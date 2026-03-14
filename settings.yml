@@ -1,0 +1,26 @@
+enabled:
+  default: true
+  type: bool
+  description: Enable inline bilibili embeds for supported video URLs.
+
+autoplay_on_click:
+  default: true
+  type: bool
+  description: Add autoplay=1 when the user clicks the cover card.
+
+max_embeds_per_post:
+  default: 4
+  type: integer
+  min: 1
+  max: 20
+  description: Maximum number of bilibili URLs to enhance in one cooked post.
+
+show_open_link:
+  default: true
+  type: bool
+  description: Show a fallback link to the original bilibili page under the embed.
+
+button_label:
+  default: "点击播放"
+  type: string
+  description: Label shown on the cover button before the iframe is loaded.

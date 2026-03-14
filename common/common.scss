@@ -1,0 +1,164 @@
+.bilibili-inline-player {
+  --bili-card-radius: 16px;
+  --bili-card-border: color-mix(in srgb, var(--primary-low, #d9d9d9) 88%, transparent);
+  --bili-card-bg: var(--secondary, #fff);
+  --bili-card-fg: var(--primary, #111);
+  --bili-card-muted: var(--primary-medium, #666);
+  --bili-card-shadow: 0 14px 36px rgb(0 0 0 / 0.14);
+  margin: 1em 0;
+  border: 1px solid var(--bili-card-border);
+  border-radius: var(--bili-card-radius);
+  overflow: hidden;
+  background: var(--bili-card-bg);
+  box-shadow: var(--bili-card-shadow);
+}
+
+.bilibili-inline-player__media {
+  position: relative;
+  aspect-ratio: var(--bili-aspect-ratio, 16 / 9);
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 18% 20%, rgb(45 45 45 / 0.2), transparent 36%),
+    linear-gradient(135deg, #10131a 0%, #1d2435 52%, #0d1118 100%);
+}
+
+.bilibili-inline-player__poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.bilibili-inline-player__scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgb(0 0 0 / 0.15) 0%, rgb(0 0 0 / 0.06) 34%, rgb(0 0 0 / 0.75) 100%);
+}
+
+.bilibili-inline-player__play {
+  position: absolute;
+  inset: auto auto 1.1rem 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 3rem;
+  padding: 0.8rem 1.1rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(255 102 153 / 0.96);
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease, box-shadow 120ms ease;
+  box-shadow: 0 10px 24px rgb(255 102 153 / 0.28);
+}
+
+.bilibili-inline-player__play:hover,
+.bilibili-inline-player__play:focus-visible {
+  transform: translateY(-1px);
+  background: #ff4f91;
+  box-shadow: 0 14px 28px rgb(255 102 153 / 0.35);
+}
+
+.bilibili-inline-player__play-icon {
+  width: 0;
+  height: 0;
+  border-top: 0.5rem solid transparent;
+  border-bottom: 0.5rem solid transparent;
+  border-left: 0.82rem solid currentColor;
+}
+
+.bilibili-inline-player__meta {
+  position: absolute;
+  left: 1.1rem;
+  right: 1.1rem;
+  bottom: 5rem;
+  color: #fff;
+}
+
+.bilibili-inline-player__title {
+  margin: 0;
+  color: inherit;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+.bilibili-inline-player__subline {
+  margin-top: 0.45rem;
+  color: rgb(255 255 255 / 0.84);
+  font-size: 0.92rem;
+}
+
+.bilibili-inline-player__frame-wrap {
+  position: relative;
+  aspect-ratio: var(--bili-aspect-ratio, 16 / 9);
+  background: #000;
+}
+
+.bilibili-inline-player__frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.bilibili-inline-player__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem 0.95rem;
+  border-top: 1px solid color-mix(in srgb, var(--bili-card-border) 70%, transparent);
+  background: color-mix(in srgb, var(--bili-card-bg) 92%, var(--primary-low, #ececec));
+}
+
+.bilibili-inline-player__footer-meta {
+  min-width: 0;
+  color: var(--bili-card-muted);
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.bilibili-inline-player__footer-link {
+  flex: none;
+  color: var(--tertiary, #0a6cff);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.bilibili-inline-player__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: rgb(255 255 255 / 0.88);
+  font-size: 0.95rem;
+  letter-spacing: 0.03em;
+}
+
+@media (max-width: 767px) {
+  .bilibili-inline-player__meta {
+    left: 0.85rem;
+    right: 0.85rem;
+    bottom: 4.65rem;
+  }
+
+  .bilibili-inline-player__play {
+    left: 0.85rem;
+    bottom: 0.85rem;
+    min-height: 2.75rem;
+    padding: 0.7rem 0.95rem;
+  }
+
+  .bilibili-inline-player__footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
