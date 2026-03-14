@@ -3,8 +3,11 @@ import { apiInitializer } from "discourse/lib/api";
 const SUPPORTED_HOSTS = new Set(["www.bilibili.com", "m.bilibili.com", "bilibili.com"]);
 const VIDEO_PATH_RE = /^\/video\/(BV[0-9A-Za-z]+|av\d+)\/?$/i;
 const DEFAULT_ASPECT_RATIO = "16 / 9";
+const JSONP_TIMEOUT_MS = 8000;
 
 const themeSettings = globalThis.settings || {};
+const wrapperState = new WeakMap();
+const videoInfoCache = new Map();
 
 function getBooleanSetting(name, fallback) {
   const value = themeSettings[name];
@@ -83,7 +86,104 @@ function buildIframeUrl(parsed) {
     params.set("aid", String(parsed.aid));
   }
 
+  if (parsed.cid) {
+    params.set("cid", String(parsed.cid));
+  }
+
   return `https://player.bilibili.com/player.html?${params.toString()}`;
+}
+
+function loadJsonp(src) {
+  return new Promise((resolve, reject) => {
+    const callbackName = `__bili_jsonp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const script = document.createElement("script");
+    let settled = false;
+
+    const cleanup = () => {
+      settled = true;
+      script.remove();
+
+      try {
+        delete window[callbackName];
+      } catch {
+        window[callbackName] = undefined;
+      }
+    };
+
+    const timeout = window.setTimeout(() => {
+      if (settled) {
+        return;
+      }
+
+      cleanup();
+      reject(new Error("bilibili metadata request timed out"));
+    }, JSONP_TIMEOUT_MS);
+
+    window[callbackName] = (payload) => {
+      if (settled) {
+        return;
+      }
+
+      window.clearTimeout(timeout);
+      cleanup();
+      resolve(payload);
+    };
+
+    script.async = true;
+    script.src = `${src}${src.includes("?") ? "&" : "?"}jsonp=jsonp&callback=${callbackName}`;
+    script.onerror = () => {
+      if (settled) {
+        return;
+      }
+
+      window.clearTimeout(timeout);
+      cleanup();
+      reject(new Error("bilibili metadata request failed"));
+    };
+
+    document.body.appendChild(script);
+  });
+}
+
+function fetchVideoInfo(parsed) {
+  const cacheKey = parsed.bvid ? `bvid:${parsed.bvid}` : `aid:${parsed.aid}`;
+
+  if (!videoInfoCache.has(cacheKey)) {
+    const params = new URLSearchParams();
+
+    if (parsed.bvid) {
+      params.set("bvid", parsed.bvid);
+    } else {
+      params.set("aid", parsed.aid);
+    }
+
+    videoInfoCache.set(
+      cacheKey,
+      loadJsonp(`https://api.bilibili.com/x/web-interface/view?${params.toString()}`).then((payload) => {
+        if (!payload || payload.code !== 0 || !payload.data) {
+          throw new Error("bilibili metadata payload was invalid");
+        }
+
+        return payload.data;
+      })
+    );
+  }
+
+  return videoInfoCache.get(cacheKey);
+}
+
+async function resolveEmbedParams(parsed) {
+  const data = await fetchVideoInfo(parsed);
+  const pages = Array.isArray(data.pages) ? data.pages : [];
+  const pageData = pages.find((page) => page.page === parsed.page) || null;
+  const cid = pageData?.cid || (parsed.page === 1 ? data.cid : null);
+
+  return {
+    page: parsed.page,
+    bvid: data.bvid || parsed.bvid,
+    aid: data.aid || parsed.aid,
+    cid,
+  };
 }
 
 function createElement(tagName, className, text) {
@@ -119,6 +219,7 @@ function extractTitle(target, fallbackAnchor, parsed) {
 
 function buildMetadata(target, fallbackAnchor, parsed) {
   return {
+    parsed,
     title: extractTitle(target, fallbackAnchor, parsed),
     poster: extractPoster(target),
     canonicalUrl: parsed.canonicalUrl,
@@ -145,7 +246,6 @@ function buildWrapper(metadata) {
   const footerMeta = createElement("div", "bilibili-inline-player__footer-meta", "Official bilibili external player");
 
   wrapper.dataset.bilibiliUrl = metadata.canonicalUrl;
-  wrapper.dataset.bilibiliIframe = metadata.iframeUrl;
   wrapper.dataset.bilibiliMeta = metadata.metaLine;
   wrapper.dataset.bilibiliTitle = metadata.title;
   wrapper.style.setProperty("--bili-aspect-ratio", DEFAULT_ASPECT_RATIO);
@@ -177,15 +277,37 @@ function buildWrapper(metadata) {
 
   wrapper.append(media, footer);
   playButton.addEventListener("click", () => activatePlayer(wrapper));
+  wrapperState.set(wrapper, metadata);
 
   return wrapper;
 }
 
-function activatePlayer(wrapper) {
-  if (wrapper.dataset.bilibiliLoaded === "1") {
+async function activatePlayer(wrapper) {
+  if (wrapper.dataset.bilibiliLoaded === "1" || wrapper.dataset.bilibiliLoading === "1") {
     return;
   }
 
+  wrapper.dataset.bilibiliLoading = "1";
+
+  const state = wrapperState.get(wrapper);
+  const buttonLabel = wrapper.querySelector(".bilibili-inline-player__play-label");
+
+  if (buttonLabel) {
+    buttonLabel.textContent = "加载中";
+  }
+
+  let iframeUrl = state?.iframeUrl;
+
+  if (state?.parsed) {
+    try {
+      const resolved = await resolveEmbedParams(state.parsed);
+      iframeUrl = buildIframeUrl(resolved);
+    } catch {
+      iframeUrl = state.iframeUrl;
+    }
+  }
+
+  wrapper.dataset.bilibiliLoading = "0";
   wrapper.dataset.bilibiliLoaded = "1";
 
   const frameWrap = createElement("div", "bilibili-inline-player__frame-wrap");
@@ -194,7 +316,7 @@ function activatePlayer(wrapper) {
   const footerMeta = createElement("div", "bilibili-inline-player__footer-meta", wrapper.dataset.bilibiliMeta);
 
   frameWrap.style.setProperty("--bili-aspect-ratio", DEFAULT_ASPECT_RATIO);
-  iframe.src = wrapper.dataset.bilibiliIframe;
+  iframe.src = iframeUrl;
   iframe.loading = "lazy";
   iframe.referrerPolicy = "strict-origin-when-cross-origin";
   iframe.allow = "autoplay; fullscreen; picture-in-picture";
