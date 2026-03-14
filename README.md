@@ -40,6 +40,8 @@ Experimental inline playback:
 
 - bilibili live H5 iframe via `enable_experimental_live_embed`
 
+Live embeds are enabled by default in `0.2.x`. If a specific site or browser combination misbehaves, turn off `enable_experimental_live_embed` to fall back to opening bilibili.
+
 Still not supported:
 
 - opaque short-link tokens that cannot be resolved client-side before Discourse oneboxes them

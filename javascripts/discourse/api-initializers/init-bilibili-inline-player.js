@@ -538,7 +538,7 @@ function isKnownInlineKind(parsed) {
   }
 
   if (parsed.kind === "live") {
-    return getBooleanSetting("enable_experimental_live_embed", false);
+    return getBooleanSetting("enable_experimental_live_embed", true);
   }
 
   return false;
@@ -554,7 +554,7 @@ function getFooterMeta(parsed) {
     case "bangumi":
       return "Official bilibili external player";
     case "live":
-      return getBooleanSetting("enable_experimental_live_embed", false)
+      return getBooleanSetting("enable_experimental_live_embed", true)
         ? "Official bilibili live H5 player"
         : "Open on bilibili live";
     case "audio":
@@ -872,7 +872,7 @@ function primeEmbedState(wrapper) {
   }
 
   if (state.parsed.kind === "live") {
-    if (getBooleanSetting("enable_experimental_live_embed", false)) {
+    if (getBooleanSetting("enable_experimental_live_embed", true)) {
       state.iframeUrl = buildIframeUrl(state.parsed);
       state.externalOnly = false;
     } else {

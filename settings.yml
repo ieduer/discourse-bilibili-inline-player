@@ -21,14 +21,14 @@ show_open_link:
   description: Show a fallback link to the original bilibili page under the embed.
 
 enable_experimental_live_embed:
-  default: false
+  default: true
   type: bool
-  description: Experimental. Inline bilibili live rooms with the official H5 iframe. bilibili documents this as Safari/mobile-friendly, not universally stable on desktop browsers.
+  description: Inline bilibili live rooms with the official H5 iframe. Disable this only if your site or browser environment has compatibility issues.
 
 enable_live_danmaku:
   default: true
   type: bool
-  description: When experimental live embeds are enabled, request danmaku in the live H5 player.
+  description: When live embeds are enabled, request danmaku in the live H5 player.
 
 button_label:
   default: "点击播放"
