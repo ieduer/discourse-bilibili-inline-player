@@ -13,7 +13,7 @@ const AUDIO_PATH_RE = /^\/audio\/(au|am)(\d+)\/?$/i;
 const ARTICLE_PATH_RE = /^\/read\/cv(\d+)\/?$/i;
 const OPUS_PATH_RE = /^\/opus\/(\d+)\/?$/i;
 const DYNAMIC_PATH_RE = /^\/(\d+)\/?$/i;
-const LIVE_PATH_RE = /^\/(\d+)\/?$/i;
+const LIVE_PATH_RE = /^\/(?:blanc\/)?(\d+)\/?$/i;
 const LIVE_IFRAME_PATH_RE = /^\/blackboard\/live\/live-mobile-playerV3\.html$/i;
 const LIVE_IFRAME_FALLBACK_PATH_RE = /^\/blackboard\/live\/live-activity-player\.html$/i;
 const IFRAME_SRC_RE = /<iframe\b[^>]*\bsrc=(["'])([^"']+)\1/gi;
@@ -346,7 +346,10 @@ function parseLiveIframeUrl(url) {
     return null;
   }
 
-  if (!LIVE_IFRAME_PATH_RE.test(url.pathname) && !LIVE_IFRAME_FALLBACK_PATH_RE.test(url.pathname)) {
+  const isMobilePlayer = LIVE_IFRAME_PATH_RE.test(url.pathname);
+  const isActivityPlayer = LIVE_IFRAME_FALLBACK_PATH_RE.test(url.pathname);
+
+  if (!isMobilePlayer && !isActivityPlayer) {
     return null;
   }
 
@@ -358,6 +361,8 @@ function parseLiveIframeUrl(url) {
 
   return createParsedLive(roomId, {
     officialLivePlayerUrl: url.toString(),
+    preferMobileLivePlayer: isMobilePlayer,
+    activityCid: isActivityPlayer ? roomId : "",
   });
 }
 
@@ -422,22 +427,7 @@ function buildIframeUrl(parsed) {
   }
 
   if (parsed.kind === "live") {
-    const params = new URLSearchParams({
-      cid: String(parsed.roomId),
-      quality: "1",
-      entrance: "1",
-      reload: "1",
-      danmaku: getBooleanSetting("enable_live_danmaku", true) ? "1" : "0",
-      fullscreen: "1",
-      send: "0",
-      recommend: "0",
-      logo: "0",
-      mute: "0",
-      enableCtrlUI: "1",
-      enableAutoPlayTips: "1",
-    });
-
-    return `https://www.bilibili.com/blackboard/live/live-activity-player.html?${params.toString()}`;
+    return buildLiveIframeUrl(parsed);
   }
 
   const params = new URLSearchParams({
@@ -464,6 +454,38 @@ function buildIframeUrl(parsed) {
   }
 
   return `https://player.bilibili.com/player.html?${params.toString()}`;
+}
+
+function buildLiveIframeUrl(parsed) {
+  const liveId = String(parsed.activityCid || parsed.roomId);
+  const shouldPreferActivityPlayer =
+    !parsed.preferMobileLivePlayer && (/^\d{7,}$/.test(liveId) || Boolean(parsed.activityCid));
+
+  if (shouldPreferActivityPlayer) {
+    const params = new URLSearchParams({
+      cid: liveId,
+      quality: "1",
+      entrance: "1",
+      reload: "1",
+      danmaku: getBooleanSetting("enable_live_danmaku", true) ? "1" : "0",
+      fullscreen: "1",
+      send: "0",
+      recommend: "0",
+      logo: "0",
+      mute: "0",
+      enableCtrlUI: "1",
+      enableAutoPlayTips: "1",
+    });
+
+    return `https://www.bilibili.com/blackboard/live/live-activity-player.html?${params.toString()}`;
+  }
+
+  const params = new URLSearchParams({
+    roomId: String(parsed.roomId),
+    danmaku: getBooleanSetting("enable_live_danmaku", true) ? "1" : "0",
+  });
+
+  return `https://www.bilibili.com/blackboard/live/live-mobile-playerV3.html?${params.toString()}`;
 }
 
 function parseFirstSupportedUrl(...hrefs) {
@@ -521,6 +543,33 @@ function getMetaLine(parsed) {
   }
 }
 
+function detectEmbedEnvironmentRisk() {
+  const userAgent = (globalThis.navigator?.userAgent || "").toLowerCase();
+  const isIOS = /iphone|ipad|ipod/.test(userAgent);
+  const isInAppBrowser =
+    /micromessenger|weibo|qq\/|qqbrowser|aliapp|dingtalk|baiduboxapp|toutiao|newsarticle/.test(userAgent);
+  const isAndroidWebView = /; wv\)/.test(userAgent) || /\bversion\/[\d.]+ chrome\/[\d.]+ mobile safari\/[\d.]+\b/.test(userAgent);
+
+  if (isInAppBrowser || isAndroidWebView) {
+    return {
+      level: "hard",
+      message: "当前内置浏览器对 bilibili 第三方播放器兼容性较差，优先在 B 站打开更稳。",
+    };
+  }
+
+  if (isIOS) {
+    return {
+      level: "soft",
+      message: "当前设备上 bilibili iframe 可能被降级，如遇卡住请改用 B 站打开。",
+    };
+  }
+
+  return {
+    level: "none",
+    message: "",
+  };
+}
+
 function getFallbackTitle(parsed) {
   switch (parsed.kind) {
     case "video":
@@ -565,7 +614,7 @@ function getFooterMeta(parsed) {
       return "Official bilibili external player";
     case "live":
       return getBooleanSetting("enable_experimental_live_embed", true)
-        ? "Official bilibili live activity player"
+        ? getLiveFooterMeta(parsed)
         : "Open on bilibili live";
     case "audio":
       return "Open on bilibili audio";
@@ -577,6 +626,15 @@ function getFooterMeta(parsed) {
     default:
       return "bilibili";
   }
+}
+
+function getLiveFooterMeta(parsed) {
+  const liveId = String(parsed.activityCid || parsed.roomId);
+  const usesActivityPlayer = !parsed.preferMobileLivePlayer && (/^\d{7,}$/.test(liveId) || Boolean(parsed.activityCid));
+
+  return usesActivityPlayer
+    ? "Official bilibili live activity player"
+    : "Official bilibili live H5 player";
 }
 
 function loadJsonp(src) {
@@ -740,6 +798,7 @@ function buildMetadata(target, fallbackAnchor, parsed) {
     poster: extractPoster(target),
     canonicalUrl: parsed.canonicalUrl,
     metaLine: getMetaLine(parsed),
+    environmentRisk: detectEmbedEnvironmentRisk(),
   };
 }
 
@@ -819,12 +878,15 @@ function buildWrapper(metadata) {
   );
   const footer = createElement("div", "bilibili-inline-player__footer");
   const footerMeta = createElement("div", "bilibili-inline-player__footer-meta", getFooterMeta(metadata.parsed));
+  const footerContent = createElement("div", "bilibili-inline-player__footer-content");
+  const footerActions = createElement("div", "bilibili-inline-player__footer-actions");
 
   wrapper.dataset.bilibiliUrl = metadata.canonicalUrl;
   wrapper.dataset.bilibiliMeta = metadata.metaLine;
   wrapper.dataset.bilibiliFooterMeta = getFooterMeta(metadata.parsed);
   wrapper.dataset.bilibiliTitle = metadata.title;
   wrapper.dataset.bilibiliKind = metadata.parsed.kind;
+  wrapper.dataset.bilibiliRiskLevel = metadata.environmentRisk?.level || "none";
   wrapper.style.setProperty("--bili-aspect-ratio", DEFAULT_ASPECT_RATIO);
 
   if (metadata.poster) {
@@ -841,19 +903,37 @@ function buildWrapper(metadata) {
   playButton.append(playIcon, playLabel);
   meta.append(title, subline);
   media.append(scrim, meta, playButton);
-  footer.appendChild(footerMeta);
+  footerContent.appendChild(footerMeta);
+
+  if (metadata.environmentRisk?.message && isKnownInlineKind(metadata.parsed)) {
+    footerContent.appendChild(createElement("div", "bilibili-inline-player__notice", metadata.environmentRisk.message));
+  }
 
   if (getBooleanSetting("show_open_link", true)) {
     const link = createElement("a", "bilibili-inline-player__footer-link", "Open on bilibili");
     link.href = metadata.canonicalUrl;
     link.target = "_blank";
     link.rel = "noopener nofollow ugc";
-    footer.appendChild(link);
+    footerActions.appendChild(link);
+  }
+
+  footer.appendChild(footerContent);
+  if (footerActions.childElementCount > 0) {
+    footer.appendChild(footerActions);
   }
 
   wrapper.append(media, footer);
   playButton.addEventListener("click", () => activatePlayer(wrapper));
   wrapperState.set(wrapper, metadata);
+
+  if (
+    metadata.environmentRisk?.level === "hard" &&
+    isKnownInlineKind(metadata.parsed) &&
+    getBooleanSetting("auto_open_on_high_risk_env", true)
+  ) {
+    setButtonLabel(wrapper, "Open on bilibili");
+  }
+
   primeEmbedState(wrapper);
 
   return wrapper;
@@ -871,6 +951,19 @@ function primeEmbedState(wrapper) {
   const state = wrapperState.get(wrapper);
 
   if (!state?.parsed || state.resolvePromise) {
+    return;
+  }
+
+  const isHardRiskEmbedEnv =
+    state.environmentRisk?.level === "hard" &&
+    isKnownInlineKind(state.parsed) &&
+    getBooleanSetting("auto_open_on_high_risk_env", true);
+
+  if (isHardRiskEmbedEnv) {
+    state.iframeUrl = null;
+    state.externalOnly = true;
+    setButtonLabel(wrapper, "Open on bilibili");
+    state.resolvePromise = Promise.resolve(state.parsed);
     return;
   }
 

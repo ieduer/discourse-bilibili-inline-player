@@ -24,11 +24,12 @@ Inline playback:
 - `https://player.bilibili.com/player.html?...`
 - `https://www.bilibili.com/bangumi/play/ep...`
 - `https://www.bilibili.com/bangumi/play/ss...`
+- `https://live.bilibili.com/<room_id>`
+- `https://live.bilibili.com/blanc/<room_id>`
 - optional `?p=<n>` on ordinary multi-page video URLs
 
 Card takeover with open-on-bilibili fallback:
 
-- `https://live.bilibili.com/<room_id>`
 - `https://www.bilibili.com/audio/au...`
 - `https://www.bilibili.com/audio/am...`
 - `https://www.bilibili.com/read/cv...`
@@ -40,7 +41,7 @@ Experimental inline playback:
 
 - bilibili live activity player iframe via `enable_experimental_live_embed`
 
-Live embeds are enabled by default in `0.2.x`. If a specific site or browser combination misbehaves, turn off `enable_experimental_live_embed` to fall back to opening bilibili.
+Live embeds are enabled by default in `0.2.x`. For true room ids the component prefers bilibili's activity player with control UI. For short/activity aliases that cannot be resolved client-side in a no-rebuild theme component, it falls back to bilibili's mobile H5 player. If a specific site or browser combination misbehaves, turn off `enable_experimental_live_embed` to fall back to opening bilibili.
 
 Still not supported:
 
@@ -58,7 +59,8 @@ The safest input pattern is still a standalone bilibili URL on its own line, whi
 4. For ordinary videos, the component fetches official bilibili metadata in the background to fill in the correct title and preview image when the cooked post does not already contain them.
 5. When the user clicks the card, the component resolves the correct bilibili page context, including `cid` when available.
 6. If bilibili exposes a valid public embed context, the official external player iframe is inserted in place.
-7. For content types without a stable official iframe path in this theme-component-only architecture, the component still upgrades the post into a unified bilibili card and falls back to opening the canonical bilibili page.
+7. In high-risk environments such as in-app browsers and WebViews, the component can automatically downgrade to opening bilibili instead of trapping the user in a broken third-party iframe.
+8. For content types without a stable official iframe path in this theme-component-only architecture, the component still upgrades the post into a unified bilibili card and falls back to opening the canonical bilibili page.
 
 The component does not modify Discourse core and does not require a rebuild.
 
@@ -89,6 +91,7 @@ No rebuild is required.
 - `show_open_link`
 - `enable_experimental_live_embed`
 - `enable_live_danmaku`
+- `auto_open_on_high_risk_env`
 - `button_label`
 
 ## Operational notes

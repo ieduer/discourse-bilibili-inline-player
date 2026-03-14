@@ -30,6 +30,11 @@ enable_live_danmaku:
   type: bool
   description: When live embeds are enabled, request danmaku in the live H5 player.
 
+auto_open_on_high_risk_env:
+  default: true
+  type: bool
+  description: In high-risk environments such as in-app browsers and WebViews, skip third-party iframe playback and prefer opening bilibili directly.
+
 button_label:
   default: "点击播放"
   type: string
