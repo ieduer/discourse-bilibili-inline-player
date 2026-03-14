@@ -35,7 +35,8 @@ The safe input pattern for v1 is a standalone bilibili video URL on its own line
 2. Existing bilibili oneboxes are detected first, and standalone bilibili links are handled as a fallback.
 3. The original cooked block is replaced with a poster card using the data already present in the cooked post.
 4. When the user clicks the card, the component resolves the correct bilibili page context, including `cid` when available.
-5. The official bilibili external player iframe is then inserted in place.
+5. If bilibili exposes a valid public embed context, the official external player iframe is inserted in place.
+6. If bilibili reports that the video is unavailable in anonymous or external context, the component falls back to opening the canonical bilibili page instead of embedding the wrong content.
 
 The component does not modify Discourse core and does not require a rebuild.
 

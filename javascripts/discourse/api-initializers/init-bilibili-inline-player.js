@@ -223,7 +223,6 @@ function buildMetadata(target, fallbackAnchor, parsed) {
     title: extractTitle(target, fallbackAnchor, parsed),
     poster: extractPoster(target),
     canonicalUrl: parsed.canonicalUrl,
-    iframeUrl: buildIframeUrl(parsed),
     metaLine: parsed.page > 1 ? `bilibili · P${parsed.page}` : "bilibili",
   };
 }
@@ -278,8 +277,42 @@ function buildWrapper(metadata) {
   wrapper.append(media, footer);
   playButton.addEventListener("click", () => activatePlayer(wrapper));
   wrapperState.set(wrapper, metadata);
+  primeEmbedState(wrapper);
 
   return wrapper;
+}
+
+function setButtonLabel(wrapper, text) {
+  const buttonLabel = wrapper.querySelector(".bilibili-inline-player__play-label");
+
+  if (buttonLabel) {
+    buttonLabel.textContent = text;
+  }
+}
+
+function primeEmbedState(wrapper) {
+  const state = wrapperState.get(wrapper);
+
+  if (!state?.parsed || state.resolvePromise) {
+    return;
+  }
+
+  state.resolvePromise = resolveEmbedParams(state.parsed)
+    .then((resolved) => {
+      if (!resolved?.cid) {
+        throw new Error("bilibili cid was unavailable");
+      }
+
+      state.iframeUrl = buildIframeUrl(resolved);
+      state.externalOnly = false;
+      return resolved;
+    })
+    .catch(() => {
+      state.iframeUrl = null;
+      state.externalOnly = true;
+      setButtonLabel(wrapper, "Open on bilibili");
+      return null;
+    });
 }
 
 async function activatePlayer(wrapper) {
@@ -290,21 +323,20 @@ async function activatePlayer(wrapper) {
   wrapper.dataset.bilibiliLoading = "1";
 
   const state = wrapperState.get(wrapper);
-  const buttonLabel = wrapper.querySelector(".bilibili-inline-player__play-label");
+  setButtonLabel(wrapper, "加载中");
 
-  if (buttonLabel) {
-    buttonLabel.textContent = "加载中";
+  if (state?.resolvePromise) {
+    await state.resolvePromise;
+  } else {
+    primeEmbedState(wrapper);
+    await state?.resolvePromise;
   }
 
-  let iframeUrl = state?.iframeUrl;
-
-  if (state?.parsed) {
-    try {
-      const resolved = await resolveEmbedParams(state.parsed);
-      iframeUrl = buildIframeUrl(resolved);
-    } catch {
-      iframeUrl = state.iframeUrl;
-    }
+  if (state?.externalOnly || !state?.iframeUrl) {
+    wrapper.dataset.bilibiliLoading = "0";
+    setButtonLabel(wrapper, "Open on bilibili");
+    window.open(wrapper.dataset.bilibiliUrl, "_blank", "noopener,noreferrer");
+    return;
   }
 
   wrapper.dataset.bilibiliLoading = "0";
@@ -316,7 +348,7 @@ async function activatePlayer(wrapper) {
   const footerMeta = createElement("div", "bilibili-inline-player__footer-meta", wrapper.dataset.bilibiliMeta);
 
   frameWrap.style.setProperty("--bili-aspect-ratio", DEFAULT_ASPECT_RATIO);
-  iframe.src = iframeUrl;
+  iframe.src = state.iframeUrl;
   iframe.loading = "lazy";
   iframe.referrerPolicy = "strict-origin-when-cross-origin";
   iframe.allow = "autoplay; fullscreen; picture-in-picture";
