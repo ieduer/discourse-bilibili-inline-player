@@ -17,15 +17,20 @@ Supported:
 - `https://www.bilibili.com/video/av...`
 - `https://m.bilibili.com/video/BV...`
 - `https://m.bilibili.com/video/av...`
+- `https://b23.tv/BV...`
+- `https://b23.tv/av...`
+- `https://bili2233.cn/BV...`
+- `https://bili2233.cn/av...`
+- `https://player.bilibili.com/player.html?...`
 - optional `?p=<n>` on ordinary multi-page video URLs
 
 Not supported in v1:
 
-- `b23.tv` short links
 - bangumi URLs such as `/bangumi/play/ep...`
 - live URLs such as `live.bilibili.com/...`
 - article, audio, dynamic, playlist, season, or collection URLs
 - inline links inside a sentence
+- opaque short-link tokens that cannot be resolved client-side before Discourse oneboxes them
 
 The safe input pattern for v1 is a standalone bilibili video URL on its own line, which matches how Discourse onebox-style embeds are normally triggered.
 
@@ -34,9 +39,10 @@ The safe input pattern for v1 is a standalone bilibili video URL on its own line
 1. The cooked post is scanned on the client with Discourse's `decorateCookedElement` JS API.
 2. Existing bilibili oneboxes are detected first, and standalone bilibili links are handled as a fallback.
 3. The original cooked block is replaced with a poster card using the data already present in the cooked post.
-4. When the user clicks the card, the component resolves the correct bilibili page context, including `cid` when available.
-5. If bilibili exposes a valid public embed context, the official external player iframe is inserted in place.
-6. If bilibili reports that the video is unavailable in anonymous or external context, the component falls back to opening the canonical bilibili page instead of embedding the wrong content.
+4. The component fetches official bilibili metadata in the background to fill in the correct title and preview image when the cooked post does not already contain them.
+5. When the user clicks the card, the component resolves the correct bilibili page context, including `cid` when available.
+6. If bilibili exposes a valid public embed context, the official external player iframe is inserted in place.
+7. If bilibili reports that the video is unavailable in anonymous or external context, the component falls back to opening the canonical bilibili page instead of embedding the wrong content.
 
 The component does not modify Discourse core and does not require a rebuild.
 

@@ -1,7 +1,10 @@
 import { apiInitializer } from "discourse/lib/api";
 
-const SUPPORTED_HOSTS = new Set(["www.bilibili.com", "m.bilibili.com", "bilibili.com"]);
-const VIDEO_PATH_RE = /^\/video\/(BV[0-9A-Za-z]+|av\d+)\/?$/i;
+const VIDEO_HOSTS = new Set(["www.bilibili.com", "m.bilibili.com", "bilibili.com"]);
+const SHORT_HOSTS = new Set(["b23.tv", "www.b23.tv", "bili2233.cn", "www.bili2233.cn"]);
+const PLAYER_HOSTS = new Set(["player.bilibili.com"]);
+const VIDEO_PATH_RE = /^\/(?:s\/)?video\/(BV[0-9A-Za-z]+|av\d+)\/?$/i;
+const SHORT_VIDEO_PATH_RE = /^\/(?:video\/)?(BV[0-9A-Za-z]+|av\d+)(?:\/p(\d+))?\/?$/i;
 const DEFAULT_ASPECT_RATIO = "16 / 9";
 const JSONP_TIMEOUT_MS = 8000;
 
@@ -34,6 +37,97 @@ function buildCanonicalUrl(id, page) {
   return url.toString();
 }
 
+function normalizeVideoId(rawId) {
+  return /^BV/i.test(rawId) ? `BV${rawId.slice(2)}` : `av${rawId.slice(2)}`;
+}
+
+function createParsedVideo(rawId, page, extras = {}) {
+  const normalizedId = normalizeVideoId(rawId);
+  const parsed = {
+    rawId: normalizedId,
+    page,
+    canonicalUrl: buildCanonicalUrl(normalizedId, page),
+    ...extras,
+  };
+
+  if (/^BV/i.test(normalizedId)) {
+    parsed.bvid = normalizedId;
+  } else {
+    parsed.aid = normalizedId.slice(2);
+  }
+
+  return parsed;
+}
+
+function parsePageNumber(...values) {
+  for (const value of values) {
+    const page = Number.parseInt(value, 10);
+
+    if (Number.isInteger(page) && page > 0) {
+      return page;
+    }
+  }
+
+  return 1;
+}
+
+function parseVideoPageUrl(url) {
+  if (!VIDEO_HOSTS.has(url.hostname.toLowerCase())) {
+    return null;
+  }
+
+  const match = url.pathname.match(VIDEO_PATH_RE);
+  if (!match) {
+    return null;
+  }
+
+  return createParsedVideo(match[1], parsePageNumber(url.searchParams.get("p")));
+}
+
+function parseShortVideoUrl(url) {
+  if (!SHORT_HOSTS.has(url.hostname.toLowerCase())) {
+    return null;
+  }
+
+  const match = url.pathname.match(SHORT_VIDEO_PATH_RE);
+  if (!match) {
+    return null;
+  }
+
+  return createParsedVideo(match[1], parsePageNumber(url.searchParams.get("p"), match[2]), {
+    shortUrl: url.toString(),
+  });
+}
+
+function parsePlayerUrl(url) {
+  if (!PLAYER_HOSTS.has(url.hostname.toLowerCase()) || url.pathname !== "/player.html") {
+    return null;
+  }
+
+  const bvid = url.searchParams.get("bvid");
+  const aid = url.searchParams.get("aid");
+  const cid = url.searchParams.get("cid");
+
+  if (!bvid && !aid) {
+    return null;
+  }
+
+  const rawId = bvid || `av${aid}`;
+  const parsed = createParsedVideo(rawId, parsePageNumber(url.searchParams.get("p"), url.searchParams.get("page")), {
+    officialPlayerUrl: url.toString(),
+  });
+
+  if (aid) {
+    parsed.aid = aid;
+  }
+
+  if (cid) {
+    parsed.cid = cid;
+  }
+
+  return parsed;
+}
+
 function parseBilibiliUrl(href) {
   let url;
 
@@ -43,31 +137,7 @@ function parseBilibiliUrl(href) {
     return null;
   }
 
-  if (!SUPPORTED_HOSTS.has(url.hostname.toLowerCase())) {
-    return null;
-  }
-
-  const match = url.pathname.match(VIDEO_PATH_RE);
-  if (!match) {
-    return null;
-  }
-
-  const rawId = match[1];
-  const normalizedId = /^BV/i.test(rawId) ? `BV${rawId.slice(2)}` : `av${rawId.slice(2)}`;
-  const page = Math.max(1, Number.parseInt(url.searchParams.get("p"), 10) || 1);
-  const parsed = {
-    rawId: normalizedId,
-    page,
-    canonicalUrl: buildCanonicalUrl(normalizedId, page),
-  };
-
-  if (/^BV/i.test(rawId)) {
-    parsed.bvid = normalizedId;
-  } else {
-    parsed.aid = rawId.slice(2);
-  }
-
-  return parsed;
+  return parseVideoPageUrl(url) || parseShortVideoUrl(url) || parsePlayerUrl(url);
 }
 
 function buildIframeUrl(parsed) {
@@ -95,6 +165,22 @@ function buildIframeUrl(parsed) {
   }
 
   return `https://player.bilibili.com/player.html?${params.toString()}`;
+}
+
+function parseFirstSupportedUrl(...hrefs) {
+  for (const href of hrefs) {
+    if (!href) {
+      continue;
+    }
+
+    const parsed = parseBilibiliUrl(href);
+
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  return null;
 }
 
 function loadJsonp(src) {
@@ -176,20 +262,6 @@ function fetchVideoInfo(parsed) {
   return videoInfoCache.get(cacheKey);
 }
 
-async function resolveEmbedParams(parsed) {
-  const data = await fetchVideoInfo(parsed);
-  const pages = Array.isArray(data.pages) ? data.pages : [];
-  const pageData = pages.find((page) => page.page === parsed.page) || null;
-  const cid = pageData?.cid || (parsed.page === 1 ? data.cid : null);
-
-  return {
-    page: parsed.page,
-    bvid: data.bvid || parsed.bvid,
-    aid: data.aid || parsed.aid,
-    cid,
-  };
-}
-
 function createElement(tagName, className, text) {
   const element = document.createElement(tagName);
 
@@ -204,9 +276,25 @@ function createElement(tagName, className, text) {
   return element;
 }
 
+function normalizeMediaUrl(url) {
+  if (!url) {
+    return "";
+  }
+
+  if (url.startsWith("//")) {
+    return `https:${url}`;
+  }
+
+  if (url.startsWith("http://")) {
+    return `https://${url.slice("http://".length)}`;
+  }
+
+  return url;
+}
+
 function extractPoster(target) {
   const image = target.querySelector("img");
-  return image?.src || "";
+  return normalizeMediaUrl(image?.src || "");
 }
 
 function extractTitle(target, fallbackAnchor, parsed) {
@@ -229,6 +317,64 @@ function buildMetadata(target, fallbackAnchor, parsed) {
     canonicalUrl: parsed.canonicalUrl,
     metaLine: parsed.page > 1 ? `bilibili · P${parsed.page}` : "bilibili",
   };
+}
+
+function resolvePosterFromData(data, page) {
+  const pages = Array.isArray(data?.pages) ? data.pages : [];
+  const pageData = pages.find((entry) => entry.page === page) || null;
+  return normalizeMediaUrl(pageData?.first_frame || data?.pic || "");
+}
+
+function updateWrapperMetadata(wrapper, data) {
+  if (!data) {
+    return;
+  }
+
+  const state = wrapperState.get(wrapper);
+  if (!state?.parsed) {
+    return;
+  }
+
+  const resolvedAid = data.aid || state.parsed.aid;
+  const canonicalId =
+    data.bvid || state.parsed.bvid || (resolvedAid ? `av${resolvedAid}` : state.parsed.rawId);
+  const canonicalUrl = buildCanonicalUrl(canonicalId, state.parsed.page);
+  const title = data.title?.trim();
+  const posterUrl = resolvePosterFromData(data, state.parsed.page);
+  const titleElement = wrapper.querySelector(".bilibili-inline-player__title");
+  const openLink = wrapper.querySelector(".bilibili-inline-player__footer-link");
+  const media = wrapper.querySelector(".bilibili-inline-player__media");
+  const existingPoster = wrapper.querySelector(".bilibili-inline-player__poster");
+  const placeholder = wrapper.querySelector(".bilibili-inline-player__placeholder");
+
+  state.parsed.canonicalUrl = canonicalUrl;
+  wrapper.dataset.bilibiliUrl = canonicalUrl;
+
+  if (openLink) {
+    openLink.href = canonicalUrl;
+  }
+
+  if (title) {
+    wrapper.dataset.bilibiliTitle = title;
+
+    if (titleElement) {
+      titleElement.textContent = title;
+    }
+  }
+
+  if (posterUrl && media) {
+    if (existingPoster) {
+      existingPoster.src = posterUrl;
+      existingPoster.alt = wrapper.dataset.bilibiliTitle || title || "bilibili";
+    } else {
+      const poster = createElement("img", "bilibili-inline-player__poster");
+      poster.src = posterUrl;
+      poster.alt = wrapper.dataset.bilibiliTitle || title || "bilibili";
+      poster.loading = "lazy";
+      placeholder?.remove();
+      media.prepend(poster);
+    }
+  }
 }
 
 function buildWrapper(metadata) {
@@ -301,8 +447,20 @@ function primeEmbedState(wrapper) {
     return;
   }
 
-  state.resolvePromise = resolveEmbedParams(state.parsed)
-    .then((resolved) => {
+  const directEmbedReady = Boolean(state.parsed.cid && (state.parsed.bvid || state.parsed.aid));
+
+  state.resolvePromise = fetchVideoInfo(state.parsed)
+    .then((data) => {
+      updateWrapperMetadata(wrapper, data);
+      const pages = Array.isArray(data.pages) ? data.pages : [];
+      const pageData = pages.find((page) => page.page === state.parsed.page) || null;
+      const resolved = {
+        page: state.parsed.page,
+        bvid: data.bvid || state.parsed.bvid,
+        aid: data.aid || state.parsed.aid,
+        cid: pageData?.cid || state.parsed.cid || (state.parsed.page === 1 ? data.cid : null),
+      };
+
       if (!resolved?.cid) {
         throw new Error("bilibili cid was unavailable");
       }
@@ -312,6 +470,12 @@ function primeEmbedState(wrapper) {
       return resolved;
     })
     .catch(() => {
+      if (directEmbedReady) {
+        state.iframeUrl = buildIframeUrl(state.parsed);
+        state.externalOnly = false;
+        return state.parsed;
+      }
+
       state.iframeUrl = null;
       state.externalOnly = true;
       setButtonLabel(wrapper, "Open on bilibili");
@@ -386,8 +550,8 @@ function collectOneboxCandidates(element) {
       continue;
     }
 
-    const sourceUrl = block.dataset.oneboxSrc || block.querySelector("a[href]")?.href || "";
-    const parsed = parseBilibiliUrl(sourceUrl);
+    const anchor = block.querySelector("a[href]");
+    const parsed = parseFirstSupportedUrl(block.dataset.oneboxSrc, anchor?.href);
 
     if (!parsed) {
       continue;
@@ -395,7 +559,7 @@ function collectOneboxCandidates(element) {
 
     results.push({
       target: block,
-      anchor: block.querySelector("a[href]"),
+      anchor,
       parsed,
     });
   }
@@ -408,7 +572,7 @@ function collectStandaloneCandidates(element, existingTargets) {
   const results = [];
   const seen = new Set(existingTargets);
 
-  for (const anchor of element.querySelectorAll("p > a[href*='bilibili.com/video/']:only-child")) {
+  for (const anchor of element.querySelectorAll("p > a[href]:only-child")) {
     if (results.length + existingTargets.length >= limit) {
       break;
     }
