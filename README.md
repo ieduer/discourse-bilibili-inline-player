@@ -32,19 +32,15 @@ The safe input pattern for v1 is a standalone bilibili video URL on its own line
 ## How it works
 
 1. The cooked post is scanned on the client with Discourse's `decorateCookedElement` JS API.
-2. Supported bilibili video URLs are detected.
-3. Metadata is loaded from bilibili's official `x/web-interface/view` endpoint through JSONP.
-4. The original link block is replaced with a poster card.
-5. When the user clicks the card, the official bilibili external player iframe is inserted in place.
+2. Existing bilibili oneboxes are detected first, and standalone bilibili links are handled as a fallback.
+3. The original cooked block is replaced with a poster card using the data already present in the cooked post.
+4. When the user clicks the card, the official bilibili external player iframe is inserted in place.
 
 The component does not modify Discourse core and does not require a rebuild.
 
 ## Official endpoints used
 
 - Player: `https://player.bilibili.com/player.html`
-- Video metadata: `https://api.bilibili.com/x/web-interface/view`
-
-The current no-rebuild design depends on bilibili's JSONP compatibility on the metadata endpoint. If bilibili removes JSONP support in the future, a plugin-based implementation will be required for full reliability.
 
 ## Installation
 
@@ -69,8 +65,8 @@ No rebuild is required.
 ## Operational notes
 
 - Default Discourse installs should not need `allowed_iframes` changes because this component injects the iframe after cooking, not from raw post HTML.
-- If a site runs a custom reverse-proxy CSP that restricts `frame-src` or dynamic `script-src`, allow `https://player.bilibili.com` and `https://api.bilibili.com`.
-- If metadata loading fails, the original bilibili link is left untouched.
+- If a site runs a custom reverse-proxy CSP that restricts `frame-src`, allow `https://player.bilibili.com`.
+- If a bilibili link cannot be parsed, the original cooked content is left untouched.
 
 ## Suggested repository name
 
