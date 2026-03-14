@@ -38,7 +38,7 @@ Card takeover with open-on-bilibili fallback:
 
 Experimental inline playback:
 
-- bilibili live H5 iframe via `enable_experimental_live_embed`
+- bilibili live activity player iframe via `enable_experimental_live_embed`
 
 Live embeds are enabled by default in `0.2.x`. If a specific site or browser combination misbehaves, turn off `enable_experimental_live_embed` to fall back to opening bilibili.
 
@@ -67,7 +67,7 @@ The component does not modify Discourse core and does not require a rebuild.
 - Player: `https://player.bilibili.com/player.html`
 - Video metadata: `https://api.bilibili.com/x/web-interface/view`
 - Bangumi metadata page source: `https://api.bilibili.com/pgc/view/web/season`
-- Live H5 player: `https://www.bilibili.com/blackboard/live/live-mobile-playerV3.html`
+- Live activity player: `https://www.bilibili.com/blackboard/live/live-activity-player.html`
 
 ## Installation
 

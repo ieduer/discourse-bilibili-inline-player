@@ -423,11 +423,21 @@ function buildIframeUrl(parsed) {
 
   if (parsed.kind === "live") {
     const params = new URLSearchParams({
-      roomId: String(parsed.roomId),
+      cid: String(parsed.roomId),
+      quality: "1",
+      entrance: "1",
+      reload: "1",
       danmaku: getBooleanSetting("enable_live_danmaku", true) ? "1" : "0",
+      fullscreen: "1",
+      send: "0",
+      recommend: "0",
+      logo: "0",
+      mute: "0",
+      enableCtrlUI: "1",
+      enableAutoPlayTips: "1",
     });
 
-    return `https://www.bilibili.com/blackboard/live/live-mobile-playerV3.html?${params.toString()}`;
+    return `https://www.bilibili.com/blackboard/live/live-activity-player.html?${params.toString()}`;
   }
 
   const params = new URLSearchParams({
@@ -555,7 +565,7 @@ function getFooterMeta(parsed) {
       return "Official bilibili external player";
     case "live":
       return getBooleanSetting("enable_experimental_live_embed", true)
-        ? "Official bilibili live H5 player"
+        ? "Official bilibili live activity player"
         : "Open on bilibili live";
     case "audio":
       return "Open on bilibili audio";

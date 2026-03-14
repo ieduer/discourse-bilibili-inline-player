@@ -23,7 +23,7 @@ show_open_link:
 enable_experimental_live_embed:
   default: true
   type: bool
-  description: Inline bilibili live rooms with the official H5 iframe. Disable this only if your site or browser environment has compatibility issues.
+  description: Inline bilibili live rooms with bilibili's official activity player iframe and control UI. Disable this only if your site or browser environment has compatibility issues.
 
 enable_live_danmaku:
   default: true
