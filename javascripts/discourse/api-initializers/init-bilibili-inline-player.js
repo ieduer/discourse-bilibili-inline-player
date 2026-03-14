@@ -1,10 +1,24 @@
 import { apiInitializer } from "discourse/lib/api";
 
 const VIDEO_HOSTS = new Set(["www.bilibili.com", "m.bilibili.com", "bilibili.com"]);
+const ARTICLE_HOSTS = new Set(["www.bilibili.com", "m.bilibili.com"]);
+const DYNAMIC_HOSTS = new Set(["www.bilibili.com", "m.bilibili.com", "t.bilibili.com"]);
+const LIVE_HOSTS = new Set(["live.bilibili.com", "www.live.bilibili.com"]);
 const SHORT_HOSTS = new Set(["b23.tv", "www.b23.tv", "bili2233.cn", "www.bili2233.cn"]);
 const PLAYER_HOSTS = new Set(["player.bilibili.com"]);
 const VIDEO_PATH_RE = /^\/(?:s\/)?video\/(BV[0-9A-Za-z]+|av\d+)\/?$/i;
 const SHORT_VIDEO_PATH_RE = /^\/(?:video\/)?(BV[0-9A-Za-z]+|av\d+)(?:\/p(\d+))?\/?$/i;
+const BANGUMI_PATH_RE = /^\/bangumi\/play\/(ep|ss)(\d+)\/?$/i;
+const AUDIO_PATH_RE = /^\/audio\/(au|am)(\d+)\/?$/i;
+const ARTICLE_PATH_RE = /^\/read\/cv(\d+)\/?$/i;
+const OPUS_PATH_RE = /^\/opus\/(\d+)\/?$/i;
+const DYNAMIC_PATH_RE = /^\/(\d+)\/?$/i;
+const LIVE_PATH_RE = /^\/(\d+)\/?$/i;
+const LIVE_IFRAME_PATH_RE = /^\/blackboard\/live\/live-mobile-playerV3\.html$/i;
+const LIVE_IFRAME_FALLBACK_PATH_RE = /^\/blackboard\/live\/live-activity-player\.html$/i;
+const IFRAME_SRC_RE = /<iframe\b[^>]*\bsrc=(["'])([^"']+)\1/gi;
+const URL_LIKE_RE =
+  /((?:https?:)?\/\/(?:player\.bilibili\.com\/player\.html|www\.bilibili\.com\/blackboard\/live\/live-mobile-playerV3\.html|www\.bilibili\.com\/blackboard\/live\/live-activity-player\.html|(?:www\.|m\.)?bilibili\.com\/(?:s\/)?video\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/bangumi\/play\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/audio\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/read\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/opus\/[^\s"'<>]+|t\.bilibili\.com\/[^\s"'<>]+|live\.bilibili\.com\/[^\s"'<>]+|(?:www\.)?(?:b23\.tv|bili2233\.cn)\/[^\s"'<>]+))/gi;
 const DEFAULT_ASPECT_RATIO = "16 / 9";
 const JSONP_TIMEOUT_MS = 8000;
 
@@ -27,7 +41,7 @@ function getStringSetting(name, fallback) {
   return typeof value === "string" && value.length > 0 ? value : fallback;
 }
 
-function buildCanonicalUrl(id, page) {
+function buildVideoCanonicalUrl(id, page) {
   const url = new URL(`https://www.bilibili.com/video/${id}`);
 
   if (page > 1) {
@@ -37,6 +51,34 @@ function buildCanonicalUrl(id, page) {
   return url.toString();
 }
 
+function buildBangumiCanonicalUrl(episodeId, seasonId) {
+  if (episodeId) {
+    return `https://www.bilibili.com/bangumi/play/ep${episodeId}`;
+  }
+
+  return `https://www.bilibili.com/bangumi/play/ss${seasonId}`;
+}
+
+function buildLiveCanonicalUrl(roomId) {
+  return `https://live.bilibili.com/${roomId}`;
+}
+
+function buildAudioCanonicalUrl(audioId, isPlaylist = false) {
+  return `https://www.bilibili.com/audio/${isPlaylist ? "am" : "au"}${audioId}`;
+}
+
+function buildArticleCanonicalUrl(articleId) {
+  return `https://www.bilibili.com/read/cv${articleId}`;
+}
+
+function buildOpusCanonicalUrl(opusId) {
+  return `https://www.bilibili.com/opus/${opusId}`;
+}
+
+function buildDynamicCanonicalUrl(dynamicId) {
+  return `https://t.bilibili.com/${dynamicId}`;
+}
+
 function normalizeVideoId(rawId) {
   return /^BV/i.test(rawId) ? `BV${rawId.slice(2)}` : `av${rawId.slice(2)}`;
 }
@@ -44,9 +86,10 @@ function normalizeVideoId(rawId) {
 function createParsedVideo(rawId, page, extras = {}) {
   const normalizedId = normalizeVideoId(rawId);
   const parsed = {
+    kind: "video",
     rawId: normalizedId,
     page,
-    canonicalUrl: buildCanonicalUrl(normalizedId, page),
+    canonicalUrl: buildVideoCanonicalUrl(normalizedId, page),
     ...extras,
   };
 
@@ -57,6 +100,74 @@ function createParsedVideo(rawId, page, extras = {}) {
   }
 
   return parsed;
+}
+
+function createParsedBangumi({ episodeId = "", seasonId = "", extras = {} }) {
+  return {
+    kind: "bangumi",
+    episodeId,
+    seasonId,
+    page: 1,
+    rawId: episodeId ? `ep${episodeId}` : `ss${seasonId}`,
+    canonicalUrl: buildBangumiCanonicalUrl(episodeId, seasonId),
+    ...extras,
+  };
+}
+
+function createParsedLive(roomId, extras = {}) {
+  return {
+    kind: "live",
+    roomId,
+    page: 1,
+    rawId: String(roomId),
+    canonicalUrl: buildLiveCanonicalUrl(roomId),
+    ...extras,
+  };
+}
+
+function createParsedAudio(audioId, isPlaylist = false, extras = {}) {
+  return {
+    kind: "audio",
+    audioId,
+    isPlaylist,
+    page: 1,
+    rawId: `${isPlaylist ? "am" : "au"}${audioId}`,
+    canonicalUrl: buildAudioCanonicalUrl(audioId, isPlaylist),
+    ...extras,
+  };
+}
+
+function createParsedArticle(articleId, extras = {}) {
+  return {
+    kind: "article",
+    articleId,
+    page: 1,
+    rawId: `cv${articleId}`,
+    canonicalUrl: buildArticleCanonicalUrl(articleId),
+    ...extras,
+  };
+}
+
+function createParsedOpus(opusId, extras = {}) {
+  return {
+    kind: "opus",
+    opusId,
+    page: 1,
+    rawId: String(opusId),
+    canonicalUrl: buildOpusCanonicalUrl(opusId),
+    ...extras,
+  };
+}
+
+function createParsedDynamic(dynamicId, extras = {}) {
+  return {
+    kind: "dynamic",
+    dynamicId,
+    page: 1,
+    rawId: String(dynamicId),
+    canonicalUrl: buildDynamicCanonicalUrl(dynamicId),
+    ...extras,
+  };
 }
 
 function parsePageNumber(...values) {
@@ -84,6 +195,96 @@ function parseVideoPageUrl(url) {
   return createParsedVideo(match[1], parsePageNumber(url.searchParams.get("p")));
 }
 
+function parseBangumiPageUrl(url) {
+  if (!VIDEO_HOSTS.has(url.hostname.toLowerCase())) {
+    return null;
+  }
+
+  const match = url.pathname.match(BANGUMI_PATH_RE);
+
+  if (!match) {
+    return null;
+  }
+
+  return match[1].toLowerCase() === "ep"
+    ? createParsedBangumi({ episodeId: match[2] })
+    : createParsedBangumi({ seasonId: match[2] });
+}
+
+function parseLivePageUrl(url) {
+  if (!LIVE_HOSTS.has(url.hostname.toLowerCase())) {
+    return null;
+  }
+
+  const match = url.pathname.match(LIVE_PATH_RE);
+
+  if (!match) {
+    return null;
+  }
+
+  return createParsedLive(match[1]);
+}
+
+function parseAudioPageUrl(url) {
+  if (!VIDEO_HOSTS.has(url.hostname.toLowerCase())) {
+    return null;
+  }
+
+  const match = url.pathname.match(AUDIO_PATH_RE);
+
+  if (!match) {
+    return null;
+  }
+
+  return createParsedAudio(match[2], match[1].toLowerCase() === "am");
+}
+
+function parseArticlePageUrl(url) {
+  if (!ARTICLE_HOSTS.has(url.hostname.toLowerCase())) {
+    return null;
+  }
+
+  const directMatch = url.pathname.match(ARTICLE_PATH_RE);
+
+  if (directMatch) {
+    return createParsedArticle(directMatch[1]);
+  }
+
+  if (url.pathname === "/read/mobile" && /^\d+$/.test(url.searchParams.get("id") || "")) {
+    return createParsedArticle(url.searchParams.get("id"));
+  }
+
+  return null;
+}
+
+function parseOpusPageUrl(url) {
+  if (!DYNAMIC_HOSTS.has(url.hostname.toLowerCase())) {
+    return null;
+  }
+
+  const match = url.pathname.match(OPUS_PATH_RE);
+
+  if (!match) {
+    return null;
+  }
+
+  return createParsedOpus(match[1]);
+}
+
+function parseDynamicPageUrl(url) {
+  if (url.hostname.toLowerCase() !== "t.bilibili.com") {
+    return null;
+  }
+
+  const match = url.pathname.match(DYNAMIC_PATH_RE);
+
+  if (!match) {
+    return null;
+  }
+
+  return createParsedDynamic(match[1]);
+}
+
 function parseShortVideoUrl(url) {
   if (!SHORT_HOSTS.has(url.hostname.toLowerCase())) {
     return null;
@@ -107,6 +308,18 @@ function parsePlayerUrl(url) {
   const bvid = url.searchParams.get("bvid");
   const aid = url.searchParams.get("aid");
   const cid = url.searchParams.get("cid");
+  const episodeId = url.searchParams.get("episodeId");
+  const seasonId = url.searchParams.get("seasonId");
+
+  if (episodeId || seasonId) {
+    return createParsedBangumi({
+      episodeId: episodeId || "",
+      seasonId: seasonId || "",
+      extras: {
+        officialPlayerUrl: url.toString(),
+      },
+    });
+  }
 
   if (!bvid && !aid) {
     return null;
@@ -128,19 +341,95 @@ function parsePlayerUrl(url) {
   return parsed;
 }
 
+function parseLiveIframeUrl(url) {
+  if (url.hostname.toLowerCase() !== "www.bilibili.com") {
+    return null;
+  }
+
+  if (!LIVE_IFRAME_PATH_RE.test(url.pathname) && !LIVE_IFRAME_FALLBACK_PATH_RE.test(url.pathname)) {
+    return null;
+  }
+
+  const roomId = url.searchParams.get("roomId") || url.searchParams.get("cid");
+
+  if (!/^\d+$/.test(roomId || "")) {
+    return null;
+  }
+
+  return createParsedLive(roomId, {
+    officialLivePlayerUrl: url.toString(),
+  });
+}
+
+function normalizeUrlLikeString(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return "";
+  }
+
+  if (trimmed.startsWith("//")) {
+    return `https:${trimmed}`.replace(/[),.;]+$/u, "");
+  }
+
+  return trimmed.replace(/[),.;]+$/u, "");
+}
+
 function parseBilibiliUrl(href) {
   let url;
 
   try {
-    url = new URL(href);
+    url = new URL(normalizeUrlLikeString(href));
   } catch {
     return null;
   }
 
-  return parseVideoPageUrl(url) || parseShortVideoUrl(url) || parsePlayerUrl(url);
+  return (
+    parseVideoPageUrl(url) ||
+    parseBangumiPageUrl(url) ||
+    parseLivePageUrl(url) ||
+    parseAudioPageUrl(url) ||
+    parseArticlePageUrl(url) ||
+    parseOpusPageUrl(url) ||
+    parseDynamicPageUrl(url) ||
+    parseShortVideoUrl(url) ||
+    parsePlayerUrl(url) ||
+    parseLiveIframeUrl(url)
+  );
 }
 
 function buildIframeUrl(parsed) {
+  if (parsed.kind === "bangumi") {
+    const params = new URLSearchParams();
+
+    if (parsed.episodeId) {
+      params.set("episodeId", String(parsed.episodeId));
+    }
+
+    if (parsed.seasonId) {
+      params.set("seasonId", String(parsed.seasonId));
+    }
+
+    if (getBooleanSetting("autoplay_on_click", true)) {
+      params.set("autoplay", "1");
+    }
+
+    return `https://player.bilibili.com/player.html?${params.toString()}`;
+  }
+
+  if (parsed.kind === "live") {
+    const params = new URLSearchParams({
+      roomId: String(parsed.roomId),
+      danmaku: getBooleanSetting("enable_live_danmaku", true) ? "1" : "0",
+    });
+
+    return `https://www.bilibili.com/blackboard/live/live-mobile-playerV3.html?${params.toString()}`;
+  }
+
   const params = new URLSearchParams({
     isOutside: "true",
     page: String(parsed.page),
@@ -181,6 +470,103 @@ function parseFirstSupportedUrl(...hrefs) {
   }
 
   return null;
+}
+
+function extractUrlsFromText(text) {
+  if (typeof text !== "string" || text.length === 0) {
+    return [];
+  }
+
+  const urls = [];
+
+  for (const match of text.matchAll(IFRAME_SRC_RE)) {
+    urls.push(normalizeUrlLikeString(match[2]));
+  }
+
+  for (const match of text.matchAll(URL_LIKE_RE)) {
+    urls.push(normalizeUrlLikeString(match[1]));
+  }
+
+  return [...new Set(urls.filter(Boolean))];
+}
+
+function getMetaLine(parsed) {
+  switch (parsed.kind) {
+    case "video":
+      return parsed.page > 1 ? `bilibili video · P${parsed.page}` : "bilibili video";
+    case "bangumi":
+      return parsed.episodeId ? "bilibili bangumi · episode" : "bilibili bangumi · season";
+    case "live":
+      return "bilibili live";
+    case "audio":
+      return parsed.isPlaylist ? "bilibili audio · playlist" : "bilibili audio";
+    case "article":
+      return "bilibili article";
+    case "opus":
+      return "bilibili opus";
+    case "dynamic":
+      return "bilibili dynamic";
+    default:
+      return "bilibili";
+  }
+}
+
+function getFallbackTitle(parsed) {
+  switch (parsed.kind) {
+    case "video":
+      return parsed.bvid || (parsed.aid ? `av${parsed.aid}` : parsed.rawId);
+    case "bangumi":
+      return parsed.episodeId ? `番剧 EP${parsed.episodeId}` : `番剧 SS${parsed.seasonId}`;
+    case "live":
+      return `直播间 ${parsed.roomId}`;
+    case "audio":
+      return parsed.isPlaylist ? `音频歌单 am${parsed.audioId}` : `音频 au${parsed.audioId}`;
+    case "article":
+      return `专栏 cv${parsed.articleId}`;
+    case "opus":
+      return `动态 opus ${parsed.opusId}`;
+    case "dynamic":
+      return `动态 ${parsed.dynamicId}`;
+    default:
+      return parsed.rawId || "bilibili";
+  }
+}
+
+function isKnownInlineKind(parsed) {
+  if (parsed.kind === "video" || parsed.kind === "bangumi") {
+    return true;
+  }
+
+  if (parsed.kind === "live") {
+    return getBooleanSetting("enable_experimental_live_embed", false);
+  }
+
+  return false;
+}
+
+function getInitialButtonLabel(parsed) {
+  return isKnownInlineKind(parsed) ? getStringSetting("button_label", "点击播放") : "Open on bilibili";
+}
+
+function getFooterMeta(parsed) {
+  switch (parsed.kind) {
+    case "video":
+    case "bangumi":
+      return "Official bilibili external player";
+    case "live":
+      return getBooleanSetting("enable_experimental_live_embed", false)
+        ? "Official bilibili live H5 player"
+        : "Open on bilibili live";
+    case "audio":
+      return "Open on bilibili audio";
+    case "article":
+      return "Open on bilibili article";
+    case "opus":
+    case "dynamic":
+      return "Open on bilibili";
+    default:
+      return "bilibili";
+  }
 }
 
 function loadJsonp(src) {
@@ -306,7 +692,7 @@ function extractTitle(target, fallbackAnchor, parsed) {
     return title;
   }
 
-  return parsed.bvid || (parsed.aid ? `av${parsed.aid}` : parsed.rawId);
+  return getFallbackTitle(parsed);
 }
 
 function buildMetadata(target, fallbackAnchor, parsed) {
@@ -315,7 +701,7 @@ function buildMetadata(target, fallbackAnchor, parsed) {
     title: extractTitle(target, fallbackAnchor, parsed),
     poster: extractPoster(target),
     canonicalUrl: parsed.canonicalUrl,
-    metaLine: parsed.page > 1 ? `bilibili · P${parsed.page}` : "bilibili",
+    metaLine: getMetaLine(parsed),
   };
 }
 
@@ -338,7 +724,7 @@ function updateWrapperMetadata(wrapper, data) {
   const resolvedAid = data.aid || state.parsed.aid;
   const canonicalId =
     data.bvid || state.parsed.bvid || (resolvedAid ? `av${resolvedAid}` : state.parsed.rawId);
-  const canonicalUrl = buildCanonicalUrl(canonicalId, state.parsed.page);
+  const canonicalUrl = buildVideoCanonicalUrl(canonicalId, state.parsed.page);
   const title = data.title?.trim();
   const posterUrl = resolvePosterFromData(data, state.parsed.page);
   const titleElement = wrapper.querySelector(".bilibili-inline-player__title");
@@ -389,14 +775,16 @@ function buildWrapper(metadata) {
   const playLabel = createElement(
     "span",
     "bilibili-inline-player__play-label",
-    getStringSetting("button_label", "点击播放")
+    getInitialButtonLabel(metadata.parsed)
   );
   const footer = createElement("div", "bilibili-inline-player__footer");
-  const footerMeta = createElement("div", "bilibili-inline-player__footer-meta", "Official bilibili external player");
+  const footerMeta = createElement("div", "bilibili-inline-player__footer-meta", getFooterMeta(metadata.parsed));
 
   wrapper.dataset.bilibiliUrl = metadata.canonicalUrl;
   wrapper.dataset.bilibiliMeta = metadata.metaLine;
+  wrapper.dataset.bilibiliFooterMeta = getFooterMeta(metadata.parsed);
   wrapper.dataset.bilibiliTitle = metadata.title;
+  wrapper.dataset.bilibiliKind = metadata.parsed.kind;
   wrapper.style.setProperty("--bili-aspect-ratio", DEFAULT_ASPECT_RATIO);
 
   if (metadata.poster) {
@@ -410,7 +798,7 @@ function buildWrapper(metadata) {
   }
 
   playButton.type = "button";
-  playButton.setAttribute("aria-label", `${getStringSetting("button_label", "点击播放")}: ${metadata.title}`);
+  playButton.setAttribute("aria-label", `${getInitialButtonLabel(metadata.parsed)}: ${metadata.title}`);
   playButton.append(playIcon, playLabel);
   meta.append(title, subline);
   media.append(scrim, meta, playButton);
@@ -444,6 +832,35 @@ function primeEmbedState(wrapper) {
   const state = wrapperState.get(wrapper);
 
   if (!state?.parsed || state.resolvePromise) {
+    return;
+  }
+
+  if (state.parsed.kind === "bangumi") {
+    state.iframeUrl = buildIframeUrl(state.parsed);
+    state.externalOnly = false;
+    state.resolvePromise = Promise.resolve(state.parsed);
+    return;
+  }
+
+  if (state.parsed.kind === "live") {
+    if (getBooleanSetting("enable_experimental_live_embed", false)) {
+      state.iframeUrl = buildIframeUrl(state.parsed);
+      state.externalOnly = false;
+    } else {
+      state.iframeUrl = null;
+      state.externalOnly = true;
+      setButtonLabel(wrapper, "Open on bilibili");
+    }
+
+    state.resolvePromise = Promise.resolve(state.parsed);
+    return;
+  }
+
+  if (state.parsed.kind !== "video") {
+    state.iframeUrl = null;
+    state.externalOnly = true;
+    setButtonLabel(wrapper, "Open on bilibili");
+    state.resolvePromise = Promise.resolve(state.parsed);
     return;
   }
 
@@ -513,7 +930,11 @@ async function activatePlayer(wrapper) {
   const frameWrap = createElement("div", "bilibili-inline-player__frame-wrap");
   const iframe = createElement("iframe", "bilibili-inline-player__frame");
   const footer = createElement("div", "bilibili-inline-player__footer");
-  const footerMeta = createElement("div", "bilibili-inline-player__footer-meta", wrapper.dataset.bilibiliMeta);
+  const footerMeta = createElement(
+    "div",
+    "bilibili-inline-player__footer-meta",
+    wrapper.dataset.bilibiliFooterMeta || wrapper.dataset.bilibiliMeta
+  );
 
   frameWrap.style.setProperty("--bili-aspect-ratio", DEFAULT_ASPECT_RATIO);
   iframe.src = state.iframeUrl;
@@ -551,7 +972,7 @@ function collectOneboxCandidates(element) {
     }
 
     const anchor = block.querySelector("a[href]");
-    const parsed = parseFirstSupportedUrl(block.dataset.oneboxSrc, anchor?.href);
+    const parsed = parseFirstSupportedUrl(...collectSourceUrls(block));
 
     if (!parsed) {
       continue;
@@ -565,6 +986,26 @@ function collectOneboxCandidates(element) {
   }
 
   return results;
+}
+
+function collectSourceUrls(target) {
+  const urls = [];
+
+  if (target.dataset?.oneboxSrc) {
+    urls.push(target.dataset.oneboxSrc);
+  }
+
+  for (const anchor of target.querySelectorAll("a[href]")) {
+    urls.push(anchor.href);
+  }
+
+  for (const iframe of target.querySelectorAll("iframe[src]")) {
+    urls.push(iframe.src);
+  }
+
+  urls.push(...extractUrlsFromText(target.textContent || ""));
+
+  return [...new Set(urls.map(normalizeUrlLikeString).filter(Boolean))];
 }
 
 function collectStandaloneCandidates(element, existingTargets) {
@@ -596,6 +1037,66 @@ function collectStandaloneCandidates(element, existingTargets) {
   return results;
 }
 
+function collectIframeCandidates(element, existingTargets) {
+  const limit = Math.max(1, getIntegerSetting("max_embeds_per_post", 4));
+  const results = [];
+  const seen = new Set(existingTargets);
+
+  for (const iframe of element.querySelectorAll("iframe[src]")) {
+    if (results.length + existingTargets.length >= limit) {
+      break;
+    }
+
+    const target = iframe.closest("p, figure") || iframe.parentElement || iframe;
+
+    if (!target || seen.has(target) || target.dataset?.bilibiliInlinePlayer) {
+      continue;
+    }
+
+    const parsed = parseBilibiliUrl(iframe.src);
+
+    if (!parsed) {
+      continue;
+    }
+
+    seen.add(target);
+    results.push({ target, anchor: null, parsed });
+  }
+
+  return results;
+}
+
+function collectEmbedTextCandidates(element, existingTargets) {
+  const limit = Math.max(1, getIntegerSetting("max_embeds_per_post", 4));
+  const results = [];
+  const seen = new Set(existingTargets);
+
+  for (const block of element.querySelectorAll("pre, p")) {
+    if (results.length + existingTargets.length >= limit) {
+      break;
+    }
+
+    if (seen.has(block) || block.dataset?.bilibiliInlinePlayer) {
+      continue;
+    }
+
+    if (block.querySelector("a[href], iframe[src], aside.onebox, article.onebox")) {
+      continue;
+    }
+
+    const parsed = parseFirstSupportedUrl(...extractUrlsFromText(block.textContent || ""));
+
+    if (!parsed) {
+      continue;
+    }
+
+    seen.add(block);
+    results.push({ target: block, anchor: null, parsed });
+  }
+
+  return results;
+}
+
 function replaceCandidate(candidate) {
   candidate.target.dataset.bilibiliInlinePlayer = "processing";
   const replacement = buildWrapper(buildMetadata(candidate.target, candidate.anchor, candidate.parsed));
@@ -614,8 +1115,16 @@ export default apiInitializer("1.8.0", (api) => {
       element,
       oneboxCandidates.map((candidate) => candidate.target)
     );
+    const iframeCandidates = collectIframeCandidates(
+      element,
+      [...oneboxCandidates, ...standaloneCandidates].map((candidate) => candidate.target)
+    );
+    const embedTextCandidates = collectEmbedTextCandidates(
+      element,
+      [...oneboxCandidates, ...standaloneCandidates, ...iframeCandidates].map((candidate) => candidate.target)
+    );
 
-    for (const candidate of [...oneboxCandidates, ...standaloneCandidates]) {
+    for (const candidate of [...oneboxCandidates, ...standaloneCandidates, ...iframeCandidates, ...embedTextCandidates]) {
       replaceCandidate(candidate);
     }
   });
