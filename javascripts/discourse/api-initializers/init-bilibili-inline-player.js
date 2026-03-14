@@ -678,6 +678,34 @@ function normalizeMediaUrl(url) {
   return url;
 }
 
+function ensurePosterPlaceholder(media) {
+  if (!media || media.querySelector(".bilibili-inline-player__placeholder")) {
+    return;
+  }
+
+  media.prepend(createElement("div", "bilibili-inline-player__placeholder", "bilibili"));
+}
+
+function configurePosterElement(poster, title, fallbackUrl = "") {
+  poster.alt = title || "bilibili";
+  poster.loading = "lazy";
+  poster.referrerPolicy = "no-referrer";
+  poster.dataset.bilibiliFallbackPoster = fallbackUrl || "";
+  poster.onerror = () => {
+    const nextFallback = poster.dataset.bilibiliFallbackPoster;
+
+    if (nextFallback && poster.src !== nextFallback) {
+      poster.dataset.bilibiliFallbackPoster = "";
+      poster.src = nextFallback;
+      return;
+    }
+
+    const media = poster.parentElement;
+    poster.remove();
+    ensurePosterPlaceholder(media);
+  };
+}
+
 function extractPoster(target) {
   const image = target.querySelector("img");
   return normalizeMediaUrl(image?.src || "");
@@ -708,7 +736,10 @@ function buildMetadata(target, fallbackAnchor, parsed) {
 function resolvePosterFromData(data, page) {
   const pages = Array.isArray(data?.pages) ? data.pages : [];
   const pageData = pages.find((entry) => entry.page === page) || null;
-  return normalizeMediaUrl(pageData?.first_frame || data?.pic || "");
+  return {
+    posterUrl: normalizeMediaUrl(data?.pic || pageData?.first_frame || ""),
+    fallbackPosterUrl: normalizeMediaUrl(pageData?.first_frame || ""),
+  };
 }
 
 function updateWrapperMetadata(wrapper, data) {
@@ -726,7 +757,7 @@ function updateWrapperMetadata(wrapper, data) {
     data.bvid || state.parsed.bvid || (resolvedAid ? `av${resolvedAid}` : state.parsed.rawId);
   const canonicalUrl = buildVideoCanonicalUrl(canonicalId, state.parsed.page);
   const title = data.title?.trim();
-  const posterUrl = resolvePosterFromData(data, state.parsed.page);
+  const { posterUrl, fallbackPosterUrl } = resolvePosterFromData(data, state.parsed.page);
   const titleElement = wrapper.querySelector(".bilibili-inline-player__title");
   const openLink = wrapper.querySelector(".bilibili-inline-player__footer-link");
   const media = wrapper.querySelector(".bilibili-inline-player__media");
@@ -751,12 +782,11 @@ function updateWrapperMetadata(wrapper, data) {
   if (posterUrl && media) {
     if (existingPoster) {
       existingPoster.src = posterUrl;
-      existingPoster.alt = wrapper.dataset.bilibiliTitle || title || "bilibili";
+      configurePosterElement(existingPoster, wrapper.dataset.bilibiliTitle || title || "bilibili", fallbackPosterUrl);
     } else {
       const poster = createElement("img", "bilibili-inline-player__poster");
       poster.src = posterUrl;
-      poster.alt = wrapper.dataset.bilibiliTitle || title || "bilibili";
-      poster.loading = "lazy";
+      configurePosterElement(poster, wrapper.dataset.bilibiliTitle || title || "bilibili", fallbackPosterUrl);
       placeholder?.remove();
       media.prepend(poster);
     }
@@ -790,8 +820,7 @@ function buildWrapper(metadata) {
   if (metadata.poster) {
     const poster = createElement("img", "bilibili-inline-player__poster");
     poster.src = metadata.poster;
-    poster.alt = metadata.title;
-    poster.loading = "lazy";
+    configurePosterElement(poster, metadata.title);
     media.appendChild(poster);
   } else {
     media.appendChild(createElement("div", "bilibili-inline-player__placeholder", "bilibili"));
