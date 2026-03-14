@@ -53,15 +53,16 @@ function parseBilibiliUrl(href) {
   }
 
   const rawId = match[1];
+  const normalizedId = /^BV/i.test(rawId) ? `BV${rawId.slice(2)}` : `av${rawId.slice(2)}`;
   const page = Math.max(1, Number.parseInt(url.searchParams.get("p"), 10) || 1);
   const parsed = {
-    rawId,
+    rawId: normalizedId,
     page,
-    canonicalUrl: buildCanonicalUrl(rawId, page),
+    canonicalUrl: buildCanonicalUrl(normalizedId, page),
   };
 
   if (/^BV/i.test(rawId)) {
-    parsed.bvid = rawId.toUpperCase();
+    parsed.bvid = normalizedId;
   } else {
     parsed.aid = rawId.slice(2);
   }
@@ -71,6 +72,7 @@ function parseBilibiliUrl(href) {
 
 function buildIframeUrl(parsed) {
   const params = new URLSearchParams({
+    isOutside: "true",
     page: String(parsed.page),
     as_wide: "1",
     high_quality: "1",
@@ -82,7 +84,9 @@ function buildIframeUrl(parsed) {
 
   if (parsed.bvid) {
     params.set("bvid", parsed.bvid);
-  } else if (parsed.aid) {
+  }
+
+  if (parsed.aid) {
     params.set("aid", String(parsed.aid));
   }
 
