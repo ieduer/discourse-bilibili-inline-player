@@ -57,7 +57,7 @@ For ordinary bilibili video and bangumi embeds, the component now also exposes a
 - expose `关闭自动播放重试` inside the loaded embed footer
 - show a delayed hint pointing users to that retry path when they get stuck
 
-For NetEase Cloud Music, the component uses the official `https://music.163.com/outchain/player` iframe path. Official NetEase source code shows the outchain player types map to playlist, album, song, DJ program, and DJ radio.
+For NetEase Cloud Music, the component uses the official outchain player paths. Desktop-like environments use `https://music.163.com/outchain/player`, while mobile-like environments use `https://music.163.com/m/outchain/player` directly to avoid NetEase's current mobile 302 downgrade to an insecure `http://` URL. Official NetEase source code shows the outchain player types map to playlist, album, song, DJ program, and DJ radio.
 
 Still not supported:
 

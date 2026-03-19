@@ -18,7 +18,7 @@ const LIVE_PATH_RE = /^\/(?:blanc\/)?(\d+)\/?$/i;
 const LIVE_IFRAME_PATH_RE = /^\/blackboard\/live\/live-mobile-playerV3\.html$/i;
 const LIVE_IFRAME_FALLBACK_PATH_RE = /^\/blackboard\/live\/live-activity-player\.html$/i;
 const BILIBILI_COMPAT_PLAYER_PATH_RE = /^\/blackboard\/webplayer\/mbplayer\.html$/i;
-const NETEASE_OUTCHAIN_PATH_RE = /^\/outchain\/player$/i;
+const NETEASE_OUTCHAIN_PATH_RE = /^\/(?:m\/)?outchain\/player$/i;
 const IFRAME_SRC_RE = /<iframe\b[^>]*\bsrc=(["'])([^"']+)\1/gi;
 const URL_LIKE_RE =
   /((?:https?:)?\/\/(?:player\.bilibili\.com\/player\.html|www\.bilibili\.com\/blackboard\/(?:live\/live-mobile-playerV3|live\/live-activity-player|webplayer\/mbplayer)\.html|(?:www\.|m\.)?bilibili\.com\/(?:s\/)?video\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/bangumi\/play\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/audio\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/read\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/opus\/[^\s"'<>]+|t\.bilibili\.com\/[^\s"'<>]+|live\.bilibili\.com\/[^\s"'<>]+|(?:www\.)?(?:b23\.tv|bili2233\.cn)\/[^\s"'<>]+|(?:y\.)?music\.163\.com\/[^\s"'<>]+))/gi;
@@ -733,7 +733,11 @@ function buildNetEaseIframeUrl(parsed, autoplay) {
     height: String(getNetEaseEmbedHeight(parsed)),
   });
 
-  return `https://music.163.com/outchain/player?${params.toString()}`;
+  const basePath = getClientEnvironment().isMobileLike
+    ? "https://music.163.com/m/outchain/player"
+    : "https://music.163.com/outchain/player";
+
+  return `${basePath}?${params.toString()}`;
 }
 
 function parseFirstSupportedUrl(...hrefs) {
@@ -809,6 +813,26 @@ function getNetEaseMetaLine(parsed) {
   }
 }
 
+function getClientEnvironment() {
+  const userAgent = (globalThis.navigator?.userAgent || "").toLowerCase();
+  const platform = (globalThis.navigator?.platform || "").toLowerCase();
+  const maxTouchPoints = globalThis.navigator?.maxTouchPoints || 0;
+  const isIPadOSDesktop = /mac/.test(platform) && maxTouchPoints > 1;
+  const isIOS = /iphone|ipad|ipod/.test(userAgent) || isIPadOSDesktop;
+  const isAndroid = /android/.test(userAgent);
+  const isMobileLike = isIOS || isAndroid;
+
+  return {
+    userAgent,
+    platform,
+    maxTouchPoints,
+    isIPadOSDesktop,
+    isIOS,
+    isAndroid,
+    isMobileLike,
+  };
+}
+
 function detectEmbedEnvironmentRisk(provider = "bilibili") {
   if (provider !== "bilibili") {
     return {
@@ -817,10 +841,7 @@ function detectEmbedEnvironmentRisk(provider = "bilibili") {
     };
   }
 
-  const userAgent = (globalThis.navigator?.userAgent || "").toLowerCase();
-  const platform = (globalThis.navigator?.platform || "").toLowerCase();
-  const maxTouchPoints = globalThis.navigator?.maxTouchPoints || 0;
-  const isIOS = /iphone|ipad|ipod/.test(userAgent) || (/mac/.test(platform) && maxTouchPoints > 1);
+  const { userAgent, isIOS } = getClientEnvironment();
   const isInAppBrowser =
     /micromessenger|weibo|qq\/|qqbrowser|aliapp|dingtalk|baiduboxapp|toutiao|newsarticle/.test(userAgent);
   const isAndroidWebView = /; wv\)/.test(userAgent) || /\bversion\/[\d.]+ chrome\/[\d.]+ mobile safari\/[\d.]+\b/.test(userAgent);
