@@ -6,6 +6,7 @@ const DYNAMIC_HOSTS = new Set(["www.bilibili.com", "m.bilibili.com", "t.bilibili
 const LIVE_HOSTS = new Set(["live.bilibili.com", "www.live.bilibili.com"]);
 const SHORT_HOSTS = new Set(["b23.tv", "www.b23.tv", "bili2233.cn", "www.bili2233.cn"]);
 const PLAYER_HOSTS = new Set(["player.bilibili.com"]);
+const NETEASE_HOSTS = new Set(["music.163.com", "y.music.163.com"]);
 const VIDEO_PATH_RE = /^\/(?:s\/)?video\/(BV[0-9A-Za-z]+|av\d+)\/?$/i;
 const SHORT_VIDEO_PATH_RE = /^\/(?:video\/)?(BV[0-9A-Za-z]+|av\d+)(?:\/p(\d+))?\/?$/i;
 const BANGUMI_PATH_RE = /^\/bangumi\/play\/(ep|ss)(\d+)\/?$/i;
@@ -16,11 +17,24 @@ const DYNAMIC_PATH_RE = /^\/(\d+)\/?$/i;
 const LIVE_PATH_RE = /^\/(?:blanc\/)?(\d+)\/?$/i;
 const LIVE_IFRAME_PATH_RE = /^\/blackboard\/live\/live-mobile-playerV3\.html$/i;
 const LIVE_IFRAME_FALLBACK_PATH_RE = /^\/blackboard\/live\/live-activity-player\.html$/i;
+const BILIBILI_COMPAT_PLAYER_PATH_RE = /^\/blackboard\/webplayer\/mbplayer\.html$/i;
+const NETEASE_OUTCHAIN_PATH_RE = /^\/outchain\/player$/i;
 const IFRAME_SRC_RE = /<iframe\b[^>]*\bsrc=(["'])([^"']+)\1/gi;
 const URL_LIKE_RE =
-  /((?:https?:)?\/\/(?:player\.bilibili\.com\/player\.html|www\.bilibili\.com\/blackboard\/live\/live-mobile-playerV3\.html|www\.bilibili\.com\/blackboard\/live\/live-activity-player\.html|(?:www\.|m\.)?bilibili\.com\/(?:s\/)?video\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/bangumi\/play\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/audio\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/read\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/opus\/[^\s"'<>]+|t\.bilibili\.com\/[^\s"'<>]+|live\.bilibili\.com\/[^\s"'<>]+|(?:www\.)?(?:b23\.tv|bili2233\.cn)\/[^\s"'<>]+))/gi;
+  /((?:https?:)?\/\/(?:player\.bilibili\.com\/player\.html|www\.bilibili\.com\/blackboard\/(?:live\/live-mobile-playerV3|live\/live-activity-player|webplayer\/mbplayer)\.html|(?:www\.|m\.)?bilibili\.com\/(?:s\/)?video\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/bangumi\/play\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/audio\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/read\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/opus\/[^\s"'<>]+|t\.bilibili\.com\/[^\s"'<>]+|live\.bilibili\.com\/[^\s"'<>]+|(?:www\.)?(?:b23\.tv|bili2233\.cn)\/[^\s"'<>]+|(?:y\.)?music\.163\.com\/[^\s"'<>]+))/gi;
 const DEFAULT_ASPECT_RATIO = "16 / 9";
 const JSONP_TIMEOUT_MS = 8000;
+const BILIBILI_STUCK_HELP_DELAY_MS = 5000;
+const NETEASE_OUTCHAIN_TYPE_BY_MEDIA = {
+  playlist: "0",
+  album: "1",
+  song: "2",
+  program: "3",
+  djradio: "4",
+};
+const NETEASE_MEDIA_BY_OUTCHAIN_TYPE = Object.fromEntries(
+  Object.entries(NETEASE_OUTCHAIN_TYPE_BY_MEDIA).map(([mediaType, type]) => [type, mediaType])
+);
 
 const themeSettings = globalThis.settings || {};
 const wrapperState = new WeakMap();
@@ -79,6 +93,22 @@ function buildDynamicCanonicalUrl(dynamicId) {
   return `https://t.bilibili.com/${dynamicId}`;
 }
 
+function buildNetEaseCanonicalUrl(mediaType, itemId) {
+  switch (mediaType) {
+    case "playlist":
+      return `https://music.163.com/playlist?id=${itemId}`;
+    case "album":
+      return `https://music.163.com/album?id=${itemId}`;
+    case "program":
+      return `https://music.163.com/program?id=${itemId}`;
+    case "djradio":
+      return `https://music.163.com/djradio?id=${itemId}`;
+    case "song":
+    default:
+      return `https://music.163.com/song?id=${itemId}`;
+  }
+}
+
 function normalizeVideoId(rawId) {
   return /^BV/i.test(rawId) ? `BV${rawId.slice(2)}` : `av${rawId.slice(2)}`;
 }
@@ -86,6 +116,7 @@ function normalizeVideoId(rawId) {
 function createParsedVideo(rawId, page, extras = {}) {
   const normalizedId = normalizeVideoId(rawId);
   const parsed = {
+    provider: "bilibili",
     kind: "video",
     rawId: normalizedId,
     page,
@@ -104,6 +135,7 @@ function createParsedVideo(rawId, page, extras = {}) {
 
 function createParsedBangumi({ episodeId = "", seasonId = "", extras = {} }) {
   return {
+    provider: "bilibili",
     kind: "bangumi",
     episodeId,
     seasonId,
@@ -116,6 +148,7 @@ function createParsedBangumi({ episodeId = "", seasonId = "", extras = {} }) {
 
 function createParsedLive(roomId, extras = {}) {
   return {
+    provider: "bilibili",
     kind: "live",
     roomId,
     page: 1,
@@ -127,6 +160,7 @@ function createParsedLive(roomId, extras = {}) {
 
 function createParsedAudio(audioId, isPlaylist = false, extras = {}) {
   return {
+    provider: "bilibili",
     kind: "audio",
     audioId,
     isPlaylist,
@@ -139,6 +173,7 @@ function createParsedAudio(audioId, isPlaylist = false, extras = {}) {
 
 function createParsedArticle(articleId, extras = {}) {
   return {
+    provider: "bilibili",
     kind: "article",
     articleId,
     page: 1,
@@ -150,6 +185,7 @@ function createParsedArticle(articleId, extras = {}) {
 
 function createParsedOpus(opusId, extras = {}) {
   return {
+    provider: "bilibili",
     kind: "opus",
     opusId,
     page: 1,
@@ -161,11 +197,26 @@ function createParsedOpus(opusId, extras = {}) {
 
 function createParsedDynamic(dynamicId, extras = {}) {
   return {
+    provider: "bilibili",
     kind: "dynamic",
     dynamicId,
     page: 1,
     rawId: String(dynamicId),
     canonicalUrl: buildDynamicCanonicalUrl(dynamicId),
+    ...extras,
+  };
+}
+
+function createParsedNetEase(mediaType, itemId, extras = {}) {
+  return {
+    provider: "netease",
+    kind: "netease",
+    mediaType,
+    itemId: String(itemId),
+    outchainType: NETEASE_OUTCHAIN_TYPE_BY_MEDIA[mediaType],
+    page: 1,
+    rawId: `${mediaType}:${itemId}`,
+    canonicalUrl: buildNetEaseCanonicalUrl(mediaType, itemId),
     ...extras,
   };
 }
@@ -366,6 +417,131 @@ function parseLiveIframeUrl(url) {
   });
 }
 
+function parseCompatPlayerUrl(url) {
+  if (url.hostname.toLowerCase() !== "www.bilibili.com" || !BILIBILI_COMPAT_PLAYER_PATH_RE.test(url.pathname)) {
+    return null;
+  }
+
+  const bvid = url.searchParams.get("bvid");
+  const aid = url.searchParams.get("aid");
+  const cid = url.searchParams.get("cid");
+  const episodeId = url.searchParams.get("episodeId");
+  const seasonId = url.searchParams.get("seasonId");
+
+  if (episodeId || seasonId) {
+    return createParsedBangumi({
+      episodeId: episodeId || "",
+      seasonId: seasonId || "",
+      extras: {
+        compatibilityPlayerUrl: url.toString(),
+      },
+    });
+  }
+
+  if (!bvid && !aid) {
+    return null;
+  }
+
+  const rawId = bvid || `av${aid}`;
+  const parsed = createParsedVideo(rawId, parsePageNumber(url.searchParams.get("p"), url.searchParams.get("page")), {
+    compatibilityPlayerUrl: url.toString(),
+  });
+
+  if (aid) {
+    parsed.aid = aid;
+  }
+
+  if (cid) {
+    parsed.cid = cid;
+  }
+
+  return parsed;
+}
+
+function normalizeNetEaseRoutePath(pathname) {
+  if (!pathname) {
+    return "/";
+  }
+
+  if (pathname.startsWith("/m/")) {
+    return pathname.slice(2);
+  }
+
+  return pathname;
+}
+
+function parseNetEaseRoute(routeUrl) {
+  const pathname = normalizeNetEaseRoutePath(routeUrl.pathname);
+  const id = routeUrl.searchParams.get("id");
+
+  if (!/^\d+$/.test(id || "")) {
+    return null;
+  }
+
+  switch (pathname) {
+    case "/song":
+      return createParsedNetEase("song", id);
+    case "/playlist":
+      return createParsedNetEase("playlist", id);
+    case "/album":
+      return createParsedNetEase("album", id);
+    case "/program":
+      return createParsedNetEase("program", id);
+    case "/dj":
+    case "/djradio":
+      return createParsedNetEase("djradio", id);
+    default:
+      return null;
+  }
+}
+
+function parseNetEaseOutchainUrl(url) {
+  if (url.hostname.toLowerCase() !== "music.163.com" || !NETEASE_OUTCHAIN_PATH_RE.test(url.pathname)) {
+    return null;
+  }
+
+  const mediaType = NETEASE_MEDIA_BY_OUTCHAIN_TYPE[url.searchParams.get("type") || ""];
+  const itemId = url.searchParams.get("id");
+
+  if (!mediaType || !/^\d+$/.test(itemId || "")) {
+    return null;
+  }
+
+  const height = Number.parseInt(url.searchParams.get("height"), 10);
+
+  return createParsedNetEase(mediaType, itemId, {
+    officialPlayerUrl: url.toString(),
+    outchainHeight: Number.isInteger(height) && height > 0 ? height : null,
+  });
+}
+
+function parseNetEasePageUrl(url) {
+  if (!NETEASE_HOSTS.has(url.hostname.toLowerCase())) {
+    return null;
+  }
+
+  const outchainParsed = parseNetEaseOutchainUrl(url);
+  if (outchainParsed) {
+    return outchainParsed;
+  }
+
+  const directParsed = parseNetEaseRoute(url);
+  if (directParsed) {
+    return directParsed;
+  }
+
+  if (url.hash?.startsWith("#/")) {
+    try {
+      const hashRoute = new URL(`https://music.163.com${url.hash.slice(1)}`);
+      return parseNetEaseRoute(hashRoute);
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
 function normalizeUrlLikeString(value) {
   if (typeof value !== "string") {
     return "";
@@ -403,11 +579,17 @@ function parseBilibiliUrl(href) {
     parseDynamicPageUrl(url) ||
     parseShortVideoUrl(url) ||
     parsePlayerUrl(url) ||
-    parseLiveIframeUrl(url)
+    parseLiveIframeUrl(url) ||
+    parseCompatPlayerUrl(url) ||
+    parseNetEasePageUrl(url)
   );
 }
 
 function buildIframeUrl(parsed) {
+  if (parsed.kind === "netease") {
+    return buildNetEaseIframeUrl(parsed, getBooleanSetting("autoplay_on_click", true));
+  }
+
   if (parsed.kind === "bangumi") {
     const params = new URLSearchParams();
 
@@ -456,6 +638,53 @@ function buildIframeUrl(parsed) {
   return `https://player.bilibili.com/player.html?${params.toString()}`;
 }
 
+function buildNoAutoplayIframeUrl(parsed) {
+  if (parsed.kind === "netease") {
+    return buildNetEaseIframeUrl(parsed, false);
+  }
+
+  if (parsed.kind === "bangumi") {
+    const params = new URLSearchParams();
+
+    if (parsed.episodeId) {
+      params.set("episodeId", String(parsed.episodeId));
+    }
+
+    if (parsed.seasonId) {
+      params.set("seasonId", String(parsed.seasonId));
+    }
+
+    return `https://player.bilibili.com/player.html?${params.toString()}`;
+  }
+
+  const isVideoLike = parsed.kind === "video" || (!parsed.kind && (parsed.bvid || parsed.aid));
+
+  if (!isVideoLike) {
+    return "";
+  }
+
+  const params = new URLSearchParams({
+    isOutside: "true",
+    page: String(parsed.page),
+    as_wide: "1",
+    high_quality: "1",
+  });
+
+  if (parsed.bvid) {
+    params.set("bvid", parsed.bvid);
+  }
+
+  if (parsed.aid) {
+    params.set("aid", String(parsed.aid));
+  }
+
+  if (parsed.cid) {
+    params.set("cid", String(parsed.cid));
+  }
+
+  return `https://player.bilibili.com/player.html?${params.toString()}`;
+}
+
 function buildLiveIframeUrl(parsed) {
   const liveId = String(parsed.activityCid || parsed.roomId);
   const shouldPreferActivityPlayer =
@@ -486,6 +715,25 @@ function buildLiveIframeUrl(parsed) {
   });
 
   return `https://www.bilibili.com/blackboard/live/live-mobile-playerV3.html?${params.toString()}`;
+}
+
+function getNetEaseEmbedHeight(parsed) {
+  if (Number.isInteger(parsed.outchainHeight) && parsed.outchainHeight > 0) {
+    return parsed.outchainHeight;
+  }
+
+  return parsed.mediaType === "song" || parsed.mediaType === "program" ? 66 : 430;
+}
+
+function buildNetEaseIframeUrl(parsed, autoplay) {
+  const params = new URLSearchParams({
+    type: parsed.outchainType,
+    id: String(parsed.itemId),
+    auto: autoplay ? "1" : "0",
+    height: String(getNetEaseEmbedHeight(parsed)),
+  });
+
+  return `https://music.163.com/outchain/player?${params.toString()}`;
 }
 
 function parseFirstSupportedUrl(...hrefs) {
@@ -538,14 +786,41 @@ function getMetaLine(parsed) {
       return "bilibili opus";
     case "dynamic":
       return "bilibili dynamic";
+    case "netease":
+      return getNetEaseMetaLine(parsed);
     default:
       return "bilibili";
   }
 }
 
-function detectEmbedEnvironmentRisk() {
+function getNetEaseMetaLine(parsed) {
+  switch (parsed.mediaType) {
+    case "playlist":
+      return "NetEase Cloud Music playlist";
+    case "album":
+      return "NetEase Cloud Music album";
+    case "program":
+      return "NetEase Cloud Music DJ program";
+    case "djradio":
+      return "NetEase Cloud Music DJ radio";
+    case "song":
+    default:
+      return "NetEase Cloud Music song";
+  }
+}
+
+function detectEmbedEnvironmentRisk(provider = "bilibili") {
+  if (provider !== "bilibili") {
+    return {
+      level: "none",
+      message: "",
+    };
+  }
+
   const userAgent = (globalThis.navigator?.userAgent || "").toLowerCase();
-  const isIOS = /iphone|ipad|ipod/.test(userAgent);
+  const platform = (globalThis.navigator?.platform || "").toLowerCase();
+  const maxTouchPoints = globalThis.navigator?.maxTouchPoints || 0;
+  const isIOS = /iphone|ipad|ipod/.test(userAgent) || (/mac/.test(platform) && maxTouchPoints > 1);
   const isInAppBrowser =
     /micromessenger|weibo|qq\/|qqbrowser|aliapp|dingtalk|baiduboxapp|toutiao|newsarticle/.test(userAgent);
   const isAndroidWebView = /; wv\)/.test(userAgent) || /\bversion\/[\d.]+ chrome\/[\d.]+ mobile safari\/[\d.]+\b/.test(userAgent);
@@ -586,13 +861,31 @@ function getFallbackTitle(parsed) {
       return `动态 opus ${parsed.opusId}`;
     case "dynamic":
       return `动态 ${parsed.dynamicId}`;
+    case "netease":
+      return getNetEaseFallbackTitle(parsed);
     default:
       return parsed.rawId || "bilibili";
   }
 }
 
+function getNetEaseFallbackTitle(parsed) {
+  switch (parsed.mediaType) {
+    case "playlist":
+      return `网易云歌单 ${parsed.itemId}`;
+    case "album":
+      return `网易云专辑 ${parsed.itemId}`;
+    case "program":
+      return `网易云播客节目 ${parsed.itemId}`;
+    case "djradio":
+      return `网易云播客 ${parsed.itemId}`;
+    case "song":
+    default:
+      return `网易云单曲 ${parsed.itemId}`;
+  }
+}
+
 function isKnownInlineKind(parsed) {
-  if (parsed.kind === "video" || parsed.kind === "bangumi") {
+  if (parsed.kind === "video" || parsed.kind === "bangumi" || parsed.kind === "netease") {
     return true;
   }
 
@@ -604,7 +897,7 @@ function isKnownInlineKind(parsed) {
 }
 
 function getInitialButtonLabel(parsed) {
-  return isKnownInlineKind(parsed) ? getStringSetting("button_label", "点击播放") : "Open on bilibili";
+  return isKnownInlineKind(parsed) ? getStringSetting("button_label", "点击播放") : getOpenLabel(parsed);
 }
 
 function getFooterMeta(parsed) {
@@ -623,8 +916,24 @@ function getFooterMeta(parsed) {
     case "opus":
     case "dynamic":
       return "Open on bilibili";
+    case "netease":
+      return getNetEaseFooterMeta(parsed);
     default:
       return "bilibili";
+  }
+}
+
+function getNetEaseFooterMeta(parsed) {
+  switch (parsed.mediaType) {
+    case "playlist":
+    case "album":
+    case "djradio":
+      return "Official NetEase Cloud Music outchain player";
+    case "program":
+      return "Official NetEase Cloud Music outchain player";
+    case "song":
+    default:
+      return "Official NetEase Cloud Music outchain player";
   }
 }
 
@@ -635,6 +944,14 @@ function getLiveFooterMeta(parsed) {
   return usesActivityPlayer
     ? "Official bilibili live activity player"
     : "Official bilibili live H5 player";
+}
+
+function getOpenLabel(parsed) {
+  return parsed.provider === "netease" ? "Open on NetEase Cloud Music" : "Open on bilibili";
+}
+
+function getEmbedTitle(parsed) {
+  return parsed.provider === "netease" ? "NetEase Cloud Music player" : "bilibili player";
 }
 
 function loadJsonp(src) {
@@ -746,12 +1063,20 @@ function normalizeMediaUrl(url) {
   return url;
 }
 
+function getPlaceholderLabel(parsedOrProvider) {
+  const provider =
+    typeof parsedOrProvider === "string" ? parsedOrProvider : parsedOrProvider?.provider || "bilibili";
+  return provider === "netease" ? "NetEase Cloud Music" : "bilibili";
+}
+
 function ensurePosterPlaceholder(media) {
   if (!media || media.querySelector(".bilibili-inline-player__placeholder")) {
     return;
   }
 
-  media.prepend(createElement("div", "bilibili-inline-player__placeholder", "bilibili"));
+  media.prepend(
+    createElement("div", "bilibili-inline-player__placeholder", media.dataset.placeholderLabel || "bilibili")
+  );
 }
 
 function configurePosterElement(poster, title, fallbackUrl = "") {
@@ -798,7 +1123,7 @@ function buildMetadata(target, fallbackAnchor, parsed) {
     poster: extractPoster(target),
     canonicalUrl: parsed.canonicalUrl,
     metaLine: getMetaLine(parsed),
-    environmentRisk: detectEmbedEnvironmentRisk(),
+    environmentRisk: detectEmbedEnvironmentRisk(parsed.provider),
   };
 }
 
@@ -862,6 +1187,14 @@ function updateWrapperMetadata(wrapper, data) {
   }
 }
 
+function getPreviewAspectRatio(parsed) {
+  return parsed.provider === "netease" ? "4 / 3" : DEFAULT_ASPECT_RATIO;
+}
+
+function getLoadedFrameHeight(parsed) {
+  return parsed.kind === "netease" ? getNetEaseEmbedHeight(parsed) : 0;
+}
+
 function buildWrapper(metadata) {
   const wrapper = createElement("div", "bilibili-inline-player");
   const media = createElement("div", "bilibili-inline-player__media");
@@ -886,8 +1219,11 @@ function buildWrapper(metadata) {
   wrapper.dataset.bilibiliFooterMeta = getFooterMeta(metadata.parsed);
   wrapper.dataset.bilibiliTitle = metadata.title;
   wrapper.dataset.bilibiliKind = metadata.parsed.kind;
+  wrapper.dataset.bilibiliProvider = metadata.parsed.provider || "bilibili";
   wrapper.dataset.bilibiliRiskLevel = metadata.environmentRisk?.level || "none";
-  wrapper.style.setProperty("--bili-aspect-ratio", DEFAULT_ASPECT_RATIO);
+  wrapper.style.setProperty("--bili-aspect-ratio", getPreviewAspectRatio(metadata.parsed));
+  wrapper.classList.add(`bilibili-inline-player--${metadata.parsed.provider || "bilibili"}`);
+  media.dataset.placeholderLabel = getPlaceholderLabel(metadata.parsed);
 
   if (metadata.poster) {
     const poster = createElement("img", "bilibili-inline-player__poster");
@@ -895,7 +1231,9 @@ function buildWrapper(metadata) {
     configurePosterElement(poster, metadata.title);
     media.appendChild(poster);
   } else {
-    media.appendChild(createElement("div", "bilibili-inline-player__placeholder", "bilibili"));
+    media.appendChild(
+      createElement("div", "bilibili-inline-player__placeholder", getPlaceholderLabel(metadata.parsed))
+    );
   }
 
   playButton.type = "button";
@@ -910,7 +1248,7 @@ function buildWrapper(metadata) {
   }
 
   if (getBooleanSetting("show_open_link", true)) {
-    const link = createElement("a", "bilibili-inline-player__footer-link", "Open on bilibili");
+    const link = createElement("a", "bilibili-inline-player__footer-link", getOpenLabel(metadata.parsed));
     link.href = metadata.canonicalUrl;
     link.target = "_blank";
     link.rel = "noopener nofollow ugc";
@@ -931,7 +1269,7 @@ function buildWrapper(metadata) {
     isKnownInlineKind(metadata.parsed) &&
     getBooleanSetting("auto_open_on_high_risk_env", true)
   ) {
-    setButtonLabel(wrapper, "Open on bilibili");
+    setButtonLabel(wrapper, getOpenLabel(metadata.parsed));
   }
 
   primeEmbedState(wrapper);
@@ -962,13 +1300,15 @@ function primeEmbedState(wrapper) {
   if (isHardRiskEmbedEnv) {
     state.iframeUrl = null;
     state.externalOnly = true;
-    setButtonLabel(wrapper, "Open on bilibili");
+    setButtonLabel(wrapper, getOpenLabel(state.parsed));
     state.resolvePromise = Promise.resolve(state.parsed);
     return;
   }
 
   if (state.parsed.kind === "bangumi") {
     state.iframeUrl = buildIframeUrl(state.parsed);
+    state.standardIframeUrl = state.iframeUrl;
+    state.noAutoplayIframeUrl = buildNoAutoplayIframeUrl(state.parsed);
     state.externalOnly = false;
     state.resolvePromise = Promise.resolve(state.parsed);
     return;
@@ -977,13 +1317,24 @@ function primeEmbedState(wrapper) {
   if (state.parsed.kind === "live") {
     if (getBooleanSetting("enable_experimental_live_embed", true)) {
       state.iframeUrl = buildIframeUrl(state.parsed);
+      state.standardIframeUrl = state.iframeUrl;
+      state.noAutoplayIframeUrl = "";
       state.externalOnly = false;
     } else {
       state.iframeUrl = null;
       state.externalOnly = true;
-      setButtonLabel(wrapper, "Open on bilibili");
+      setButtonLabel(wrapper, getOpenLabel(state.parsed));
     }
 
+    state.resolvePromise = Promise.resolve(state.parsed);
+    return;
+  }
+
+  if (state.parsed.kind === "netease") {
+    state.iframeUrl = buildIframeUrl(state.parsed);
+    state.standardIframeUrl = state.iframeUrl;
+    state.noAutoplayIframeUrl = buildNoAutoplayIframeUrl(state.parsed);
+    state.externalOnly = false;
     state.resolvePromise = Promise.resolve(state.parsed);
     return;
   }
@@ -991,7 +1342,7 @@ function primeEmbedState(wrapper) {
   if (state.parsed.kind !== "video") {
     state.iframeUrl = null;
     state.externalOnly = true;
-    setButtonLabel(wrapper, "Open on bilibili");
+    setButtonLabel(wrapper, getOpenLabel(state.parsed));
     state.resolvePromise = Promise.resolve(state.parsed);
     return;
   }
@@ -1015,21 +1366,152 @@ function primeEmbedState(wrapper) {
       }
 
       state.iframeUrl = buildIframeUrl(resolved);
+      state.standardIframeUrl = state.iframeUrl;
+      state.noAutoplayIframeUrl = buildNoAutoplayIframeUrl(resolved);
       state.externalOnly = false;
       return resolved;
     })
     .catch(() => {
       if (directEmbedReady) {
         state.iframeUrl = buildIframeUrl(state.parsed);
+        state.standardIframeUrl = state.iframeUrl;
+        state.noAutoplayIframeUrl = buildNoAutoplayIframeUrl(state.parsed);
         state.externalOnly = false;
         return state.parsed;
       }
 
       state.iframeUrl = null;
       state.externalOnly = true;
-      setButtonLabel(wrapper, "Open on bilibili");
+      setButtonLabel(wrapper, getOpenLabel(state.parsed));
       return null;
     });
+}
+
+function supportsNoAutoplayRetry(state) {
+  return Boolean(
+    state?.noAutoplayIframeUrl &&
+      state.noAutoplayIframeUrl !== state.standardIframeUrl &&
+      state.parsed?.provider === "bilibili" &&
+      (state.parsed.kind === "video" || state.parsed.kind === "bangumi")
+  );
+}
+
+function updateRetryButtonLabel(wrapper) {
+  const button = wrapper.querySelector(".bilibili-inline-player__retry-button");
+  const state = wrapperState.get(wrapper);
+
+  if (!button || !state) {
+    return;
+  }
+
+  button.textContent = state.autoplayDisabled ? "已关闭自动播放" : "关闭自动播放重试";
+  button.disabled = Boolean(state.autoplayDisabled);
+}
+
+function updateFooterMeta(wrapper) {
+  const footerMeta = wrapper.querySelector(".bilibili-inline-player__footer-meta");
+  const state = wrapperState.get(wrapper);
+
+  if (!footerMeta || !state?.parsed) {
+    return;
+  }
+
+  footerMeta.textContent =
+    state.autoplayDisabled && supportsNoAutoplayRetry(state)
+      ? `${wrapper.dataset.bilibiliFooterMeta || wrapper.dataset.bilibiliMeta} · autoplay off`
+      : wrapper.dataset.bilibiliFooterMeta || wrapper.dataset.bilibiliMeta;
+}
+
+function swapIframeSource(wrapper, nextUrl) {
+  const iframe = wrapper.querySelector(".bilibili-inline-player__frame");
+
+  if (!iframe || !nextUrl) {
+    return;
+  }
+
+  iframe.src = nextUrl;
+}
+
+function retryWithoutAutoplay(wrapper) {
+  const state = wrapperState.get(wrapper);
+
+  if (!supportsNoAutoplayRetry(state) || state.autoplayDisabled) {
+    return;
+  }
+
+  state.autoplayDisabled = true;
+  swapIframeSource(wrapper, state.noAutoplayIframeUrl);
+  updateRetryButtonLabel(wrapper);
+  updateFooterMeta(wrapper);
+}
+
+function maybeAttachStuckHelpNotice(wrapper) {
+  const state = wrapperState.get(wrapper);
+
+  if (!supportsNoAutoplayRetry(state)) {
+    return;
+  }
+
+  window.setTimeout(() => {
+    if (!wrapper.isConnected || wrapper.dataset.bilibiliLoaded !== "1") {
+      return;
+    }
+
+    const footerContent = wrapper.querySelector(".bilibili-inline-player__footer-content");
+
+    if (!footerContent || footerContent.querySelector(".bilibili-inline-player__notice--stuck")) {
+      return;
+    }
+
+    footerContent.appendChild(
+      createElement(
+        "div",
+        "bilibili-inline-player__notice bilibili-inline-player__notice--stuck",
+        "若卡在“你感兴趣的视频都在B站”，请先点“关闭自动播放重试”，仍不行再点下方打开原站。"
+      )
+    );
+  }, BILIBILI_STUCK_HELP_DELAY_MS);
+}
+
+function buildLoadedFooter(wrapper) {
+  const state = wrapperState.get(wrapper);
+  const footer = createElement("div", "bilibili-inline-player__footer");
+  const footerContent = createElement("div", "bilibili-inline-player__footer-content");
+  const footerMeta = createElement(
+    "div",
+    "bilibili-inline-player__footer-meta",
+    wrapper.dataset.bilibiliFooterMeta || wrapper.dataset.bilibiliMeta
+  );
+  const footerActions = createElement("div", "bilibili-inline-player__footer-actions");
+
+  footerContent.appendChild(footerMeta);
+
+  if (supportsNoAutoplayRetry(state)) {
+    const retryButton = createElement(
+      "button",
+      "bilibili-inline-player__footer-button bilibili-inline-player__retry-button",
+      state.autoplayDisabled ? "已关闭自动播放" : "关闭自动播放重试"
+    );
+    retryButton.type = "button";
+    retryButton.disabled = Boolean(state.autoplayDisabled);
+    retryButton.addEventListener("click", () => retryWithoutAutoplay(wrapper));
+    footerActions.appendChild(retryButton);
+  }
+
+  if (getBooleanSetting("show_open_link", true)) {
+    const link = createElement("a", "bilibili-inline-player__footer-link", getOpenLabel(state.parsed));
+    link.href = wrapper.dataset.bilibiliUrl;
+    link.target = "_blank";
+    link.rel = "noopener nofollow ugc";
+    footerActions.appendChild(link);
+  }
+
+  footer.appendChild(footerContent);
+  if (footerActions.childElementCount > 0) {
+    footer.appendChild(footerActions);
+  }
+
+  return footer;
 }
 
 async function activatePlayer(wrapper) {
@@ -1051,7 +1533,7 @@ async function activatePlayer(wrapper) {
 
   if (state?.externalOnly || !state?.iframeUrl) {
     wrapper.dataset.bilibiliLoading = "0";
-    setButtonLabel(wrapper, "Open on bilibili");
+    setButtonLabel(wrapper, getOpenLabel(state?.parsed || { provider: "bilibili" }));
     window.open(wrapper.dataset.bilibiliUrl, "_blank", "noopener,noreferrer");
     return;
   }
@@ -1061,33 +1543,28 @@ async function activatePlayer(wrapper) {
 
   const frameWrap = createElement("div", "bilibili-inline-player__frame-wrap");
   const iframe = createElement("iframe", "bilibili-inline-player__frame");
-  const footer = createElement("div", "bilibili-inline-player__footer");
-  const footerMeta = createElement(
-    "div",
-    "bilibili-inline-player__footer-meta",
-    wrapper.dataset.bilibiliFooterMeta || wrapper.dataset.bilibiliMeta
-  );
+  const frameHeight = getLoadedFrameHeight(state.parsed);
 
-  frameWrap.style.setProperty("--bili-aspect-ratio", DEFAULT_ASPECT_RATIO);
+  if (frameHeight > 0) {
+    frameWrap.classList.add("bilibili-inline-player__frame-wrap--fixed");
+    frameWrap.style.setProperty("--bili-frame-height", `${frameHeight}px`);
+  } else {
+    frameWrap.style.setProperty("--bili-aspect-ratio", DEFAULT_ASPECT_RATIO);
+  }
   iframe.src = state.iframeUrl;
   iframe.loading = "lazy";
   iframe.referrerPolicy = "strict-origin-when-cross-origin";
   iframe.allow = "autoplay; fullscreen; picture-in-picture";
   iframe.allowFullscreen = true;
-  iframe.title = wrapper.dataset.bilibiliTitle || "bilibili player";
+  iframe.title = wrapper.dataset.bilibiliTitle || getEmbedTitle(state.parsed);
 
   frameWrap.appendChild(iframe);
-  footer.appendChild(footerMeta);
-
-  if (getBooleanSetting("show_open_link", true)) {
-    const link = createElement("a", "bilibili-inline-player__footer-link", "Open on bilibili");
-    link.href = wrapper.dataset.bilibiliUrl;
-    link.target = "_blank";
-    link.rel = "noopener nofollow ugc";
-    footer.appendChild(link);
-  }
+  const footer = buildLoadedFooter(wrapper);
 
   wrapper.replaceChildren(frameWrap, footer);
+  updateRetryButtonLabel(wrapper);
+  updateFooterMeta(wrapper);
+  maybeAttachStuckHelpNotice(wrapper);
 }
 
 function collectOneboxCandidates(element) {

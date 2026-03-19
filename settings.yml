@@ -1,7 +1,7 @@
 enabled:
   default: true
   type: bool
-  description: Enable inline bilibili embeds for supported video URLs.
+  description: Enable inline bilibili and NetEase Cloud Music embeds for supported URLs.
 
 autoplay_on_click:
   default: true
@@ -13,12 +13,12 @@ max_embeds_per_post:
   type: integer
   min: 1
   max: 20
-  description: Maximum number of bilibili URLs to enhance in one cooked post.
+  description: Maximum number of supported media URLs to enhance in one cooked post.
 
 show_open_link:
   default: true
   type: bool
-  description: Show a fallback link to the original bilibili page under the embed.
+  description: Show a fallback link to the original source page under the embed.
 
 enable_experimental_live_embed:
   default: true

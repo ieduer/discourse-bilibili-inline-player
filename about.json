@@ -1,8 +1,8 @@
 {
-  "name": "Bilibili Inline Player",
+  "name": "Bilibili + NetEase Inline Player",
   "about_url": "https://github.com/ieduer/discourse-bilibili-inline-player",
   "license_url": "https://github.com/ieduer/discourse-bilibili-inline-player/blob/main/LICENSE",
   "component": true,
   "authors": "suen",
-  "theme_version": "0.2.4"
+  "theme_version": "0.3.0"
 }
