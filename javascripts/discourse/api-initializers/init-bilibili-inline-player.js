@@ -722,7 +722,7 @@ function getNetEaseEmbedHeight(parsed) {
     return parsed.outchainHeight;
   }
 
-  return parsed.mediaType === "song" || parsed.mediaType === "program" ? 66 : 430;
+  return parsed.mediaType === "song" || parsed.mediaType === "program" ? 86 : 430;
 }
 
 function buildNetEaseIframeUrl(parsed, autoplay) {
@@ -993,18 +993,8 @@ function getFooterMeta(parsed) {
   }
 }
 
-function getNetEaseFooterMeta(parsed) {
-  switch (parsed.mediaType) {
-    case "playlist":
-    case "album":
-    case "djradio":
-      return "网易云外链播放器";
-    case "program":
-      return "网易云外链播放器";
-    case "song":
-    default:
-      return "网易云外链播放器";
-  }
+function getNetEaseFooterMeta() {
+  return "网易云外链播放器";
 }
 
 function getLiveFooterMeta(parsed) {
@@ -1268,7 +1258,18 @@ function updateWrapperMetadata(wrapper, data) {
 }
 
 function getPreviewAspectRatio(parsed) {
-  return "4 / 3";
+  switch (parsed.kind) {
+    case "video":
+    case "bangumi":
+    case "live":
+      return "16 / 9";
+    case "netease":
+      return parsed.mediaType === "song" || parsed.mediaType === "program"
+        ? "auto"
+        : "4 / 3";
+    default:
+      return "4 / 3";
+  }
 }
 
 function getLoadedFrameHeight(parsed) {
@@ -1278,6 +1279,7 @@ function getLoadedFrameHeight(parsed) {
 function buildWrapper(metadata) {
   const wrapper = createElement("div", "bilibili-inline-player");
   const media = createElement("div", "bilibili-inline-player__media");
+  const scrim = createElement("div", "bilibili-inline-player__scrim");
   const title = createElement("h3", "bilibili-inline-player__title", metadata.title);
   const subline = createElement(
     "div",
@@ -1322,13 +1324,15 @@ function buildWrapper(metadata) {
   playButton.type = "button";
   playButton.setAttribute("aria-label", `${getInitialButtonLabel(metadata.parsed)}: ${metadata.title}`);
   playButton.append(playIcon, playLabel);
+
+  media.append(scrim, playButton);
+  playButton.addEventListener("click", () => activatePlayer(wrapper));
+
   footerContent.append(title, subline);
 
   if (metadata.environmentRisk?.message && isKnownInlineKind(metadata.parsed)) {
     footerContent.appendChild(createElement("div", "bilibili-inline-player__notice", metadata.environmentRisk.message));
   }
-
-  footerActions.appendChild(playButton);
 
   if (getBooleanSetting("show_open_link", true)) {
     const link = createElement("a", "bilibili-inline-player__footer-link", getOpenLabel(metadata.parsed));
@@ -1348,7 +1352,6 @@ function buildWrapper(metadata) {
   }
 
   wrapper.append(media, footer);
-  playButton.addEventListener("click", () => activatePlayer(wrapper));
   wrapperState.set(wrapper, metadata);
 
   if (
@@ -1607,9 +1610,10 @@ async function activatePlayer(wrapper) {
   }
 
   wrapper.dataset.bilibiliLoading = "1";
+  wrapper.classList.add("bilibili-inline-player--loading");
 
   const state = wrapperState.get(wrapper);
-  setButtonLabel(wrapper, "加载中");
+  setButtonLabel(wrapper, "加载中…");
 
   if (state?.resolvePromise) {
     await state.resolvePromise;
@@ -1620,6 +1624,7 @@ async function activatePlayer(wrapper) {
 
   if (state?.externalOnly || !state?.iframeUrl) {
     wrapper.dataset.bilibiliLoading = "0";
+    wrapper.classList.remove("bilibili-inline-player--loading");
     setButtonLabel(wrapper, getOpenLabel(state?.parsed || { provider: "bilibili" }));
     window.open(wrapper.dataset.bilibiliUrl, "_blank", "noopener,noreferrer");
     return;
@@ -1627,6 +1632,7 @@ async function activatePlayer(wrapper) {
 
   wrapper.dataset.bilibiliLoading = "0";
   wrapper.dataset.bilibiliLoaded = "1";
+  wrapper.classList.remove("bilibili-inline-player--loading");
 
   const frameWrap = createElement("div", "bilibili-inline-player__frame-wrap");
   const iframe = createElement("iframe", "bilibili-inline-player__frame");
