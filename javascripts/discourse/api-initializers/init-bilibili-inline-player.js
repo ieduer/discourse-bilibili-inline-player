@@ -777,19 +777,19 @@ function extractUrlsFromText(text) {
 function getMetaLine(parsed) {
   switch (parsed.kind) {
     case "video":
-      return parsed.page > 1 ? `bilibili video · P${parsed.page}` : "bilibili video";
+      return parsed.page > 1 ? `视频 · P${parsed.page}` : "视频";
     case "bangumi":
-      return parsed.episodeId ? "bilibili bangumi · episode" : "bilibili bangumi · season";
+      return parsed.episodeId ? "番剧" : "番剧";
     case "live":
-      return "bilibili live";
+      return "直播";
     case "audio":
-      return parsed.isPlaylist ? "bilibili audio · playlist" : "bilibili audio";
+      return parsed.isPlaylist ? "音频歌单" : "音频";
     case "article":
-      return "bilibili article";
+      return "专栏";
     case "opus":
-      return "bilibili opus";
+      return "动态";
     case "dynamic":
-      return "bilibili dynamic";
+      return "动态";
     case "netease":
       return getNetEaseMetaLine(parsed);
     default:
@@ -800,16 +800,67 @@ function getMetaLine(parsed) {
 function getNetEaseMetaLine(parsed) {
   switch (parsed.mediaType) {
     case "playlist":
-      return "NetEase Cloud Music playlist";
+      return "网易云歌单";
     case "album":
-      return "NetEase Cloud Music album";
+      return "网易云专辑";
     case "program":
-      return "NetEase Cloud Music DJ program";
+      return "网易云播客节目";
     case "djradio":
-      return "NetEase Cloud Music DJ radio";
+      return "网易云播客";
     case "song":
     default:
-      return "NetEase Cloud Music song";
+      return "网易云单曲";
+  }
+}
+
+function formatCompactCount(value) {
+  const count = Number(value);
+
+  if (!Number.isFinite(count) || count < 0) {
+    return "";
+  }
+
+  if (count >= 100000000) {
+    const scaled = count / 100000000;
+    return `${scaled >= 10 ? scaled.toFixed(0) : scaled.toFixed(1).replace(/\.0$/, "")}亿`;
+  }
+
+  if (count >= 10000) {
+    const scaled = count / 10000;
+    return `${scaled >= 10 ? scaled.toFixed(0) : scaled.toFixed(1).replace(/\.0$/, "")}万`;
+  }
+
+  return Math.round(count).toLocaleString("zh-CN");
+}
+
+function getPreviewStatText(parsed, viewCount = null) {
+  switch (parsed.kind) {
+    case "video": {
+      const parts = [];
+
+      if (Number.isFinite(Number(viewCount))) {
+        parts.push(`${formatCompactCount(viewCount)} 播放`);
+      }
+
+      if (parsed.page > 1) {
+        parts.push(`P${parsed.page}`);
+      }
+
+      return parts.join(" · ") || "视频";
+    }
+    case "bangumi":
+      return parsed.episodeId ? `番剧 · EP${parsed.episodeId}` : "番剧";
+    case "live":
+      return "直播";
+    case "audio":
+    case "article":
+    case "opus":
+    case "dynamic":
+      return getMetaLine(parsed);
+    case "netease":
+      return getMetaLine(parsed);
+    default:
+      return "";
   }
 }
 
@@ -925,18 +976,16 @@ function getFooterMeta(parsed) {
   switch (parsed.kind) {
     case "video":
     case "bangumi":
-      return "Official bilibili external player";
+      return getPreviewStatText(parsed);
     case "live":
-      return getBooleanSetting("enable_experimental_live_embed", true)
-        ? getLiveFooterMeta(parsed)
-        : "Open on bilibili live";
+      return getBooleanSetting("enable_experimental_live_embed", true) ? getLiveFooterMeta(parsed) : "在 bilibili 打开";
     case "audio":
-      return "Open on bilibili audio";
+      return "在 bilibili 打开";
     case "article":
-      return "Open on bilibili article";
+      return "在 bilibili 打开";
     case "opus":
     case "dynamic":
-      return "Open on bilibili";
+      return "在 bilibili 打开";
     case "netease":
       return getNetEaseFooterMeta(parsed);
     default:
@@ -949,12 +998,12 @@ function getNetEaseFooterMeta(parsed) {
     case "playlist":
     case "album":
     case "djradio":
-      return "Official NetEase Cloud Music outchain player";
+      return "网易云外链播放器";
     case "program":
-      return "Official NetEase Cloud Music outchain player";
+      return "网易云外链播放器";
     case "song":
     default:
-      return "Official NetEase Cloud Music outchain player";
+      return "网易云外链播放器";
   }
 }
 
@@ -962,13 +1011,11 @@ function getLiveFooterMeta(parsed) {
   const liveId = String(parsed.activityCid || parsed.roomId);
   const usesActivityPlayer = !parsed.preferMobileLivePlayer && (/^\d{7,}$/.test(liveId) || Boolean(parsed.activityCid));
 
-  return usesActivityPlayer
-    ? "Official bilibili live activity player"
-    : "Official bilibili live H5 player";
+  return usesActivityPlayer ? "直播嵌入播放器" : "直播播放器";
 }
 
 function getOpenLabel(parsed) {
-  return parsed.provider === "netease" ? "Open on NetEase Cloud Music" : "Open on bilibili";
+  return parsed.provider === "netease" ? "在网易云音乐打开" : "在 bilibili 打开";
 }
 
 function getEmbedTitle(parsed) {
@@ -1144,6 +1191,7 @@ function buildMetadata(target, fallbackAnchor, parsed) {
     poster: extractPoster(target),
     canonicalUrl: parsed.canonicalUrl,
     metaLine: getMetaLine(parsed),
+    viewCount: null,
     environmentRisk: detectEmbedEnvironmentRisk(parsed.provider),
   };
 }
@@ -1172,8 +1220,10 @@ function updateWrapperMetadata(wrapper, data) {
     data.bvid || state.parsed.bvid || (resolvedAid ? `av${resolvedAid}` : state.parsed.rawId);
   const canonicalUrl = buildVideoCanonicalUrl(canonicalId, state.parsed.page);
   const title = data.title?.trim();
+  const viewCount = data.stat?.view;
   const { posterUrl, fallbackPosterUrl } = resolvePosterFromData(data, state.parsed.page);
   const titleElement = wrapper.querySelector(".bilibili-inline-player__title");
+  const statElement = wrapper.querySelector(".bilibili-inline-player__subline");
   const openLink = wrapper.querySelector(".bilibili-inline-player__footer-link");
   const media = wrapper.querySelector(".bilibili-inline-player__media");
   const existingPoster = wrapper.querySelector(".bilibili-inline-player__poster");
@@ -1194,6 +1244,15 @@ function updateWrapperMetadata(wrapper, data) {
     }
   }
 
+  if (Number.isFinite(Number(viewCount))) {
+    wrapper.dataset.bilibiliViewCount = String(viewCount);
+    wrapper.dataset.bilibiliFooterMeta = getPreviewStatText(state.parsed, viewCount);
+
+    if (statElement) {
+      statElement.textContent = getPreviewStatText(state.parsed, viewCount);
+    }
+  }
+
   if (posterUrl && media) {
     if (existingPoster) {
       existingPoster.src = posterUrl;
@@ -1209,7 +1268,7 @@ function updateWrapperMetadata(wrapper, data) {
 }
 
 function getPreviewAspectRatio(parsed) {
-  return parsed.provider === "netease" ? "4 / 3" : DEFAULT_ASPECT_RATIO;
+  return "4 / 3";
 }
 
 function getLoadedFrameHeight(parsed) {
@@ -1219,10 +1278,12 @@ function getLoadedFrameHeight(parsed) {
 function buildWrapper(metadata) {
   const wrapper = createElement("div", "bilibili-inline-player");
   const media = createElement("div", "bilibili-inline-player__media");
-  const scrim = createElement("div", "bilibili-inline-player__scrim");
-  const meta = createElement("div", "bilibili-inline-player__meta");
   const title = createElement("h3", "bilibili-inline-player__title", metadata.title);
-  const subline = createElement("div", "bilibili-inline-player__subline", metadata.metaLine);
+  const subline = createElement(
+    "div",
+    "bilibili-inline-player__subline",
+    getPreviewStatText(metadata.parsed, metadata.viewCount)
+  );
   const playButton = createElement("button", "bilibili-inline-player__play");
   const playIcon = createElement("span", "bilibili-inline-player__play-icon");
   const playLabel = createElement(
@@ -1239,6 +1300,7 @@ function buildWrapper(metadata) {
   wrapper.dataset.bilibiliMeta = metadata.metaLine;
   wrapper.dataset.bilibiliFooterMeta = getFooterMeta(metadata.parsed);
   wrapper.dataset.bilibiliTitle = metadata.title;
+  wrapper.dataset.bilibiliViewCount = "";
   wrapper.dataset.bilibiliKind = metadata.parsed.kind;
   wrapper.dataset.bilibiliProvider = metadata.parsed.provider || "bilibili";
   wrapper.dataset.bilibiliRiskLevel = metadata.environmentRisk?.level || "none";
@@ -1260,13 +1322,13 @@ function buildWrapper(metadata) {
   playButton.type = "button";
   playButton.setAttribute("aria-label", `${getInitialButtonLabel(metadata.parsed)}: ${metadata.title}`);
   playButton.append(playIcon, playLabel);
-  meta.append(title, subline);
-  media.append(scrim, meta, playButton);
-  footerContent.appendChild(footerMeta);
+  footerContent.append(title, subline);
 
   if (metadata.environmentRisk?.message && isKnownInlineKind(metadata.parsed)) {
     footerContent.appendChild(createElement("div", "bilibili-inline-player__notice", metadata.environmentRisk.message));
   }
+
+  footerActions.appendChild(playButton);
 
   if (getBooleanSetting("show_open_link", true)) {
     const link = createElement("a", "bilibili-inline-player__footer-link", getOpenLabel(metadata.parsed));
@@ -1274,6 +1336,10 @@ function buildWrapper(metadata) {
     link.target = "_blank";
     link.rel = "noopener nofollow ugc";
     footerActions.appendChild(link);
+  }
+
+  if (metadata.parsed.kind !== "video") {
+    footerContent.appendChild(footerMeta);
   }
 
   footer.appendChild(footerContent);
@@ -1439,7 +1505,7 @@ function updateFooterMeta(wrapper) {
 
   footerMeta.textContent =
     state.autoplayDisabled && supportsNoAutoplayRetry(state)
-      ? `${wrapper.dataset.bilibiliFooterMeta || wrapper.dataset.bilibiliMeta} · autoplay off`
+      ? `${wrapper.dataset.bilibiliFooterMeta || wrapper.dataset.bilibiliMeta} · 已关闭自动播放`
       : wrapper.dataset.bilibiliFooterMeta || wrapper.dataset.bilibiliMeta;
 }
 
