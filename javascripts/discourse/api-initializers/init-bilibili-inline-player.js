@@ -722,7 +722,7 @@ function getNetEaseEmbedHeight(parsed) {
     return parsed.outchainHeight;
   }
 
-  return parsed.mediaType === "song" || parsed.mediaType === "program" ? 86 : 430;
+  return parsed.mediaType === "song" || parsed.mediaType === "program" ? 130 : 430;
 }
 
 function buildNetEaseIframeUrl(parsed, autoplay) {
@@ -1166,12 +1166,23 @@ function extractPoster(target) {
   return normalizeMediaUrl(image?.src || "");
 }
 
+const GENERIC_TITLE_RE =
+  /^(?:bilibili|哔哩哔哩|b站|网易云音乐|netease\s*(?:cloud\s*)?music|music\.163\.com|(?:www\.)?bilibili\.com|(?:https?:\/\/)?(?:music\.163\.com|(?:www\.)?bilibili\.com)\/\S*)$/i;
+
+function isGenericTitle(title) {
+  if (!title || title.length < 2) {
+    return true;
+  }
+
+  return GENERIC_TITLE_RE.test(title);
+}
+
 function extractTitle(target, fallbackAnchor, parsed) {
   const titleElement =
     target.querySelector(".onebox-body h3 a, .onebox-body h3, h3 a, h3, a[href]") || fallbackAnchor;
   const title = titleElement?.textContent?.trim();
 
-  if (title) {
+  if (title && !isGenericTitle(title)) {
     return title;
   }
 
@@ -1613,14 +1624,16 @@ function buildLoadedFooter(wrapper) {
   const state = wrapperState.get(wrapper);
   const footer = createElement("div", "bilibili-inline-player__footer");
   const footerContent = createElement("div", "bilibili-inline-player__footer-content");
-  const footerMeta = createElement(
-    "div",
-    "bilibili-inline-player__footer-meta",
-    wrapper.dataset.bilibiliFooterMeta || wrapper.dataset.bilibiliMeta
-  );
   const footerActions = createElement("div", "bilibili-inline-player__footer-actions");
 
-  footerContent.appendChild(footerMeta);
+  if (!isCompactNetEase(state.parsed)) {
+    const footerMeta = createElement(
+      "div",
+      "bilibili-inline-player__footer-meta",
+      wrapper.dataset.bilibiliFooterMeta || wrapper.dataset.bilibiliMeta
+    );
+    footerContent.appendChild(footerMeta);
+  }
 
   if (supportsNoAutoplayRetry(state)) {
     const retryButton = createElement(
@@ -1698,6 +1711,8 @@ async function activatePlayer(wrapper) {
   iframe.title = wrapper.dataset.bilibiliTitle || getEmbedTitle(state.parsed);
 
   frameWrap.appendChild(iframe);
+
+  wrapper.classList.remove("bilibili-inline-player--compact-audio");
   const footer = buildLoadedFooter(wrapper);
 
   wrapper.replaceChildren(frameWrap, footer);

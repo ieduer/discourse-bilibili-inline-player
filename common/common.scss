@@ -406,11 +406,14 @@
   border: 0;
 }
 
-/* ── Auto aspect-ratio for compact NetEase loaded state ── */
+/* ── Compact NetEase loaded state (iframe replaces compact card) ── */
 
-.bilibili-inline-player__media[style*="aspect-ratio: auto"] {
-  aspect-ratio: auto;
-  min-height: 86px;
+.bilibili-inline-player--netease .bilibili-inline-player__frame-wrap--fixed {
+  border-radius: 0;
+}
+
+.bilibili-inline-player--netease .bilibili-inline-player__footer {
+  padding: 0.5rem 0.85rem;
 }
 
 /* ── Mobile ── */
