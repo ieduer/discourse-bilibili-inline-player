@@ -1,29 +1,29 @@
 /* ── Card container ── */
 
 .bilibili-inline-player {
-  --bili-card-radius: 16px;
-  --bili-card-border: color-mix(in srgb, var(--primary-low, #d9d9d9) 88%, transparent);
+  --bili-card-radius: 14px;
+  --bili-card-border: color-mix(in srgb, var(--primary-low, #d9d9d9) 80%, transparent);
   --bili-card-bg: var(--secondary, #fff);
   --bili-card-fg: var(--primary, #111);
   --bili-card-muted: var(--primary-medium, #666);
-  --bili-card-shadow: 0 6px 24px rgb(0 0 0 / 0.10);
+  --bili-card-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
   margin: 1em 0;
   border: 1px solid var(--bili-card-border);
   border-radius: var(--bili-card-radius);
   overflow: hidden;
   background: var(--bili-card-bg);
   box-shadow: var(--bili-card-shadow);
-  transition: box-shadow 200ms ease;
+  transition: box-shadow 220ms ease, transform 220ms ease;
 }
 
 .bilibili-inline-player:hover {
-  box-shadow: 0 10px 32px rgb(0 0 0 / 0.15);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.13);
 }
 
-/* ── NetEase provider overrides ── */
+/* ── NetEase provider overrides (standard cards) ── */
 
 .bilibili-inline-player--netease {
-  --bili-card-shadow: 0 6px 24px rgb(0 0 0 / 0.10);
+  --bili-card-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
 }
 
 .bilibili-inline-player--netease .bilibili-inline-player__media {
@@ -34,14 +34,127 @@
 
 .bilibili-inline-player--netease .bilibili-inline-player__play {
   background: rgb(198 47 47 / 0.96);
-  box-shadow: 0 8px 20px rgb(198 47 47 / 0.28);
+  box-shadow: 0 6px 18px rgb(198 47 47 / 0.32);
 }
 
 .bilibili-inline-player--netease .bilibili-inline-player__play:hover,
 .bilibili-inline-player--netease .bilibili-inline-player__play:focus-visible {
   background: #b61f24;
-  box-shadow: 0 12px 28px rgb(198 47 47 / 0.36);
+  box-shadow: 0 10px 24px rgb(198 47 47 / 0.38);
 }
+
+/* ═══════════════════════════════════════════════════
+   Compact audio card (NetEase single songs / programs)
+   Single-row unified dark card — Spotify/Discord style
+   ═══════════════════════════════════════════════════ */
+
+.bilibili-inline-player--compact-audio {
+  background:
+    radial-gradient(ellipse at 10% 50%, rgb(255 255 255 / 0.06), transparent 50%),
+    linear-gradient(135deg, #2d1519 0%, #4d1218 50%, #1e0c10 100%);
+  border-color: rgb(90 30 35 / 0.35);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.14);
+}
+
+.bilibili-inline-player--compact-audio:hover {
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.22);
+}
+
+.bilibili-inline-player__compact-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1.1rem;
+  min-height: 3.5rem;
+}
+
+.bilibili-inline-player__compact-info {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.bilibili-inline-player__music-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.1);
+  color: rgb(255 255 255 / 0.75);
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.bilibili-inline-player__compact-title {
+  color: rgb(255 255 255 / 0.92);
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.bilibili-inline-player__compact-badge {
+  flex-shrink: 0;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.1);
+  color: rgb(255 255 255 / 0.6);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.bilibili-inline-player__compact-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.bilibili-inline-player__play--compact {
+  position: relative;
+  min-height: 2.2rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.84rem;
+  background: rgb(198 47 47 / 0.92);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.25);
+}
+
+.bilibili-inline-player__play--compact:hover,
+.bilibili-inline-player__play--compact:focus-visible {
+  background: #b61f24;
+  box-shadow: 0 6px 16px rgb(0 0 0 / 0.32);
+  transform: scale(1.04);
+}
+
+.bilibili-inline-player__compact-link {
+  color: rgb(255 255 255 / 0.5) !important;
+  font-size: 0.78rem !important;
+  transition: color 150ms ease;
+}
+
+.bilibili-inline-player__compact-link:hover {
+  color: rgb(255 255 255 / 0.8) !important;
+}
+
+/* Loading state for compact card */
+.bilibili-inline-player--compact-audio.bilibili-inline-player--loading .bilibili-inline-player__play--compact {
+  pointer-events: none;
+  opacity: 0.75;
+}
+
+/* ═══════════════════════════════════════════════════
+   Standard card layout (bilibili video / bangumi / live / NetEase collection)
+   ═══════════════════════════════════════════════════ */
 
 /* ── Media area ── */
 
@@ -65,27 +178,27 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 300ms ease;
+  transition: transform 350ms ease;
 }
 
 .bilibili-inline-player__media:hover .bilibili-inline-player__poster {
   transform: scale(1.03);
 }
 
-/* ── Scrim overlay (gradient over poster for button contrast) ── */
+/* ── Scrim overlay ── */
 
 .bilibili-inline-player__scrim {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse at center, rgb(0 0 0 / 0.38) 0%, rgb(0 0 0 / 0.12) 70%),
-    linear-gradient(180deg, rgb(0 0 0 / 0.05) 0%, rgb(0 0 0 / 0.02) 40%, rgb(0 0 0 / 0.30) 100%);
+    radial-gradient(ellipse at center, rgb(0 0 0 / 0.35) 0%, rgb(0 0 0 / 0.10) 70%),
+    linear-gradient(180deg, rgb(0 0 0 / 0.04) 0%, rgb(0 0 0 / 0.02) 40%, rgb(0 0 0 / 0.25) 100%);
   pointer-events: none;
   transition: opacity 200ms ease;
 }
 
 .bilibili-inline-player__media:hover .bilibili-inline-player__scrim {
-  opacity: 0.85;
+  opacity: 0.8;
 }
 
 /* ── Play button (centered on media) ── */
@@ -96,19 +209,19 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.6rem;
-  min-height: 2.8rem;
-  padding: 0.72rem 1.3rem;
+  gap: 0.55rem;
+  min-height: 3rem;
+  padding: 0.75rem 1.5rem;
   border: 0;
   border-radius: 999px;
   background: rgb(255 102 153 / 0.94);
   color: #fff;
   font-weight: 700;
-  font-size: 0.92rem;
+  font-size: 0.95rem;
   letter-spacing: 0.01em;
   cursor: pointer;
   transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.28);
   backdrop-filter: blur(4px);
 }
 
@@ -116,7 +229,7 @@
 .bilibili-inline-player__play:focus-visible {
   transform: scale(1.06);
   background: #ff4f91;
-  box-shadow: 0 12px 32px rgb(0 0 0 / 0.30);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.34);
 }
 
 .bilibili-inline-player__play:active {
@@ -127,12 +240,12 @@
 
 .bilibili-inline-player--loading .bilibili-inline-player__play {
   pointer-events: none;
-  opacity: 0.85;
+  opacity: 0.82;
 }
 
 .bilibili-inline-player--loading .bilibili-inline-player__play-icon {
-  animation: bili-spin 800ms linear infinite;
-  border: 2px solid rgb(255 255 255 / 0.3);
+  animation: bili-spin 700ms linear infinite;
+  border: 2.5px solid rgb(255 255 255 / 0.25);
   border-top-color: #fff;
   border-radius: 50%;
   border-left-style: none;
@@ -149,9 +262,9 @@
 .bilibili-inline-player__play-icon {
   width: 0;
   height: 0;
-  border-top: 0.45rem solid transparent;
-  border-bottom: 0.45rem solid transparent;
-  border-left: 0.76rem solid currentColor;
+  border-top: 0.44rem solid transparent;
+  border-bottom: 0.44rem solid transparent;
+  border-left: 0.74rem solid currentColor;
   flex-shrink: 0;
 }
 
@@ -165,13 +278,13 @@
   justify-content: center;
   width: 100%;
   height: 100%;
-  color: rgb(255 255 255 / 0.6);
-  font-size: 0.92rem;
+  color: rgb(255 255 255 / 0.45);
+  font-size: 0.88rem;
   letter-spacing: 0.04em;
   pointer-events: none;
 }
 
-/* ── Unused legacy meta (hidden) ── */
+/* ── Hidden legacy meta ── */
 
 .bilibili-inline-player__meta {
   display: none;
@@ -184,23 +297,22 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.75rem 1rem;
-  border-top: 1px solid color-mix(in srgb, var(--bili-card-border) 70%, transparent);
-  background: color-mix(in srgb, var(--bili-card-bg) 94%, var(--primary-low, #ececec));
+  padding: 0.7rem 1rem;
+  background: var(--bili-card-bg);
 }
 
 .bilibili-inline-player__footer-content {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.2rem;
   flex: 1;
 }
 
 .bilibili-inline-player__title {
   margin: 0;
   color: var(--bili-card-fg);
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   font-weight: 700;
   line-height: 1.4;
   overflow: hidden;
@@ -213,14 +325,14 @@
 .bilibili-inline-player__subline {
   margin: 0;
   color: var(--bili-card-muted);
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   line-height: 1.3;
 }
 
 .bilibili-inline-player__footer-meta {
   min-width: 0;
   color: var(--bili-card-muted);
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   line-height: 1.35;
 }
 
@@ -230,23 +342,23 @@
   align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 0.75rem;
+  gap: 0.65rem;
 }
 
 .bilibili-inline-player__notice {
   color: color-mix(in srgb, var(--bili-card-muted) 92%, #c96b00);
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   line-height: 1.4;
 }
 
 .bilibili-inline-player__footer-button {
   flex: none;
-  padding: 0.38rem 0.72rem;
+  padding: 0.36rem 0.68rem;
   border: 1px solid color-mix(in srgb, var(--bili-card-border) 88%, transparent);
   border-radius: 999px;
   background: color-mix(in srgb, var(--bili-card-bg) 94%, var(--primary-low, #ececec));
   color: var(--bili-card-fg);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 600;
   line-height: 1.2;
   cursor: pointer;
@@ -258,21 +370,21 @@
 }
 
 .bilibili-inline-player__footer-button:disabled {
-  opacity: 0.55;
+  opacity: 0.5;
   cursor: default;
 }
 
 .bilibili-inline-player__footer-link {
   flex: none;
   color: var(--tertiary, #0a6cff);
-  font-size: 0.84rem;
+  font-size: 0.82rem;
   font-weight: 600;
   text-decoration: none;
   transition: opacity 120ms ease;
 }
 
 .bilibili-inline-player__footer-link:hover {
-  opacity: 0.8;
+  opacity: 0.75;
 }
 
 /* ── Iframe frame ── */
@@ -294,7 +406,7 @@
   border: 0;
 }
 
-/* ── Auto aspect-ratio for compact NetEase single-song cards ── */
+/* ── Auto aspect-ratio for compact NetEase loaded state ── */
 
 .bilibili-inline-player__media[style*="aspect-ratio: auto"] {
   aspect-ratio: auto;
@@ -305,24 +417,46 @@
 
 @media (max-width: 767px) {
   .bilibili-inline-player__play {
-    min-height: 2.5rem;
-    padding: 0.6rem 1rem;
-    font-size: 0.86rem;
+    min-height: 2.6rem;
+    padding: 0.6rem 1.1rem;
+    font-size: 0.88rem;
   }
 
   .bilibili-inline-player__footer {
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.6rem;
-    padding: 0.7rem 0.85rem;
+    gap: 0.5rem;
+    padding: 0.65rem 0.85rem;
   }
 
   .bilibili-inline-player__title {
-    font-size: 0.9rem;
+    font-size: 0.88rem;
   }
 
   .bilibili-inline-player__footer-actions {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  /* Compact audio mobile */
+  .bilibili-inline-player__compact-body {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.65rem;
+    padding: 0.75rem 0.9rem;
+  }
+
+  .bilibili-inline-player__compact-info {
+    width: 100%;
+  }
+
+  .bilibili-inline-player__compact-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .bilibili-inline-player__play--compact {
+    flex: 1;
+    justify-content: center;
   }
 }

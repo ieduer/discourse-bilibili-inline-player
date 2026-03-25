@@ -993,6 +993,10 @@ function getFooterMeta(parsed) {
   }
 }
 
+function isCompactNetEase(parsed) {
+  return parsed.kind === "netease" && (parsed.mediaType === "song" || parsed.mediaType === "program");
+}
+
 function getNetEaseFooterMeta() {
   return "网易云外链播放器";
 }
@@ -1264,9 +1268,7 @@ function getPreviewAspectRatio(parsed) {
     case "live":
       return "16 / 9";
     case "netease":
-      return parsed.mediaType === "song" || parsed.mediaType === "program"
-        ? "auto"
-        : "4 / 3";
+      return isCompactNetEase(parsed) ? "auto" : "4 / 3";
     default:
       return "4 / 3";
   }
@@ -1278,6 +1280,73 @@ function getLoadedFrameHeight(parsed) {
 
 function buildWrapper(metadata) {
   const wrapper = createElement("div", "bilibili-inline-player");
+  const compact = isCompactNetEase(metadata.parsed);
+
+  wrapper.dataset.bilibiliUrl = metadata.canonicalUrl;
+  wrapper.dataset.bilibiliMeta = metadata.metaLine;
+  wrapper.dataset.bilibiliFooterMeta = getFooterMeta(metadata.parsed);
+  wrapper.dataset.bilibiliTitle = metadata.title;
+  wrapper.dataset.bilibiliViewCount = "";
+  wrapper.dataset.bilibiliKind = metadata.parsed.kind;
+  wrapper.dataset.bilibiliProvider = metadata.parsed.provider || "bilibili";
+  wrapper.dataset.bilibiliRiskLevel = metadata.environmentRisk?.level || "none";
+  wrapper.style.setProperty("--bili-aspect-ratio", getPreviewAspectRatio(metadata.parsed));
+  wrapper.classList.add(`bilibili-inline-player--${metadata.parsed.provider || "bilibili"}`);
+
+  if (compact) {
+    wrapper.classList.add("bilibili-inline-player--compact-audio");
+    buildCompactAudioCard(wrapper, metadata);
+  } else {
+    buildStandardCard(wrapper, metadata);
+  }
+
+  wrapperState.set(wrapper, metadata);
+
+  if (
+    metadata.environmentRisk?.level === "hard" &&
+    isKnownInlineKind(metadata.parsed) &&
+    getBooleanSetting("auto_open_on_high_risk_env", true)
+  ) {
+    setButtonLabel(wrapper, getOpenLabel(metadata.parsed));
+  }
+
+  primeEmbedState(wrapper);
+
+  return wrapper;
+}
+
+function buildCompactAudioCard(wrapper, metadata) {
+  const body = createElement("div", "bilibili-inline-player__compact-body");
+  const info = createElement("div", "bilibili-inline-player__compact-info");
+  const musicIcon = createElement("span", "bilibili-inline-player__music-icon", "♪");
+  const title = createElement("span", "bilibili-inline-player__compact-title", metadata.title);
+  const badge = createElement("span", "bilibili-inline-player__compact-badge", metadata.metaLine);
+  const actions = createElement("div", "bilibili-inline-player__compact-actions");
+  const playButton = createElement("button", "bilibili-inline-player__play bilibili-inline-player__play--compact");
+  const playIcon = createElement("span", "bilibili-inline-player__play-icon");
+  const playLabel = createElement("span", "bilibili-inline-player__play-label", getInitialButtonLabel(metadata.parsed));
+
+  playButton.type = "button";
+  playButton.setAttribute("aria-label", `${getInitialButtonLabel(metadata.parsed)}: ${metadata.title}`);
+  playButton.append(playIcon, playLabel);
+  playButton.addEventListener("click", () => activatePlayer(wrapper));
+
+  info.append(musicIcon, title, badge);
+  actions.appendChild(playButton);
+
+  if (getBooleanSetting("show_open_link", true)) {
+    const link = createElement("a", "bilibili-inline-player__footer-link bilibili-inline-player__compact-link", getOpenLabel(metadata.parsed));
+    link.href = metadata.canonicalUrl;
+    link.target = "_blank";
+    link.rel = "noopener nofollow ugc";
+    actions.appendChild(link);
+  }
+
+  body.append(info, actions);
+  wrapper.appendChild(body);
+}
+
+function buildStandardCard(wrapper, metadata) {
   const media = createElement("div", "bilibili-inline-player__media");
   const scrim = createElement("div", "bilibili-inline-player__scrim");
   const title = createElement("h3", "bilibili-inline-player__title", metadata.title);
@@ -1294,20 +1363,9 @@ function buildWrapper(metadata) {
     getInitialButtonLabel(metadata.parsed)
   );
   const footer = createElement("div", "bilibili-inline-player__footer");
-  const footerMeta = createElement("div", "bilibili-inline-player__footer-meta", getFooterMeta(metadata.parsed));
   const footerContent = createElement("div", "bilibili-inline-player__footer-content");
   const footerActions = createElement("div", "bilibili-inline-player__footer-actions");
 
-  wrapper.dataset.bilibiliUrl = metadata.canonicalUrl;
-  wrapper.dataset.bilibiliMeta = metadata.metaLine;
-  wrapper.dataset.bilibiliFooterMeta = getFooterMeta(metadata.parsed);
-  wrapper.dataset.bilibiliTitle = metadata.title;
-  wrapper.dataset.bilibiliViewCount = "";
-  wrapper.dataset.bilibiliKind = metadata.parsed.kind;
-  wrapper.dataset.bilibiliProvider = metadata.parsed.provider || "bilibili";
-  wrapper.dataset.bilibiliRiskLevel = metadata.environmentRisk?.level || "none";
-  wrapper.style.setProperty("--bili-aspect-ratio", getPreviewAspectRatio(metadata.parsed));
-  wrapper.classList.add(`bilibili-inline-player--${metadata.parsed.provider || "bilibili"}`);
   media.dataset.placeholderLabel = getPlaceholderLabel(metadata.parsed);
 
   if (metadata.poster) {
@@ -1342,7 +1400,8 @@ function buildWrapper(metadata) {
     footerActions.appendChild(link);
   }
 
-  if (metadata.parsed.kind !== "video") {
+  if (metadata.parsed.kind !== "video" && !isCompactNetEase(metadata.parsed)) {
+    const footerMeta = createElement("div", "bilibili-inline-player__footer-meta", getFooterMeta(metadata.parsed));
     footerContent.appendChild(footerMeta);
   }
 
@@ -1352,19 +1411,6 @@ function buildWrapper(metadata) {
   }
 
   wrapper.append(media, footer);
-  wrapperState.set(wrapper, metadata);
-
-  if (
-    metadata.environmentRisk?.level === "hard" &&
-    isKnownInlineKind(metadata.parsed) &&
-    getBooleanSetting("auto_open_on_high_risk_env", true)
-  ) {
-    setButtonLabel(wrapper, getOpenLabel(metadata.parsed));
-  }
-
-  primeEmbedState(wrapper);
-
-  return wrapper;
 }
 
 function setButtonLabel(wrapper, text) {
