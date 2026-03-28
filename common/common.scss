@@ -43,6 +43,29 @@
   box-shadow: 0 10px 24px rgb(198 47 47 / 0.38);
 }
 
+/* ── QQ Music provider overrides (standard cards) ── */
+
+.bilibili-inline-player--qqmusic {
+  --bili-card-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
+}
+
+.bilibili-inline-player--qqmusic .bilibili-inline-player__media {
+  background:
+    radial-gradient(circle at 18% 18%, rgb(255 255 255 / 0.08), transparent 34%),
+    linear-gradient(135deg, #0a1e14 0%, #0d3520 48%, #071a0e 100%);
+}
+
+.bilibili-inline-player--qqmusic .bilibili-inline-player__play {
+  background: rgb(49 194 124 / 0.96);
+  box-shadow: 0 6px 18px rgb(49 194 124 / 0.32);
+}
+
+.bilibili-inline-player--qqmusic .bilibili-inline-player__play:hover,
+.bilibili-inline-player--qqmusic .bilibili-inline-player__play:focus-visible {
+  background: #28a96e;
+  box-shadow: 0 10px 24px rgb(49 194 124 / 0.38);
+}
+
 /* ═══════════════════════════════════════════════════
    Compact audio card (NetEase single songs / programs)
    Single-row unified dark card — Spotify/Discord style
@@ -144,6 +167,38 @@
 
 .bilibili-inline-player__compact-link:hover {
   color: rgb(255 255 255 / 0.8) !important;
+}
+
+/* ── QQ Music compact card overrides ── */
+
+.bilibili-inline-player--qqmusic.bilibili-inline-player--compact-audio {
+  background:
+    radial-gradient(ellipse at 10% 50%, rgb(255 255 255 / 0.06), transparent 50%),
+    linear-gradient(135deg, #0a1e14 0%, #0d3520 50%, #071a0e 100%);
+  border-color: rgb(30 90 50 / 0.35);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.14);
+}
+
+.bilibili-inline-player--qqmusic.bilibili-inline-player--compact-audio:hover {
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.22);
+}
+
+.bilibili-inline-player--qqmusic .bilibili-inline-player__play--compact {
+  background: rgb(49 194 124 / 0.92);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.25);
+}
+
+.bilibili-inline-player--qqmusic .bilibili-inline-player__play--compact:hover,
+.bilibili-inline-player--qqmusic .bilibili-inline-player__play--compact:focus-visible {
+  background: #28a96e;
+  box-shadow: 0 6px 16px rgb(0 0 0 / 0.32);
+  transform: scale(1.04);
+}
+
+/* ── Compact NetEase loaded state overrides ── */
+
+.bilibili-inline-player--qqmusic .bilibili-inline-player__footer {
+  padding: 0.5rem 0.85rem;
 }
 
 /* Loading state for compact card */

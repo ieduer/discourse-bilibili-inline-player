@@ -1,6 +1,6 @@
-# Bilibili + NetEase Inline Player
+# Bilibili + NetEase + QQ Music Inline Player
 
-A Discourse theme component that turns supported bilibili and NetEase Cloud Music links into inline, click-to-play embeds without requiring a container rebuild.
+A Discourse theme component that turns supported bilibili, NetEase Cloud Music, and QQ Music links into inline, click-to-play embeds without requiring a container rebuild.
 
 This repository is intentionally implemented as a remote theme component, not a server plugin:
 
@@ -33,7 +33,17 @@ Inline playback:
 - `https://music.163.com/djradio?id=...`
 - `https://music.163.com/#/song?id=...`
 - `https://music.163.com/outchain/player?...`
+- `https://i.y.qq.com/n2/m/outchain/player/index.html?songid=...` (QQ Music outchain player)
+- `https://i.y.qq.com/v8/playsong.html?songmid=...` (QQ Music playsong)
 - optional `?p=<n>` on ordinary multi-page video URLs
+
+Card takeover with open-on-QQ-Music fallback:
+
+- `https://y.qq.com/n/ryqq/songDetail/...` (QQ Music song detail)
+- `https://y.qq.com/n/ryqq/playlist/...` (QQ Music playlist)
+- `https://y.qq.com/n/ryqq/albumDetail/...` (QQ Music album)
+- `https://y.qq.com/n/ryqq/toplist/...` (QQ Music toplist)
+- `https://i.y.qq.com/n2/m/share/details/taoge.html?id=...` (QQ Music shared playlist)
 
 Card takeover with open-on-bilibili fallback:
 
@@ -78,7 +88,8 @@ The safest input pattern is still a standalone bilibili URL on its own line, whi
 7. If a bilibili iframe loads but the user still gets trapped in bilibili's own guide layer, the footer offers an inline retry that reloads the player without autoplay.
 8. In high-risk environments such as in-app browsers and WebViews, the component can automatically downgrade to opening bilibili instead of trapping the user in a broken third-party iframe.
 9. For NetEase Cloud Music, the component converts supported URLs directly into the official outchain player iframe.
-10. For content types without a stable official iframe path in this theme-component-only architecture, the component still upgrades the post into a unified media card and falls back to opening the canonical source page.
+10. For QQ Music, the component supports the official outchain player for songs with numeric IDs and the playsong page for songs with songmid identifiers. Playlists, albums, and toplists are rendered as styled cards with an open-on-QQ-Music fallback.
+11. For content types without a stable official iframe path in this theme-component-only architecture, the component still upgrades the post into a unified media card and falls back to opening the canonical source page.
 
 The component does not modify Discourse core and does not require a rebuild.
 
@@ -89,6 +100,8 @@ The component does not modify Discourse core and does not require a rebuild.
 - Bangumi metadata page source: `https://api.bilibili.com/pgc/view/web/season`
 - Live activity player: `https://www.bilibili.com/blackboard/live/live-activity-player.html`
 - NetEase Cloud Music outchain player: `https://music.163.com/outchain/player`
+- QQ Music outchain player: `https://i.y.qq.com/n2/m/outchain/player/index.html`
+- QQ Music playsong: `https://i.y.qq.com/v8/playsong.html`
 
 ## Installation
 
@@ -120,6 +133,7 @@ No rebuild is required.
 - If a site runs a strict custom script CSP that blocks dynamic third-party scripts, allow `https://api.bilibili.com` for the click-time metadata request.
 - If experimental live embeds are enabled, allow `https://www.bilibili.com` in `frame-src`.
 - If NetEase Cloud Music embeds are enabled by CSP, allow `https://music.163.com` in `frame-src`.
+- If QQ Music embeds are enabled by CSP, allow `https://i.y.qq.com` in `frame-src`.
 - If a supported media link cannot be parsed, the original cooked content is left untouched.
 
 ## Suggested repository name

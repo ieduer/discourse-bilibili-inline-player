@@ -7,6 +7,7 @@ const LIVE_HOSTS = new Set(["live.bilibili.com", "www.live.bilibili.com"]);
 const SHORT_HOSTS = new Set(["b23.tv", "www.b23.tv", "bili2233.cn", "www.bili2233.cn"]);
 const PLAYER_HOSTS = new Set(["player.bilibili.com"]);
 const NETEASE_HOSTS = new Set(["music.163.com", "y.music.163.com"]);
+const QQMUSIC_HOSTS = new Set(["y.qq.com", "i.y.qq.com"]);
 const VIDEO_PATH_RE = /^\/(?:s\/)?video\/(BV[0-9A-Za-z]+|av\d+)\/?$/i;
 const SHORT_VIDEO_PATH_RE = /^\/(?:video\/)?(BV[0-9A-Za-z]+|av\d+)(?:\/p(\d+))?\/?$/i;
 const BANGUMI_PATH_RE = /^\/bangumi\/play\/(ep|ss)(\d+)\/?$/i;
@@ -19,9 +20,16 @@ const LIVE_IFRAME_PATH_RE = /^\/blackboard\/live\/live-mobile-playerV3\.html$/i;
 const LIVE_IFRAME_FALLBACK_PATH_RE = /^\/blackboard\/live\/live-activity-player\.html$/i;
 const BILIBILI_COMPAT_PLAYER_PATH_RE = /^\/blackboard\/webplayer\/mbplayer\.html$/i;
 const NETEASE_OUTCHAIN_PATH_RE = /^\/(?:m\/)?outchain\/player$/i;
+const QQMUSIC_SONG_DETAIL_PATH_RE = /^\/n\/ryqq\/songDetail\/([A-Za-z0-9]+)\/?$/;
+const QQMUSIC_PLAYLIST_PATH_RE = /^\/n\/ryqq\/playlist\/(\d+)\/?$/;
+const QQMUSIC_ALBUM_PATH_RE = /^\/n\/ryqq\/albumDetail\/([A-Za-z0-9]+)\/?$/;
+const QQMUSIC_TOPLIST_PATH_RE = /^\/n\/ryqq\/toplist\/(\d+)\/?$/;
+const QQMUSIC_PLAYSONG_PATH_RE = /^\/v8\/playsong\.html$/;
+const QQMUSIC_OUTCHAIN_PATH_RE = /^\/n2\/m\/outchain\/player\/index\.html$/;
+const QQMUSIC_SHARE_PLAYLIST_PATH_RE = /^\/n2\/m\/share\/details\/taoge\.html$/;
 const IFRAME_SRC_RE = /<iframe\b[^>]*\bsrc=(["'])([^"']+)\1/gi;
 const URL_LIKE_RE =
-  /((?:https?:)?\/\/(?:player\.bilibili\.com\/player\.html|www\.bilibili\.com\/blackboard\/(?:live\/live-mobile-playerV3|live\/live-activity-player|webplayer\/mbplayer)\.html|(?:www\.|m\.)?bilibili\.com\/(?:s\/)?video\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/bangumi\/play\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/audio\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/read\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/opus\/[^\s"'<>]+|t\.bilibili\.com\/[^\s"'<>]+|live\.bilibili\.com\/[^\s"'<>]+|(?:www\.)?(?:b23\.tv|bili2233\.cn)\/[^\s"'<>]+|(?:y\.)?music\.163\.com\/[^\s"'<>]+))/gi;
+  /((?:https?:)?\/\/(?:player\.bilibili\.com\/player\.html|www\.bilibili\.com\/blackboard\/(?:live\/live-mobile-playerV3|live\/live-activity-player|webplayer\/mbplayer)\.html|(?:www\.|m\.)?bilibili\.com\/(?:s\/)?video\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/bangumi\/play\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/audio\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/read\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/opus\/[^\s"'<>]+|t\.bilibili\.com\/[^\s"'<>]+|live\.bilibili\.com\/[^\s"'<>]+|(?:www\.)?(?:b23\.tv|bili2233\.cn)\/[^\s"'<>]+|(?:y\.)?music\.163\.com\/[^\s"'<>]+|(?:i\.)?y\.qq\.com\/[^\s"'<>]+))/gi;
 const DEFAULT_ASPECT_RATIO = "16 / 9";
 const JSONP_TIMEOUT_MS = 8000;
 const BILIBILI_STUCK_HELP_DELAY_MS = 5000;
@@ -106,6 +114,20 @@ function buildNetEaseCanonicalUrl(mediaType, itemId) {
     case "song":
     default:
       return `https://music.163.com/song?id=${itemId}`;
+  }
+}
+
+function buildQQMusicCanonicalUrl(mediaType, itemId) {
+  switch (mediaType) {
+    case "playlist":
+      return `https://y.qq.com/n/ryqq/playlist/${itemId}`;
+    case "album":
+      return `https://y.qq.com/n/ryqq/albumDetail/${itemId}`;
+    case "toplist":
+      return `https://y.qq.com/n/ryqq/toplist/${itemId}`;
+    case "song":
+    default:
+      return `https://y.qq.com/n/ryqq/songDetail/${itemId}`;
   }
 }
 
@@ -217,6 +239,21 @@ function createParsedNetEase(mediaType, itemId, extras = {}) {
     page: 1,
     rawId: `${mediaType}:${itemId}`,
     canonicalUrl: buildNetEaseCanonicalUrl(mediaType, itemId),
+    ...extras,
+  };
+}
+
+function createParsedQQMusic(mediaType, itemId, extras = {}) {
+  const idType = extras.idType || "mid";
+  return {
+    provider: "qqmusic",
+    kind: "qqmusic",
+    mediaType,
+    itemId: String(itemId),
+    idType,
+    page: 1,
+    rawId: `${mediaType}:${itemId}`,
+    canonicalUrl: buildQQMusicCanonicalUrl(mediaType, itemId),
     ...extras,
   };
 }
@@ -542,6 +579,83 @@ function parseNetEasePageUrl(url) {
   return null;
 }
 
+function parseQQMusicPageUrl(url) {
+  const hostname = url.hostname.toLowerCase();
+
+  if (!QQMUSIC_HOSTS.has(hostname)) {
+    return null;
+  }
+
+  if (hostname === "i.y.qq.com") {
+    if (QQMUSIC_OUTCHAIN_PATH_RE.test(url.pathname)) {
+      const songid = url.searchParams.get("songid");
+
+      if (songid && /^\d+$/.test(songid)) {
+        return createParsedQQMusic("song", songid, {
+          idType: "id",
+          officialPlayerUrl: url.toString(),
+        });
+      }
+
+      return null;
+    }
+
+    if (QQMUSIC_PLAYSONG_PATH_RE.test(url.pathname)) {
+      const songmid = url.searchParams.get("songmid");
+
+      if (songmid && /^[A-Za-z0-9]{8,}$/.test(songmid)) {
+        return createParsedQQMusic("song", songmid, { idType: "mid" });
+      }
+
+      const songid = url.searchParams.get("songid");
+
+      if (songid && /^\d+$/.test(songid) && songid !== "0") {
+        return createParsedQQMusic("song", songid, { idType: "id" });
+      }
+
+      return null;
+    }
+
+    if (QQMUSIC_SHARE_PLAYLIST_PATH_RE.test(url.pathname)) {
+      const id = url.searchParams.get("id");
+
+      if (id && /^\d+$/.test(id)) {
+        return createParsedQQMusic("playlist", id, { idType: "id" });
+      }
+
+      return null;
+    }
+
+    return null;
+  }
+
+  const songMatch = url.pathname.match(QQMUSIC_SONG_DETAIL_PATH_RE);
+
+  if (songMatch) {
+    return createParsedQQMusic("song", songMatch[1], { idType: "mid" });
+  }
+
+  const playlistMatch = url.pathname.match(QQMUSIC_PLAYLIST_PATH_RE);
+
+  if (playlistMatch) {
+    return createParsedQQMusic("playlist", playlistMatch[1], { idType: "id" });
+  }
+
+  const albumMatch = url.pathname.match(QQMUSIC_ALBUM_PATH_RE);
+
+  if (albumMatch) {
+    return createParsedQQMusic("album", albumMatch[1], { idType: "mid" });
+  }
+
+  const toplistMatch = url.pathname.match(QQMUSIC_TOPLIST_PATH_RE);
+
+  if (toplistMatch) {
+    return createParsedQQMusic("toplist", toplistMatch[1], { idType: "id" });
+  }
+
+  return null;
+}
+
 function normalizeUrlLikeString(value) {
   if (typeof value !== "string") {
     return "";
@@ -581,11 +695,16 @@ function parseBilibiliUrl(href) {
     parsePlayerUrl(url) ||
     parseLiveIframeUrl(url) ||
     parseCompatPlayerUrl(url) ||
-    parseNetEasePageUrl(url)
+    parseNetEasePageUrl(url) ||
+    parseQQMusicPageUrl(url)
   );
 }
 
 function buildIframeUrl(parsed) {
+  if (parsed.kind === "qqmusic") {
+    return buildQQMusicIframeUrl(parsed, getBooleanSetting("autoplay_on_click", true));
+  }
+
   if (parsed.kind === "netease") {
     return buildNetEaseIframeUrl(parsed, getBooleanSetting("autoplay_on_click", true));
   }
@@ -639,6 +758,10 @@ function buildIframeUrl(parsed) {
 }
 
 function buildNoAutoplayIframeUrl(parsed) {
+  if (parsed.kind === "qqmusic") {
+    return buildQQMusicIframeUrl(parsed, false);
+  }
+
   if (parsed.kind === "netease") {
     return buildNetEaseIframeUrl(parsed, false);
   }
@@ -725,6 +848,31 @@ function getNetEaseEmbedHeight(parsed) {
   return parsed.mediaType === "song" || parsed.mediaType === "program" ? 130 : 430;
 }
 
+function getQQMusicEmbedHeight(parsed) {
+  return parsed.idType === "id" ? 86 : 430;
+}
+
+function buildQQMusicIframeUrl(parsed, autoplay) {
+  if (parsed.mediaType !== "song") {
+    return "";
+  }
+
+  if (parsed.idType === "id") {
+    return `https://i.y.qq.com/n2/m/outchain/player/index.html?songid=${parsed.itemId}&songtype=0`;
+  }
+
+  const params = new URLSearchParams({
+    songmid: parsed.itemId,
+    songtype: "0",
+  });
+
+  if (autoplay) {
+    params.set("autoplay", "1");
+  }
+
+  return `https://i.y.qq.com/v8/playsong.html?${params.toString()}`;
+}
+
 function buildNetEaseIframeUrl(parsed, autoplay) {
   const params = new URLSearchParams({
     type: parsed.outchainType,
@@ -792,8 +940,24 @@ function getMetaLine(parsed) {
       return "动态";
     case "netease":
       return getNetEaseMetaLine(parsed);
+    case "qqmusic":
+      return getQQMusicMetaLine(parsed);
     default:
       return "bilibili";
+  }
+}
+
+function getQQMusicMetaLine(parsed) {
+  switch (parsed.mediaType) {
+    case "playlist":
+      return "QQ音乐歌单";
+    case "album":
+      return "QQ音乐专辑";
+    case "toplist":
+      return "QQ音乐排行榜";
+    case "song":
+    default:
+      return "QQ音乐单曲";
   }
 }
 
@@ -858,6 +1022,7 @@ function getPreviewStatText(parsed, viewCount = null) {
     case "dynamic":
       return getMetaLine(parsed);
     case "netease":
+    case "qqmusic":
       return getMetaLine(parsed);
     default:
       return "";
@@ -935,8 +1100,24 @@ function getFallbackTitle(parsed) {
       return `动态 ${parsed.dynamicId}`;
     case "netease":
       return getNetEaseFallbackTitle(parsed);
+    case "qqmusic":
+      return getQQMusicFallbackTitle(parsed);
     default:
       return parsed.rawId || "bilibili";
+  }
+}
+
+function getQQMusicFallbackTitle(parsed) {
+  switch (parsed.mediaType) {
+    case "playlist":
+      return `QQ音乐歌单 ${parsed.itemId}`;
+    case "album":
+      return `QQ音乐专辑 ${parsed.itemId}`;
+    case "toplist":
+      return `QQ音乐排行榜 ${parsed.itemId}`;
+    case "song":
+    default:
+      return `QQ音乐单曲 ${parsed.itemId}`;
   }
 }
 
@@ -958,6 +1139,10 @@ function getNetEaseFallbackTitle(parsed) {
 
 function isKnownInlineKind(parsed) {
   if (parsed.kind === "video" || parsed.kind === "bangumi" || parsed.kind === "netease") {
+    return true;
+  }
+
+  if (parsed.kind === "qqmusic" && parsed.mediaType === "song") {
     return true;
   }
 
@@ -988,9 +1173,23 @@ function getFooterMeta(parsed) {
       return "在 bilibili 打开";
     case "netease":
       return getNetEaseFooterMeta(parsed);
+    case "qqmusic":
+      return getQQMusicFooterMeta(parsed);
     default:
       return "bilibili";
   }
+}
+
+function getQQMusicFooterMeta() {
+  return "QQ音乐外链播放器";
+}
+
+function isCompactQQMusic(parsed) {
+  return parsed.kind === "qqmusic" && parsed.mediaType === "song";
+}
+
+function isCompactAudio(parsed) {
+  return isCompactNetEase(parsed) || isCompactQQMusic(parsed);
 }
 
 function isCompactNetEase(parsed) {
@@ -1009,10 +1208,18 @@ function getLiveFooterMeta(parsed) {
 }
 
 function getOpenLabel(parsed) {
+  if (parsed.provider === "qqmusic") {
+    return "在QQ音乐打开";
+  }
+
   return parsed.provider === "netease" ? "在网易云音乐打开" : "在 bilibili 打开";
 }
 
 function getEmbedTitle(parsed) {
+  if (parsed.provider === "qqmusic") {
+    return "QQ Music player";
+  }
+
   return parsed.provider === "netease" ? "NetEase Cloud Music player" : "bilibili player";
 }
 
@@ -1128,6 +1335,11 @@ function normalizeMediaUrl(url) {
 function getPlaceholderLabel(parsedOrProvider) {
   const provider =
     typeof parsedOrProvider === "string" ? parsedOrProvider : parsedOrProvider?.provider || "bilibili";
+
+  if (provider === "qqmusic") {
+    return "QQ Music";
+  }
+
   return provider === "netease" ? "NetEase Cloud Music" : "bilibili";
 }
 
@@ -1167,7 +1379,7 @@ function extractPoster(target) {
 }
 
 const GENERIC_TITLE_RE =
-  /^(?:bilibili|哔哩哔哩|b站|网易云音乐|netease\s*(?:cloud\s*)?music|music\.163\.com|(?:www\.)?bilibili\.com|(?:https?:\/\/)?(?:music\.163\.com|(?:www\.)?bilibili\.com)\/\S*)$/i;
+  /^(?:bilibili|哔哩哔哩|b站|网易云音乐|netease\s*(?:cloud\s*)?music|music\.163\.com|(?:www\.)?bilibili\.com|qq音乐|qqmusic|qq\s*music|(?:i\.)?y\.qq\.com|(?:https?:\/\/)?(?:music\.163\.com|(?:www\.)?bilibili\.com|(?:i\.)?y\.qq\.com)\/\S*)$/i;
 
 function isGenericTitle(title) {
   if (!title || title.length < 2) {
@@ -1280,18 +1492,24 @@ function getPreviewAspectRatio(parsed) {
       return "16 / 9";
     case "netease":
       return isCompactNetEase(parsed) ? "auto" : "4 / 3";
+    case "qqmusic":
+      return isCompactQQMusic(parsed) ? "auto" : "4 / 3";
     default:
       return "4 / 3";
   }
 }
 
 function getLoadedFrameHeight(parsed) {
+  if (parsed.kind === "qqmusic") {
+    return getQQMusicEmbedHeight(parsed);
+  }
+
   return parsed.kind === "netease" ? getNetEaseEmbedHeight(parsed) : 0;
 }
 
 function buildWrapper(metadata) {
   const wrapper = createElement("div", "bilibili-inline-player");
-  const compact = isCompactNetEase(metadata.parsed);
+  const compact = isCompactAudio(metadata.parsed);
 
   wrapper.dataset.bilibiliUrl = metadata.canonicalUrl;
   wrapper.dataset.bilibiliMeta = metadata.metaLine;
@@ -1411,7 +1629,7 @@ function buildStandardCard(wrapper, metadata) {
     footerActions.appendChild(link);
   }
 
-  if (metadata.parsed.kind !== "video" && !isCompactNetEase(metadata.parsed)) {
+  if (metadata.parsed.kind !== "video" && !isCompactAudio(metadata.parsed)) {
     const footerMeta = createElement("div", "bilibili-inline-player__footer-meta", getFooterMeta(metadata.parsed));
     footerContent.appendChild(footerMeta);
   }
@@ -1482,6 +1700,22 @@ function primeEmbedState(wrapper) {
     state.standardIframeUrl = state.iframeUrl;
     state.noAutoplayIframeUrl = buildNoAutoplayIframeUrl(state.parsed);
     state.externalOnly = false;
+    state.resolvePromise = Promise.resolve(state.parsed);
+    return;
+  }
+
+  if (state.parsed.kind === "qqmusic") {
+    if (state.parsed.mediaType === "song") {
+      state.iframeUrl = buildIframeUrl(state.parsed);
+      state.standardIframeUrl = state.iframeUrl;
+      state.noAutoplayIframeUrl = buildNoAutoplayIframeUrl(state.parsed);
+      state.externalOnly = false;
+    } else {
+      state.iframeUrl = null;
+      state.externalOnly = true;
+      setButtonLabel(wrapper, getOpenLabel(state.parsed));
+    }
+
     state.resolvePromise = Promise.resolve(state.parsed);
     return;
   }
@@ -1626,7 +1860,7 @@ function buildLoadedFooter(wrapper) {
   const footerContent = createElement("div", "bilibili-inline-player__footer-content");
   const footerActions = createElement("div", "bilibili-inline-player__footer-actions");
 
-  if (!isCompactNetEase(state.parsed)) {
+  if (!isCompactAudio(state.parsed)) {
     const footerMeta = createElement(
       "div",
       "bilibili-inline-player__footer-meta",
