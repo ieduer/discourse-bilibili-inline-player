@@ -47,6 +47,7 @@ const NETEASE_MEDIA_BY_OUTCHAIN_TYPE = Object.fromEntries(
 const themeSettings = globalThis.settings || {};
 const wrapperState = new WeakMap();
 const videoInfoCache = new Map();
+const qqMusicSongInfoCache = new Map();
 
 function getBooleanSetting(name, fallback) {
   const value = themeSettings[name];
@@ -1223,10 +1224,13 @@ function getEmbedTitle(parsed) {
   return parsed.provider === "netease" ? "NetEase Cloud Music player" : "bilibili player";
 }
 
-function loadJsonp(src) {
+function loadCallbackScript(src, options = {}) {
+  const { callbackParam = "callback", extraParams = {} } = options;
+
   return new Promise((resolve, reject) => {
     const callbackName = `__bili_jsonp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const script = document.createElement("script");
+    const requestUrl = new URL(src, globalThis.location?.href || "https://forum.invalid/");
     let settled = false;
 
     const cleanup = () => {
@@ -1259,8 +1263,17 @@ function loadJsonp(src) {
       resolve(payload);
     };
 
+    for (const [key, value] of Object.entries(extraParams)) {
+      if (value == null || requestUrl.searchParams.has(key)) {
+        continue;
+      }
+
+      requestUrl.searchParams.set(key, String(value));
+    }
+
+    requestUrl.searchParams.set(callbackParam, callbackName);
     script.async = true;
-    script.src = `${src}${src.includes("?") ? "&" : "?"}jsonp=jsonp&callback=${callbackName}`;
+    script.src = requestUrl.toString();
     script.onerror = () => {
       if (settled) {
         return;
@@ -1272,6 +1285,15 @@ function loadJsonp(src) {
     };
 
     document.body.appendChild(script);
+  });
+}
+
+function loadJsonp(src) {
+  return loadCallbackScript(src, {
+    callbackParam: "callback",
+    extraParams: {
+      jsonp: "jsonp",
+    },
   });
 }
 
@@ -1300,6 +1322,44 @@ function fetchVideoInfo(parsed) {
   }
 
   return videoInfoCache.get(cacheKey);
+}
+
+function fetchQQMusicSongInfo(parsed) {
+  if (parsed.kind !== "qqmusic" || parsed.mediaType !== "song") {
+    return Promise.reject(new Error("QQ Music metadata is only supported for songs"));
+  }
+
+  const cacheKey = `${parsed.idType}:${parsed.itemId}`;
+
+  if (!qqMusicSongInfoCache.has(cacheKey)) {
+    const params = new URLSearchParams({
+      tpl: "yqq_song_detail",
+      format: "jsonp",
+    });
+
+    if (parsed.idType === "id") {
+      params.set("songid", parsed.itemId);
+    } else {
+      params.set("songmid", parsed.itemId);
+    }
+
+    qqMusicSongInfoCache.set(
+      cacheKey,
+      loadCallbackScript(`https://i.y.qq.com/v8/fcg-bin/fcg_play_single_song.fcg?${params.toString()}`).then(
+        (payload) => {
+          const song = Array.isArray(payload?.data) ? payload.data[0] : null;
+
+          if (!song || payload?.code !== 0) {
+            throw new Error("QQ Music metadata payload was invalid");
+          }
+
+          return song;
+        }
+      )
+    );
+  }
+
+  return qqMusicSongInfoCache.get(cacheKey);
 }
 
 function createElement(tagName, className, text) {
@@ -1378,6 +1438,30 @@ function extractPoster(target) {
   return normalizeMediaUrl(image?.src || "");
 }
 
+function normalizeTitleText(value) {
+  return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+}
+
+function cleanProviderTitle(title, parsed) {
+  let cleaned = normalizeTitleText(title);
+
+  if (!cleaned) {
+    return "";
+  }
+
+  if (parsed?.provider === "netease") {
+    cleaned = cleaned.replace(/\s*-\s*网易云音乐\s*$/i, "");
+    cleaned = cleaned.replace(/\s*-\s*(?:单曲|专辑|歌单|播客节目|播客|电台)\s*$/i, "");
+  }
+
+  if (parsed?.provider === "qqmusic") {
+    cleaned = cleaned.replace(/\s*-\s*qq音乐.*$/i, "");
+    cleaned = cleaned.replace(/\s*-\s*qq\s*music.*$/i, "");
+  }
+
+  return normalizeTitleText(cleaned);
+}
+
 const GENERIC_TITLE_RE =
   /^(?:bilibili|哔哩哔哩|b站|网易云音乐|netease\s*(?:cloud\s*)?music|music\.163\.com|(?:www\.)?bilibili\.com|qq音乐|qqmusic|qq\s*music|(?:i\.)?y\.qq\.com|(?:https?:\/\/)?(?:music\.163\.com|(?:www\.)?bilibili\.com|(?:i\.)?y\.qq\.com)\/\S*)$/i;
 
@@ -1389,12 +1473,59 @@ function isGenericTitle(title) {
   return GENERIC_TITLE_RE.test(title);
 }
 
-function extractTitle(target, fallbackAnchor, parsed) {
-  const titleElement =
-    target.querySelector(".onebox-body h3 a, .onebox-body h3, h3 a, h3, a[href]") || fallbackAnchor;
-  const title = titleElement?.textContent?.trim();
+function isPlaceholderTitle(title, parsed) {
+  return normalizeTitleText(title) === normalizeTitleText(getFallbackTitle(parsed));
+}
 
-  if (title && !isGenericTitle(title)) {
+function collectTextTitleCandidates(target, fallbackAnchor) {
+  const candidates = [];
+  const pushCandidate = (value) => {
+    if (value) {
+      candidates.push(value);
+    }
+  };
+
+  for (const element of target.querySelectorAll(".onebox-body h3 a, .onebox-body h3, h3 a, h3")) {
+    pushCandidate(element.textContent);
+    pushCandidate(element.getAttribute?.("title"));
+    pushCandidate(element.getAttribute?.("aria-label"));
+  }
+
+  for (const element of target.querySelectorAll("[data-title], [title], [aria-label], img[alt]")) {
+    pushCandidate(element.getAttribute?.("data-title"));
+    pushCandidate(element.getAttribute?.("title"));
+    pushCandidate(element.getAttribute?.("aria-label"));
+    pushCandidate(element.getAttribute?.("alt"));
+  }
+
+  for (const line of (target.textContent || "").split(/\n+/)) {
+    pushCandidate(line);
+  }
+
+  pushCandidate(fallbackAnchor?.textContent);
+  pushCandidate(fallbackAnchor?.getAttribute?.("title"));
+  pushCandidate(fallbackAnchor?.getAttribute?.("aria-label"));
+
+  return candidates;
+}
+
+function extractTitle(target, fallbackAnchor, parsed) {
+  for (const candidate of collectTextTitleCandidates(target, fallbackAnchor)) {
+    const title = cleanProviderTitle(candidate, parsed);
+
+    if (!title || title.length > 120) {
+      continue;
+    }
+
+    if (
+      isGenericTitle(title) ||
+      title === getMetaLine(parsed) ||
+      title === getOpenLabel(parsed) ||
+      title === getFooterMeta(parsed)
+    ) {
+      continue;
+    }
+
     return title;
   }
 
@@ -1481,6 +1612,95 @@ function updateWrapperMetadata(wrapper, data) {
       placeholder?.remove();
       media.prepend(poster);
     }
+  }
+}
+
+function formatMusicArtists(artists) {
+  return artists
+    .map((artist) => normalizeTitleText(artist))
+    .filter(Boolean)
+    .join(" / ");
+}
+
+function buildSongDisplayTitle(name, artists = []) {
+  const baseName = normalizeTitleText(name);
+  const artistLine = formatMusicArtists(artists);
+
+  if (!baseName) {
+    return "";
+  }
+
+  return artistLine ? `${baseName} - ${artistLine}` : baseName;
+}
+
+function updatePreviewTitle(wrapper, title) {
+  const nextTitle = normalizeTitleText(title);
+
+  if (!nextTitle) {
+    return;
+  }
+
+  const state = wrapperState.get(wrapper);
+  const titleElement =
+    wrapper.querySelector(".bilibili-inline-player__compact-title") ||
+    wrapper.querySelector(".bilibili-inline-player__title");
+  const playButton = wrapper.querySelector(".bilibili-inline-player__play");
+  const playLabel = wrapper.querySelector(".bilibili-inline-player__play-label");
+  const iframe = wrapper.querySelector(".bilibili-inline-player__frame");
+
+  wrapper.dataset.bilibiliTitle = nextTitle;
+
+  if (state) {
+    state.title = nextTitle;
+  }
+
+  if (titleElement) {
+    titleElement.textContent = nextTitle;
+  }
+
+  if (playButton) {
+    const buttonText = playLabel?.textContent?.trim() || getInitialButtonLabel(state?.parsed || {});
+    playButton.setAttribute("aria-label", `${buttonText}: ${nextTitle}`);
+  }
+
+  if (iframe) {
+    iframe.title = nextTitle;
+  }
+}
+
+function updatePreviewCanonicalUrl(wrapper, canonicalUrl) {
+  const nextUrl = normalizeUrlLikeString(canonicalUrl);
+
+  if (!nextUrl) {
+    return;
+  }
+
+  const state = wrapperState.get(wrapper);
+
+  wrapper.dataset.bilibiliUrl = nextUrl;
+
+  if (state?.parsed) {
+    state.parsed.canonicalUrl = nextUrl;
+  }
+
+  for (const link of wrapper.querySelectorAll(".bilibili-inline-player__footer-link")) {
+    link.href = nextUrl;
+  }
+}
+
+function updateQQMusicPreviewMetadata(wrapper, song) {
+  const title = buildSongDisplayTitle(song?.name || song?.title, (song?.singer || []).map((entry) => entry?.name));
+
+  if (!title) {
+    return;
+  }
+
+  updatePreviewTitle(wrapper, title);
+
+  const canonicalMid = normalizeTitleText(song?.mid);
+
+  if (canonicalMid) {
+    updatePreviewCanonicalUrl(wrapper, buildQQMusicCanonicalUrl("song", canonicalMid));
   }
 }
 
@@ -1897,6 +2117,99 @@ function buildLoadedFooter(wrapper) {
   return footer;
 }
 
+function renderLoadedPlayer(wrapper, iframeUrl) {
+  const state = wrapperState.get(wrapper);
+
+  if (!state?.parsed || !iframeUrl) {
+    return;
+  }
+
+  wrapper.dataset.bilibiliLoading = "0";
+  wrapper.dataset.bilibiliLoaded = "1";
+  wrapper.classList.remove("bilibili-inline-player--loading");
+
+  const frameWrap = createElement("div", "bilibili-inline-player__frame-wrap");
+  const iframe = createElement("iframe", "bilibili-inline-player__frame");
+  const frameHeight = getLoadedFrameHeight(state.parsed);
+
+  if (frameHeight > 0) {
+    frameWrap.classList.add("bilibili-inline-player__frame-wrap--fixed");
+    frameWrap.style.setProperty("--bili-frame-height", `${frameHeight}px`);
+  } else {
+    frameWrap.style.setProperty("--bili-aspect-ratio", DEFAULT_ASPECT_RATIO);
+  }
+
+  iframe.src = iframeUrl;
+  iframe.loading = "lazy";
+  iframe.referrerPolicy = "strict-origin-when-cross-origin";
+  iframe.allow = "autoplay; fullscreen; picture-in-picture";
+  iframe.allowFullscreen = true;
+  iframe.title = wrapper.dataset.bilibiliTitle || getEmbedTitle(state.parsed);
+
+  frameWrap.appendChild(iframe);
+
+  wrapper.classList.remove("bilibili-inline-player--compact-audio");
+  wrapper.replaceChildren(frameWrap, buildLoadedFooter(wrapper));
+  updateRetryButtonLabel(wrapper);
+  updateFooterMeta(wrapper);
+  maybeAttachStuckHelpNotice(wrapper);
+}
+
+function maybeAutoEmbedFallbackMusicCard(wrapper) {
+  const state = wrapperState.get(wrapper);
+
+  if (!state?.parsed || wrapper.dataset.bilibiliLoaded === "1" || wrapper.dataset.bilibiliLoading === "1") {
+    return;
+  }
+
+  const fallbackAllowed =
+    (state.parsed.kind === "netease" && state.parsed.mediaType === "song") ||
+    (state.parsed.kind === "qqmusic" && state.parsed.mediaType === "song" && state.parsed.idType === "id");
+
+  if (!fallbackAllowed) {
+    return;
+  }
+
+  const iframeUrl = state.noAutoplayIframeUrl || state.standardIframeUrl || state.iframeUrl;
+
+  if (!iframeUrl) {
+    return;
+  }
+
+  renderLoadedPlayer(wrapper, iframeUrl);
+}
+
+function maybeResolveMusicPreviewMetadata(wrapper) {
+  const state = wrapperState.get(wrapper);
+
+  if (!state?.parsed || !isCompactAudio(state.parsed) || state.previewMetadataPromise) {
+    return;
+  }
+
+  const currentTitle = wrapper.dataset.bilibiliTitle || state.title || "";
+
+  if (!isPlaceholderTitle(currentTitle, state.parsed)) {
+    return;
+  }
+
+  if (state.parsed.kind === "qqmusic" && state.parsed.mediaType === "song") {
+    state.previewMetadataPromise = fetchQQMusicSongInfo(state.parsed)
+      .then((song) => {
+        updateQQMusicPreviewMetadata(wrapper, song);
+      })
+      .catch(() => {
+        maybeAutoEmbedFallbackMusicCard(wrapper);
+      });
+    return;
+  }
+
+  if (state.parsed.kind === "netease" && state.parsed.mediaType === "song") {
+    state.previewMetadataPromise = Promise.resolve().then(() => {
+      maybeAutoEmbedFallbackMusicCard(wrapper);
+    });
+  }
+}
+
 async function activatePlayer(wrapper) {
   if (wrapper.dataset.bilibiliLoaded === "1" || wrapper.dataset.bilibiliLoading === "1") {
     return;
@@ -1923,36 +2236,7 @@ async function activatePlayer(wrapper) {
     return;
   }
 
-  wrapper.dataset.bilibiliLoading = "0";
-  wrapper.dataset.bilibiliLoaded = "1";
-  wrapper.classList.remove("bilibili-inline-player--loading");
-
-  const frameWrap = createElement("div", "bilibili-inline-player__frame-wrap");
-  const iframe = createElement("iframe", "bilibili-inline-player__frame");
-  const frameHeight = getLoadedFrameHeight(state.parsed);
-
-  if (frameHeight > 0) {
-    frameWrap.classList.add("bilibili-inline-player__frame-wrap--fixed");
-    frameWrap.style.setProperty("--bili-frame-height", `${frameHeight}px`);
-  } else {
-    frameWrap.style.setProperty("--bili-aspect-ratio", DEFAULT_ASPECT_RATIO);
-  }
-  iframe.src = state.iframeUrl;
-  iframe.loading = "lazy";
-  iframe.referrerPolicy = "strict-origin-when-cross-origin";
-  iframe.allow = "autoplay; fullscreen; picture-in-picture";
-  iframe.allowFullscreen = true;
-  iframe.title = wrapper.dataset.bilibiliTitle || getEmbedTitle(state.parsed);
-
-  frameWrap.appendChild(iframe);
-
-  wrapper.classList.remove("bilibili-inline-player--compact-audio");
-  const footer = buildLoadedFooter(wrapper);
-
-  wrapper.replaceChildren(frameWrap, footer);
-  updateRetryButtonLabel(wrapper);
-  updateFooterMeta(wrapper);
-  maybeAttachStuckHelpNotice(wrapper);
+  renderLoadedPlayer(wrapper, state.iframeUrl);
 }
 
 function collectOneboxCandidates(element) {
@@ -2099,6 +2383,7 @@ function replaceCandidate(candidate) {
   const replacement = buildWrapper(buildMetadata(candidate.target, candidate.anchor, candidate.parsed));
   replacement.dataset.bilibiliInlinePlayer = "done";
   candidate.target.replaceWith(replacement);
+  maybeResolveMusicPreviewMetadata(replacement);
 }
 
 export default apiInitializer("1.8.0", (api) => {
