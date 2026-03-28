@@ -1465,12 +1465,40 @@ function cleanProviderTitle(title, parsed) {
 const GENERIC_TITLE_RE =
   /^(?:bilibili|哔哩哔哩|b站|网易云音乐|netease\s*(?:cloud\s*)?music|music\.163\.com|(?:www\.)?bilibili\.com|qq音乐|qqmusic|qq\s*music|(?:i\.)?y\.qq\.com|(?:https?:\/\/)?(?:music\.163\.com|(?:www\.)?bilibili\.com|(?:i\.)?y\.qq\.com)\/\S*)$/i;
 
+function extractStructuredProviderTitle(candidate, parsed) {
+  const text = normalizeTitleText(candidate);
+
+  if (!text) {
+    return "";
+  }
+
+  if (parsed?.provider === "netease") {
+    const songBySingerMatch = text.match(/歌曲名[《"]([^》"]+)[》"]\s*，\s*由\s*([^，。]+?)\s*演唱/u);
+
+    if (songBySingerMatch) {
+      return buildSongDisplayTitle(songBySingerMatch[1], [songBySingerMatch[2]]);
+    }
+
+    const titleOnlyMatch = text.match(/[《"]([^》"]+)[》"](?:下载|歌词|在线试听|无损音乐下载)/u);
+
+    if (titleOnlyMatch) {
+      return normalizeTitleText(titleOnlyMatch[1]);
+    }
+  }
+
+  return "";
+}
+
 function isGenericTitle(title) {
   if (!title || title.length < 2) {
     return true;
   }
 
-  return GENERIC_TITLE_RE.test(title);
+  return (
+    GENERIC_TITLE_RE.test(title) ||
+    /^网易云音乐(?:是一款|是一个|专注于|，)/u.test(title) ||
+    /^qq音乐(?:是|，)/iu.test(title)
+  );
 }
 
 function isPlaceholderTitle(title, parsed) {
@@ -1511,6 +1539,12 @@ function collectTextTitleCandidates(target, fallbackAnchor) {
 
 function extractTitle(target, fallbackAnchor, parsed) {
   for (const candidate of collectTextTitleCandidates(target, fallbackAnchor)) {
+    const structuredTitle = extractStructuredProviderTitle(candidate, parsed);
+
+    if (structuredTitle && !isGenericTitle(structuredTitle)) {
+      return structuredTitle;
+    }
+
     const title = cleanProviderTitle(candidate, parsed);
 
     if (!title || title.length > 120) {
