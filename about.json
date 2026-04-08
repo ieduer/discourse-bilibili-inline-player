@@ -1,8 +1,8 @@
 {
-  "name": "Bilibili + NetEase + QQ Music Inline Player",
+  "name": "Bilibili + NetEase + QQ Music + X Inline Embeds",
   "about_url": "https://github.com/ieduer/discourse-bilibili-inline-player",
   "license_url": "https://github.com/ieduer/discourse-bilibili-inline-player/blob/main/LICENSE",
   "component": true,
   "authors": "suen",
-  "theme_version": "0.5.2"
+  "theme_version": "0.6.0"
 }

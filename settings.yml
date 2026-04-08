@@ -1,7 +1,7 @@
 enabled:
   default: true
   type: bool
-  description: Enable inline bilibili, NetEase Cloud Music, and QQ Music embeds for supported URLs.
+  description: Enable inline bilibili, NetEase Cloud Music, QQ Music, and Twitter/X embeds for supported URLs.
 
 autoplay_on_click:
   default: true

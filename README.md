@@ -1,6 +1,6 @@
-# Bilibili + NetEase + QQ Music Inline Player
+# Bilibili + NetEase + QQ Music + X Inline Embeds
 
-A Discourse theme component that turns supported bilibili, NetEase Cloud Music, and QQ Music links into inline, click-to-play embeds without requiring a container rebuild.
+A Discourse theme component that turns supported bilibili, NetEase Cloud Music, QQ Music, and Twitter/X links into inline embeds without requiring a container rebuild.
 
 This repository is intentionally implemented as a remote theme component, not a server plugin:
 
@@ -44,6 +44,14 @@ Card takeover with open-on-QQ-Music fallback:
 - `https://y.qq.com/n/ryqq/albumDetail/...` (QQ Music album)
 - `https://y.qq.com/n/ryqq/toplist/...` (QQ Music toplist)
 - `https://i.y.qq.com/n2/m/share/details/taoge.html?id=...` (QQ Music shared playlist)
+
+Direct render:
+
+- `https://twitter.com/<handle>/status/<tweet_id>`
+- `https://x.com/<handle>/status/<tweet_id>`
+- `https://mobile.twitter.com/<handle>/status/<tweet_id>`
+- `https://mobile.x.com/<handle>/status/<tweet_id>`
+- `https://x.com/i/web/status/<tweet_id>`
 
 Card takeover with open-on-bilibili fallback:
 
@@ -91,7 +99,8 @@ The safest input pattern is still a standalone bilibili URL on its own line, whi
 10. For QQ Music single-song cards, the component resolves the real track title on the client with QQ Music's official JSONP song-detail endpoint before the user clicks play.
 11. For NetEase single-song cards, if the cooked post still only exposes a generic provider title in this no-rebuild architecture, the component falls back to loading the official no-autoplay outchain player immediately instead of showing an ID-only fake title.
 12. For QQ Music, the component supports the official outchain player for songs with numeric IDs and the playsong page for songs with songmid identifiers. Playlists, albums, and toplists are rendered as styled cards with an open-on-QQ-Music fallback.
-13. For content types without a stable official iframe path in this theme-component-only architecture, the component still upgrades the post into a unified media card and falls back to opening the canonical source page.
+13. For Twitter/X status links, the component loads `https://platform.twitter.com/widgets.js` on demand and renders the official tweet widget directly inside the cooked post.
+14. For content types without a stable official iframe path in this theme-component-only architecture, the component still upgrades the post into a unified media card and falls back to opening the canonical source page.
 
 The component does not modify Discourse core and does not require a rebuild.
 
@@ -105,6 +114,7 @@ The component does not modify Discourse core and does not require a rebuild.
 - QQ Music song detail JSONP: `https://i.y.qq.com/v8/fcg-bin/fcg_play_single_song.fcg`
 - QQ Music outchain player: `https://i.y.qq.com/n2/m/outchain/player/index.html`
 - QQ Music playsong: `https://i.y.qq.com/v8/playsong.html`
+- Twitter/X widgets script: `https://platform.twitter.com/widgets.js`
 
 ## Installation
 
@@ -137,6 +147,7 @@ No rebuild is required.
 - If experimental live embeds are enabled, allow `https://www.bilibili.com` in `frame-src`.
 - If NetEase Cloud Music embeds are enabled by CSP, allow `https://music.163.com` in `frame-src`.
 - If QQ Music embeds are enabled by CSP, allow `https://i.y.qq.com` in `frame-src`.
+- If tweet embeds are blocked by a custom CSP, allow `https://platform.twitter.com` in `script-src` and the corresponding X/Twitter widget origins used by your site policy.
 - If a supported media link cannot be parsed, the original cooked content is left untouched.
 
 ## Suggested repository name

@@ -66,6 +66,18 @@
   box-shadow: 0 10px 24px rgb(49 194 124 / 0.38);
 }
 
+/* ── Twitter/X provider overrides ── */
+
+.bilibili-inline-player--twitter {
+  --bili-card-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
+}
+
+.bilibili-inline-player--twitter .bilibili-inline-player__tweet-wrap {
+  background:
+    radial-gradient(circle at 18% 18%, rgb(255 255 255 / 0.05), transparent 34%),
+    linear-gradient(135deg, #0b1017 0%, #101825 52%, #0a111b 100%);
+}
+
 /* ═══════════════════════════════════════════════════
    Compact audio card (NetEase single songs / programs)
    Single-row unified dark card — Spotify/Discord style
@@ -337,6 +349,42 @@
   font-size: 0.88rem;
   letter-spacing: 0.04em;
   pointer-events: none;
+}
+
+/* ── Tweet embed shell ── */
+
+.bilibili-inline-player__tweet-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  width: 100%;
+  min-height: 12rem;
+  padding: 1rem 0.85rem;
+  overflow-x: auto;
+  background: color-mix(in srgb, var(--primary-low, #f4f4f4) 58%, var(--secondary, #fff));
+}
+
+.bilibili-inline-player__tweet-wrap iframe {
+  max-width: 100%;
+}
+
+.bilibili-inline-player__tweet-loading {
+  color: rgb(255 255 255 / 0.72);
+  font-size: 0.88rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.bilibili-inline-player__tweet-loading--failed {
+  color: rgb(255 255 255 / 0.82);
+}
+
+.bilibili-inline-player__tweet-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* ── Hidden legacy meta ── */

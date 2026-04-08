@@ -8,6 +8,14 @@ const SHORT_HOSTS = new Set(["b23.tv", "www.b23.tv", "bili2233.cn", "www.bili223
 const PLAYER_HOSTS = new Set(["player.bilibili.com"]);
 const NETEASE_HOSTS = new Set(["music.163.com", "y.music.163.com"]);
 const QQMUSIC_HOSTS = new Set(["y.qq.com", "i.y.qq.com"]);
+const TWITTER_HOSTS = new Set([
+  "twitter.com",
+  "www.twitter.com",
+  "mobile.twitter.com",
+  "x.com",
+  "www.x.com",
+  "mobile.x.com",
+]);
 const VIDEO_PATH_RE = /^\/(?:s\/)?video\/(BV[0-9A-Za-z]+|av\d+)\/?$/i;
 const SHORT_VIDEO_PATH_RE = /^\/(?:video\/)?(BV[0-9A-Za-z]+|av\d+)(?:\/p(\d+))?\/?$/i;
 const BANGUMI_PATH_RE = /^\/bangumi\/play\/(ep|ss)(\d+)\/?$/i;
@@ -27,12 +35,14 @@ const QQMUSIC_TOPLIST_PATH_RE = /^\/n\/ryqq\/toplist\/(\d+)\/?$/;
 const QQMUSIC_PLAYSONG_PATH_RE = /^\/v8\/playsong\.html$/;
 const QQMUSIC_OUTCHAIN_PATH_RE = /^\/n2\/m\/outchain\/player\/index\.html$/;
 const QQMUSIC_SHARE_PLAYLIST_PATH_RE = /^\/n2\/m\/share\/details\/taoge\.html$/;
+const TWITTER_STATUS_PATH_RE = /^\/(?:(?:i\/web)|([A-Za-z0-9_]{1,15}))\/status(?:es)?\/(\d+)(?:\/.*)?$/i;
 const IFRAME_SRC_RE = /<iframe\b[^>]*\bsrc=(["'])([^"']+)\1/gi;
 const URL_LIKE_RE =
-  /((?:https?:)?\/\/(?:player\.bilibili\.com\/player\.html|www\.bilibili\.com\/blackboard\/(?:live\/live-mobile-playerV3|live\/live-activity-player|webplayer\/mbplayer)\.html|(?:www\.|m\.)?bilibili\.com\/(?:s\/)?video\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/bangumi\/play\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/audio\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/read\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/opus\/[^\s"'<>]+|t\.bilibili\.com\/[^\s"'<>]+|live\.bilibili\.com\/[^\s"'<>]+|(?:www\.)?(?:b23\.tv|bili2233\.cn)\/[^\s"'<>]+|(?:y\.)?music\.163\.com\/[^\s"'<>]+|(?:i\.)?y\.qq\.com\/[^\s"'<>]+))/gi;
+  /((?:https?:)?\/\/(?:player\.bilibili\.com\/player\.html|www\.bilibili\.com\/blackboard\/(?:live\/live-mobile-playerV3|live\/live-activity-player|webplayer\/mbplayer)\.html|(?:www\.|m\.)?bilibili\.com\/(?:s\/)?video\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/bangumi\/play\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/audio\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/read\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/opus\/[^\s"'<>]+|t\.bilibili\.com\/[^\s"'<>]+|live\.bilibili\.com\/[^\s"'<>]+|(?:www\.)?(?:b23\.tv|bili2233\.cn)\/[^\s"'<>]+|(?:y\.)?music\.163\.com\/[^\s"'<>]+|(?:i\.)?y\.qq\.com\/[^\s"'<>]+|(?:www\.|mobile\.)?(?:twitter\.com|x\.com)\/[^\s"'<>]+))/gi;
 const DEFAULT_ASPECT_RATIO = "16 / 9";
 const JSONP_TIMEOUT_MS = 8000;
 const BILIBILI_STUCK_HELP_DELAY_MS = 5000;
+const TWITTER_WIDGETS_SRC = "https://platform.twitter.com/widgets.js";
 const NETEASE_OUTCHAIN_TYPE_BY_MEDIA = {
   playlist: "0",
   album: "1",
@@ -48,6 +58,7 @@ const themeSettings = globalThis.settings || {};
 const wrapperState = new WeakMap();
 const videoInfoCache = new Map();
 const qqMusicSongInfoCache = new Map();
+let twitterWidgetsPromise;
 
 function getBooleanSetting(name, fallback) {
   const value = themeSettings[name];
@@ -130,6 +141,14 @@ function buildQQMusicCanonicalUrl(mediaType, itemId) {
     default:
       return `https://y.qq.com/n/ryqq/songDetail/${itemId}`;
   }
+}
+
+function buildTweetCanonicalUrl(tweetId, screenName = "") {
+  const normalizedScreenName = /^[A-Za-z0-9_]{1,15}$/.test(screenName || "") ? screenName : "";
+
+  return normalizedScreenName
+    ? `https://x.com/${normalizedScreenName}/status/${tweetId}`
+    : `https://x.com/i/web/status/${tweetId}`;
 }
 
 function normalizeVideoId(rawId) {
@@ -255,6 +274,19 @@ function createParsedQQMusic(mediaType, itemId, extras = {}) {
     page: 1,
     rawId: `${mediaType}:${itemId}`,
     canonicalUrl: buildQQMusicCanonicalUrl(mediaType, itemId),
+    ...extras,
+  };
+}
+
+function createParsedTweet(tweetId, extras = {}) {
+  return {
+    provider: "twitter",
+    kind: "tweet",
+    tweetId: String(tweetId),
+    screenName: typeof extras.screenName === "string" ? extras.screenName : "",
+    page: 1,
+    rawId: String(tweetId),
+    canonicalUrl: buildTweetCanonicalUrl(tweetId, extras.screenName || ""),
     ...extras,
   };
 }
@@ -657,6 +689,24 @@ function parseQQMusicPageUrl(url) {
   return null;
 }
 
+function parseTwitterPageUrl(url) {
+  const hostname = url.hostname.toLowerCase();
+
+  if (!TWITTER_HOSTS.has(hostname)) {
+    return null;
+  }
+
+  const match = url.pathname.match(TWITTER_STATUS_PATH_RE);
+
+  if (!match) {
+    return null;
+  }
+
+  return createParsedTweet(match[2], {
+    screenName: match[1] || "",
+  });
+}
+
 function normalizeUrlLikeString(value) {
   if (typeof value !== "string") {
     return "";
@@ -697,7 +747,8 @@ function parseBilibiliUrl(href) {
     parseLiveIframeUrl(url) ||
     parseCompatPlayerUrl(url) ||
     parseNetEasePageUrl(url) ||
-    parseQQMusicPageUrl(url)
+    parseQQMusicPageUrl(url) ||
+    parseTwitterPageUrl(url)
   );
 }
 
@@ -943,6 +994,8 @@ function getMetaLine(parsed) {
       return getNetEaseMetaLine(parsed);
     case "qqmusic":
       return getQQMusicMetaLine(parsed);
+    case "tweet":
+      return "Twitter/X 推文";
     default:
       return "bilibili";
   }
@@ -1024,6 +1077,7 @@ function getPreviewStatText(parsed, viewCount = null) {
       return getMetaLine(parsed);
     case "netease":
     case "qqmusic":
+    case "tweet":
       return getMetaLine(parsed);
     default:
       return "";
@@ -1103,6 +1157,8 @@ function getFallbackTitle(parsed) {
       return getNetEaseFallbackTitle(parsed);
     case "qqmusic":
       return getQQMusicFallbackTitle(parsed);
+    case "tweet":
+      return `推文 ${parsed.tweetId}`;
     default:
       return parsed.rawId || "bilibili";
   }
@@ -1147,6 +1203,10 @@ function isKnownInlineKind(parsed) {
     return true;
   }
 
+  if (parsed.kind === "tweet") {
+    return true;
+  }
+
   if (parsed.kind === "live") {
     return getBooleanSetting("enable_experimental_live_embed", true);
   }
@@ -1176,6 +1236,8 @@ function getFooterMeta(parsed) {
       return getNetEaseFooterMeta(parsed);
     case "qqmusic":
       return getQQMusicFooterMeta(parsed);
+    case "tweet":
+      return "Twitter/X 原生嵌入";
     default:
       return "bilibili";
   }
@@ -1209,6 +1271,10 @@ function getLiveFooterMeta(parsed) {
 }
 
 function getOpenLabel(parsed) {
+  if (parsed.provider === "twitter") {
+    return "在 X 打开";
+  }
+
   if (parsed.provider === "qqmusic") {
     return "在QQ音乐打开";
   }
@@ -1217,11 +1283,96 @@ function getOpenLabel(parsed) {
 }
 
 function getEmbedTitle(parsed) {
+  if (parsed.provider === "twitter") {
+    return "Twitter/X post";
+  }
+
   if (parsed.provider === "qqmusic") {
     return "QQ Music player";
   }
 
   return parsed.provider === "netease" ? "NetEase Cloud Music player" : "bilibili player";
+}
+
+function ensureTwitterWidgetsReady() {
+  if (window.twttr?.widgets?.createTweet) {
+    return Promise.resolve(window.twttr);
+  }
+
+  if (twitterWidgetsPromise) {
+    return twitterWidgetsPromise;
+  }
+
+  twitterWidgetsPromise = new Promise((resolve, reject) => {
+    const resolveWhenReady = () => {
+      const twttr = window.twttr;
+
+      if (twttr?.widgets?.createTweet) {
+        resolve(twttr);
+        return;
+      }
+
+      if (typeof twttr?.ready === "function") {
+        twttr.ready(() => {
+          if (window.twttr?.widgets?.createTweet) {
+            resolve(window.twttr);
+          } else {
+            reject(new Error("Twitter widgets API unavailable"));
+          }
+        });
+        return;
+      }
+
+      reject(new Error("Twitter widgets API unavailable"));
+    };
+
+    let script = document.querySelector(`script[src="${TWITTER_WIDGETS_SRC}"]`);
+
+    if (!script) {
+      script = document.createElement("script");
+      script.async = true;
+      script.src = TWITTER_WIDGETS_SRC;
+      document.head.appendChild(script);
+    }
+
+    script.addEventListener("load", resolveWhenReady, { once: true });
+    script.addEventListener(
+      "error",
+      () => reject(new Error("Twitter widgets script failed to load")),
+      { once: true }
+    );
+
+    if (window.twttr?.widgets?.createTweet || typeof window.twttr?.ready === "function") {
+      resolveWhenReady();
+    }
+  }).catch((error) => {
+    twitterWidgetsPromise = null;
+    throw error;
+  });
+
+  return twitterWidgetsPromise;
+}
+
+function getTweetTheme() {
+  const root = document.documentElement;
+
+  if (root?.classList.contains("dark-scheme") || root?.classList.contains("dark-mode")) {
+    return "dark";
+  }
+
+  if (root?.classList.contains("light-scheme") || root?.classList.contains("light-mode")) {
+    return "light";
+  }
+
+  return globalThis.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function buildTweetEmbedOptions() {
+  return {
+    align: "center",
+    dnt: true,
+    theme: getTweetTheme(),
+  };
 }
 
 function loadCallbackScript(src, options = {}) {
@@ -1396,6 +1547,10 @@ function getPlaceholderLabel(parsedOrProvider) {
   const provider =
     typeof parsedOrProvider === "string" ? parsedOrProvider : parsedOrProvider?.provider || "bilibili";
 
+  if (provider === "twitter") {
+    return "Twitter/X";
+  }
+
   if (provider === "qqmusic") {
     return "QQ Music";
   }
@@ -1459,11 +1614,16 @@ function cleanProviderTitle(title, parsed) {
     cleaned = cleaned.replace(/\s*-\s*qq\s*music.*$/i, "");
   }
 
+  if (parsed?.provider === "twitter") {
+    cleaned = cleaned.replace(/\s*(?:[-|/]\s*)?(?:twitter|x)\s*$/i, "");
+    cleaned = cleaned.replace(/\s+on\s+x\s*$/i, "");
+  }
+
   return normalizeTitleText(cleaned);
 }
 
 const GENERIC_TITLE_RE =
-  /^(?:bilibili|哔哩哔哩|b站|网易云音乐|netease\s*(?:cloud\s*)?music|music\.163\.com|(?:www\.)?bilibili\.com|qq音乐|qqmusic|qq\s*music|(?:i\.)?y\.qq\.com|(?:https?:\/\/)?(?:music\.163\.com|(?:www\.)?bilibili\.com|(?:i\.)?y\.qq\.com)\/\S*)$/i;
+  /^(?:bilibili|哔哩哔哩|b站|网易云音乐|netease\s*(?:cloud\s*)?music|music\.163\.com|(?:www\.)?bilibili\.com|qq音乐|qqmusic|qq\s*music|(?:i\.)?y\.qq\.com|twitter|x|x\.com|twitter\.com|(?:https?:\/\/)?(?:music\.163\.com|(?:www\.)?bilibili\.com|(?:i\.)?y\.qq\.com|(?:www\.|mobile\.)?(?:twitter\.com|x\.com))\/\S*)$/i;
 
 function extractStructuredProviderTitle(candidate, parsed) {
   const text = normalizeTitleText(candidate);
@@ -1775,15 +1935,16 @@ function buildWrapper(metadata) {
   wrapper.dataset.bilibiliRiskLevel = metadata.environmentRisk?.level || "none";
   wrapper.style.setProperty("--bili-aspect-ratio", getPreviewAspectRatio(metadata.parsed));
   wrapper.classList.add(`bilibili-inline-player--${metadata.parsed.provider || "bilibili"}`);
+  wrapperState.set(wrapper, metadata);
 
-  if (compact) {
+  if (metadata.parsed.kind === "tweet") {
+    buildTweetShell(wrapper);
+  } else if (compact) {
     wrapper.classList.add("bilibili-inline-player--compact-audio");
     buildCompactAudioCard(wrapper, metadata);
   } else {
     buildStandardCard(wrapper, metadata);
   }
-
-  wrapperState.set(wrapper, metadata);
 
   if (
     metadata.environmentRisk?.level === "hard" &&
@@ -1896,6 +2057,14 @@ function buildStandardCard(wrapper, metadata) {
   wrapper.append(media, footer);
 }
 
+function buildTweetShell(wrapper) {
+  const tweetWrap = createElement("div", "bilibili-inline-player__tweet-wrap");
+  const loading = createElement("div", "bilibili-inline-player__tweet-loading", "加载推文中…");
+
+  tweetWrap.appendChild(loading);
+  wrapper.append(tweetWrap, buildLoadedFooter(wrapper));
+}
+
 function setButtonLabel(wrapper, text) {
   const buttonLabel = wrapper.querySelector(".bilibili-inline-player__play-label");
 
@@ -1921,6 +2090,17 @@ function primeEmbedState(wrapper) {
     state.externalOnly = true;
     setButtonLabel(wrapper, getOpenLabel(state.parsed));
     state.resolvePromise = Promise.resolve(state.parsed);
+    return;
+  }
+
+  if (state.parsed.kind === "tweet") {
+    state.externalOnly = false;
+    state.resolvePromise = ensureTwitterWidgetsReady()
+      .then(() => state.parsed)
+      .catch(() => {
+        state.externalOnly = true;
+        return null;
+      });
     return;
   }
 
@@ -2189,6 +2369,84 @@ function renderLoadedPlayer(wrapper, iframeUrl) {
   maybeAttachStuckHelpNotice(wrapper);
 }
 
+function renderTweetFallback(wrapper) {
+  const state = wrapperState.get(wrapper);
+  const tweetWrap = wrapper.querySelector(".bilibili-inline-player__tweet-wrap");
+
+  if (!state?.parsed || !tweetWrap) {
+    return;
+  }
+
+  wrapper.dataset.bilibiliLoading = "0";
+  wrapper.classList.remove("bilibili-inline-player--loading");
+
+  const message = createElement(
+    "div",
+    "bilibili-inline-player__tweet-loading bilibili-inline-player__tweet-loading--failed",
+    "推文嵌入失败，请直接打开原文。"
+  );
+  const actions = createElement("div", "bilibili-inline-player__tweet-actions");
+  const link = createElement("a", "bilibili-inline-player__footer-link", getOpenLabel(state.parsed));
+
+  link.href = wrapper.dataset.bilibiliUrl;
+  link.target = "_blank";
+  link.rel = "noopener nofollow ugc";
+  actions.appendChild(link);
+
+  tweetWrap.replaceChildren(message, actions);
+}
+
+async function renderTweetEmbed(wrapper) {
+  const state = wrapperState.get(wrapper);
+  const tweetWrap = wrapper.querySelector(".bilibili-inline-player__tweet-wrap");
+
+  if (
+    !state?.parsed ||
+    state.parsed.kind !== "tweet" ||
+    !tweetWrap ||
+    tweetWrap.dataset.bilibiliTweetLoaded === "1" ||
+    tweetWrap.dataset.bilibiliTweetLoading === "1"
+  ) {
+    return;
+  }
+
+  tweetWrap.dataset.bilibiliTweetLoading = "1";
+  wrapper.dataset.bilibiliLoading = "1";
+  wrapper.classList.add("bilibili-inline-player--loading");
+
+  try {
+    if (state.resolvePromise) {
+      await state.resolvePromise;
+    } else {
+      primeEmbedState(wrapper);
+      await wrapperState.get(wrapper)?.resolvePromise;
+    }
+
+    if (!wrapper.isConnected || state.externalOnly) {
+      throw new Error("Twitter widgets were unavailable");
+    }
+
+    const twttr = await ensureTwitterWidgetsReady();
+    tweetWrap.replaceChildren();
+
+    const embed = await twttr.widgets.createTweet(state.parsed.tweetId, tweetWrap, buildTweetEmbedOptions());
+
+    if (!embed) {
+      throw new Error("Twitter widget returned no embed");
+    }
+
+    tweetWrap.dataset.bilibiliTweetLoaded = "1";
+    wrapper.dataset.bilibiliLoading = "0";
+    wrapper.dataset.bilibiliLoaded = "1";
+    wrapper.classList.remove("bilibili-inline-player--loading");
+  } catch {
+    state.externalOnly = true;
+    renderTweetFallback(wrapper);
+  } finally {
+    delete tweetWrap.dataset.bilibiliTweetLoading;
+  }
+}
+
 function maybeAutoEmbedFallbackMusicCard(wrapper) {
   const state = wrapperState.get(wrapper);
 
@@ -2418,6 +2676,10 @@ function replaceCandidate(candidate) {
   replacement.dataset.bilibiliInlinePlayer = "done";
   candidate.target.replaceWith(replacement);
   maybeResolveMusicPreviewMetadata(replacement);
+
+  if (candidate.parsed.kind === "tweet") {
+    renderTweetEmbed(replacement);
+  }
 }
 
 export default apiInitializer("1.8.0", (api) => {
