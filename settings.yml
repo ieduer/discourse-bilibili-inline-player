@@ -20,6 +20,11 @@ show_open_link:
   type: bool
   description: Show a fallback link to the original source page under the embed.
 
+twitter_oembed_proxy_url:
+  default: ""
+  type: string
+  description: Optional server-side cache/proxy endpoint for Twitter/X oEmbed JSON. When set, the component appends url, theme, and dnt query parameters before falling back to publish.x.com JSONP.
+
 enable_experimental_live_embed:
   default: true
   type: bool

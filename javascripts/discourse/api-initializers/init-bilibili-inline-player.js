@@ -44,6 +44,7 @@ const JSONP_TIMEOUT_MS = 8000;
 const BILIBILI_STUCK_HELP_DELAY_MS = 5000;
 const TWITTER_SCRIPT_TIMEOUT_MS = 8000;
 const TWITTER_RENDER_TIMEOUT_MS = 3500;
+const TWITTER_OEMBED_FETCH_TIMEOUT_MS = 8000;
 const TWITTER_WIDGETS_SRC = "https://platform.twitter.com/widgets.js";
 const TWITTER_OEMBED_SRC = "https://publish.x.com/oembed";
 const NETEASE_OUTCHAIN_TYPE_BY_MEDIA = {
@@ -175,6 +176,26 @@ function buildTweetOEmbedUrl(parsed) {
   url.searchParams.set("url", buildTweetWidgetUrl(parsed));
 
   return url.toString();
+}
+
+function buildTweetOEmbedProxyUrl(parsed) {
+  const proxyUrl = getStringSetting("twitter_oembed_proxy_url", "").trim();
+
+  if (!proxyUrl) {
+    return "";
+  }
+
+  try {
+    const url = new URL(proxyUrl, globalThis.location?.href || "https://forum.invalid/");
+
+    url.searchParams.set("url", buildTweetWidgetUrl(parsed));
+    url.searchParams.set("theme", getTweetTheme());
+    url.searchParams.set("dnt", "true");
+
+    return url.toString();
+  } catch {
+    return "";
+  }
 }
 
 function normalizeVideoId(rawId) {
@@ -1520,6 +1541,50 @@ async function renderTweetWithFactory(twttr, state, tweetWrap) {
   return Boolean(embed || isTweetRendered(tweetWrap));
 }
 
+async function fetchTweetOEmbedFromProxy(parsed) {
+  const proxyUrl = buildTweetOEmbedProxyUrl(parsed);
+
+  if (!proxyUrl) {
+    throw new Error("Twitter/X oEmbed proxy is not configured");
+  }
+
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), TWITTER_OEMBED_FETCH_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(proxyUrl, {
+      credentials: "omit",
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Twitter/X oEmbed proxy returned ${response.status}`);
+    }
+
+    const payload = await response.json();
+
+    if (!payload?.html || typeof payload.html !== "string") {
+      throw new Error("Twitter/X oEmbed proxy payload was invalid");
+    }
+
+    return payload;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+function fetchTweetOEmbedFromJsonp(parsed) {
+  return loadCallbackScript(buildTweetOEmbedUrl(parsed), {
+    callbackParam: "callback",
+  }).then((payload) => {
+    if (!payload?.html || typeof payload.html !== "string") {
+      throw new Error("Twitter/X oEmbed payload was invalid");
+    }
+
+    return payload;
+  });
+}
+
 function fetchTweetOEmbed(parsed) {
   if (!parsed?.tweetId) {
     return Promise.reject(new Error("Twitter/X post id is missing"));
@@ -1530,16 +1595,8 @@ function fetchTweetOEmbed(parsed) {
   if (!twitterOEmbedCache.has(cacheKey)) {
     twitterOEmbedCache.set(
       cacheKey,
-      loadCallbackScript(buildTweetOEmbedUrl(parsed), {
-        callbackParam: "callback",
-      })
-        .then((payload) => {
-          if (!payload?.html || typeof payload.html !== "string") {
-            throw new Error("Twitter/X oEmbed payload was invalid");
-          }
-
-          return payload;
-        })
+      fetchTweetOEmbedFromProxy(parsed)
+        .catch(() => fetchTweetOEmbedFromJsonp(parsed))
         .catch((error) => {
           twitterOEmbedCache.delete(cacheKey);
           throw error;
@@ -1613,8 +1670,98 @@ function sanitizeTweetMarkupNode(node) {
   return element;
 }
 
+function hasUsefulTweetContent(node) {
+  const text = normalizeTitleText(node?.textContent || "");
+
+  return text.length > 0 && !isGenericTitle(text);
+}
+
+function isUsefulTweetSnapshotLine(line, parsed) {
+  const text = normalizeTitleText(line);
+
+  if (!text || text.length < 2) {
+    return false;
+  }
+
+  if (text === getFallbackTitle(parsed) || text === getOpenLabel(parsed) || text === getFooterMeta(parsed)) {
+    return false;
+  }
+
+  if (isGenericTitle(text)) {
+    return false;
+  }
+
+  if (/^https?:\/\/(?:mobile\.|www\.)?(?:twitter\.com|x\.com)\//i.test(text)) {
+    return false;
+  }
+
+  if (/^(?:open|view|打开|查看)(?:\s+on)?\s*(?:x|twitter)$/i.test(text)) {
+    return false;
+  }
+
+  return true;
+}
+
+function extractTweetSnapshotText(target, fallbackAnchor, parsed) {
+  if (parsed?.provider !== "twitter" || !target) {
+    return "";
+  }
+
+  const lines = [];
+  const seen = new Set();
+  const pushText = (value) => {
+    for (const line of String(value || "").split(/\n+/)) {
+      const text = normalizeTitleText(line);
+
+      if (!isUsefulTweetSnapshotLine(text, parsed)) {
+        continue;
+      }
+
+      const key = text.toLowerCase();
+
+      if (!seen.has(key)) {
+        seen.add(key);
+        lines.push(text);
+      }
+    }
+  };
+
+  for (const selector of [
+    "blockquote.twitter-tweet",
+    "article.onebox-body",
+    ".onebox-body",
+    ".tweet",
+    ".tweet-text",
+    ".tweet-content",
+    "p",
+  ]) {
+    for (const element of target.querySelectorAll(selector)) {
+      pushText(element.textContent);
+    }
+  }
+
+  pushText(target.textContent);
+  pushText(fallbackAnchor?.textContent);
+
+  return lines.slice(0, 8).join("\n");
+}
+
+function buildTweetSnapshotFragment(text) {
+  const quote = createElement("blockquote", "bilibili-inline-player__tweet-quote");
+
+  for (const line of String(text || "").split(/\n+/)) {
+    const normalized = normalizeTitleText(line);
+
+    if (normalized) {
+      quote.appendChild(createElement("p", "", normalized));
+    }
+  }
+
+  return quote.childElementCount > 0 ? quote : null;
+}
+
 function buildStaticTweetCard(parsed, options = {}) {
-  const { title = "", body = null, source = "" } = options;
+  const { title = "", body = null, text = "", source = "", unavailable = false } = options;
   const card = createElement("article", "bilibili-inline-player__tweet-static");
   const header = createElement("div", "bilibili-inline-player__tweet-static-header");
   const badge = createElement("span", "bilibili-inline-player__tweet-static-badge", "X");
@@ -1627,19 +1774,25 @@ function buildStaticTweetCard(parsed, options = {}) {
   const meta = createElement(
     "div",
     "bilibili-inline-player__tweet-static-meta",
-    source ? `官方静态嵌入 · ${source}` : "静态嵌入内容"
+    source || (unavailable ? "X 暂时未返回可展示正文" : "X 嵌入内容")
   );
 
   header.append(badge, titleElement);
 
   if (body) {
     bodyElement.appendChild(body);
-  } else {
-    const quote = createElement("blockquote", "bilibili-inline-player__tweet-quote");
-    const urlLine = createElement("p", "", parsed.canonicalUrl || buildTweetCanonicalUrl(parsed.tweetId, parsed.screenName));
+  } else if (text) {
+    const snapshot = buildTweetSnapshotFragment(text);
 
-    quote.appendChild(urlLine);
-    bodyElement.appendChild(quote);
+    if (snapshot) {
+      bodyElement.appendChild(snapshot);
+    }
+  } else {
+    const message = unavailable
+      ? "X 暂时没有返回这条推文的正文。请稍后刷新本帖；若论坛启用了服务端 oEmbed 缓存，会自动呈现缓存内容。"
+      : "正在等待 X 返回可展示的推文正文。";
+
+    bodyElement.appendChild(createElement("p", "bilibili-inline-player__tweet-unavailable", message));
   }
 
   card.append(header, bodyElement, meta);
@@ -1654,11 +1807,12 @@ function buildOEmbedTweetCard(parsed, payload) {
 
   const quote = template.content.querySelector("blockquote.twitter-tweet, blockquote");
   const sanitizedQuote = quote ? sanitizeTweetMarkupNode(quote) : null;
+  const usefulQuote = hasUsefulTweetContent(sanitizedQuote) ? sanitizedQuote : null;
 
   return buildStaticTweetCard(parsed, {
     title: payload.author_name || getFallbackTitle(parsed),
-    body: sanitizedQuote,
-    source: "oEmbed",
+    body: usefulQuote,
+    source: "X oEmbed 正文",
   });
 }
 
@@ -1680,9 +1834,14 @@ async function renderTweetStaticEmbed(wrapper) {
     tweetWrap.dataset.bilibiliTweetLoaded = "1";
     tweetWrap.dataset.bilibiliTweetStatic = "1";
   } catch {
+    const snapshotText = state.tweetSnapshotText || "";
+
     tweetWrap.replaceChildren(
       buildStaticTweetCard(state.parsed, {
         title: state.title || wrapper.dataset.bilibiliTitle || getFallbackTitle(state.parsed),
+        text: snapshotText,
+        source: snapshotText ? "当前帖子缓存正文" : "",
+        unavailable: !snapshotText,
       })
     );
     tweetWrap.dataset.bilibiliTweetLoaded = "1";
@@ -2049,6 +2208,7 @@ function buildMetadata(target, fallbackAnchor, parsed) {
   return {
     parsed,
     title: extractTitle(target, fallbackAnchor, parsed),
+    tweetSnapshotText: extractTweetSnapshotText(target, fallbackAnchor, parsed),
     poster: extractPoster(target),
     canonicalUrl: parsed.canonicalUrl,
     metaLine: getMetaLine(parsed),
