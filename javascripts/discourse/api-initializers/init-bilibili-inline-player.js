@@ -35,13 +35,15 @@ const QQMUSIC_TOPLIST_PATH_RE = /^\/n\/ryqq\/toplist\/(\d+)\/?$/;
 const QQMUSIC_PLAYSONG_PATH_RE = /^\/v8\/playsong\.html$/;
 const QQMUSIC_OUTCHAIN_PATH_RE = /^\/n2\/m\/outchain\/player\/index\.html$/;
 const QQMUSIC_SHARE_PLAYLIST_PATH_RE = /^\/n2\/m\/share\/details\/taoge\.html$/;
-const TWITTER_STATUS_PATH_RE = /^\/(?:(?:i\/web)|([A-Za-z0-9_]{1,15}))\/status(?:es)?\/(\d+)(?:\/.*)?$/i;
+const TWITTER_STATUS_PATH_RE = /^\/(?:(?:i\/(?:web\/)?status)|(?:([A-Za-z0-9_]{1,15})\/status(?:es)?))\/(\d+)(?:\/.*)?$/i;
 const IFRAME_SRC_RE = /<iframe\b[^>]*\bsrc=(["'])([^"']+)\1/gi;
 const URL_LIKE_RE =
   /((?:https?:)?\/\/(?:player\.bilibili\.com\/player\.html|www\.bilibili\.com\/blackboard\/(?:live\/live-mobile-playerV3|live\/live-activity-player|webplayer\/mbplayer)\.html|(?:www\.|m\.)?bilibili\.com\/(?:s\/)?video\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/bangumi\/play\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/audio\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/read\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/opus\/[^\s"'<>]+|t\.bilibili\.com\/[^\s"'<>]+|live\.bilibili\.com\/[^\s"'<>]+|(?:www\.)?(?:b23\.tv|bili2233\.cn)\/[^\s"'<>]+|(?:y\.)?music\.163\.com\/[^\s"'<>]+|(?:i\.)?y\.qq\.com\/[^\s"'<>]+|(?:www\.|mobile\.)?(?:twitter\.com|x\.com)\/[^\s"'<>]+))/gi;
 const DEFAULT_ASPECT_RATIO = "16 / 9";
 const JSONP_TIMEOUT_MS = 8000;
 const BILIBILI_STUCK_HELP_DELAY_MS = 5000;
+const TWITTER_SCRIPT_TIMEOUT_MS = 8000;
+const TWITTER_RENDER_TIMEOUT_MS = 3500;
 const TWITTER_WIDGETS_SRC = "https://platform.twitter.com/widgets.js";
 const NETEASE_OUTCHAIN_TYPE_BY_MEDIA = {
   playlist: "0",
@@ -148,7 +150,17 @@ function buildTweetCanonicalUrl(tweetId, screenName = "") {
 
   return normalizedScreenName
     ? `https://x.com/${normalizedScreenName}/status/${tweetId}`
-    : `https://x.com/i/web/status/${tweetId}`;
+    : `https://x.com/i/status/${tweetId}`;
+}
+
+function buildTweetWidgetUrl(parsed) {
+  const normalizedScreenName = /^[A-Za-z0-9_]{1,15}$/.test(parsed?.screenName || "")
+    ? parsed.screenName
+    : "";
+
+  return normalizedScreenName
+    ? `https://twitter.com/${normalizedScreenName}/status/${parsed.tweetId}`
+    : `https://twitter.com/i/status/${parsed.tweetId}`;
 }
 
 function normalizeVideoId(rawId) {
@@ -1294,8 +1306,12 @@ function getEmbedTitle(parsed) {
   return parsed.provider === "netease" ? "NetEase Cloud Music player" : "bilibili player";
 }
 
+function hasTwitterWidgetApi(twttr = window.twttr) {
+  return Boolean(twttr?.widgets?.load || twttr?.widgets?.createTweet);
+}
+
 function ensureTwitterWidgetsReady() {
-  if (window.twttr?.widgets?.createTweet) {
+  if (hasTwitterWidgetApi()) {
     return Promise.resolve(window.twttr);
   }
 
@@ -1304,45 +1320,63 @@ function ensureTwitterWidgetsReady() {
   }
 
   twitterWidgetsPromise = new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      window.clearTimeout(timeout);
+      callback(value);
+    };
     const resolveWhenReady = () => {
       const twttr = window.twttr;
 
-      if (twttr?.widgets?.createTweet) {
-        resolve(twttr);
+      if (hasTwitterWidgetApi(twttr)) {
+        finish(resolve, twttr);
         return;
       }
 
       if (typeof twttr?.ready === "function") {
         twttr.ready(() => {
-          if (window.twttr?.widgets?.createTweet) {
-            resolve(window.twttr);
+          if (hasTwitterWidgetApi()) {
+            finish(resolve, window.twttr);
           } else {
-            reject(new Error("Twitter widgets API unavailable"));
+            finish(reject, new Error("Twitter widgets API unavailable"));
           }
         });
         return;
       }
 
-      reject(new Error("Twitter widgets API unavailable"));
+      finish(reject, new Error("Twitter widgets API unavailable"));
     };
+    const timeout = window.setTimeout(
+      () => finish(reject, new Error("Twitter widgets script timed out")),
+      TWITTER_SCRIPT_TIMEOUT_MS
+    );
 
-    let script = document.querySelector(`script[src="${TWITTER_WIDGETS_SRC}"]`);
+    let script =
+      document.querySelector(`script[src="${TWITTER_WIDGETS_SRC}"]`) ||
+      document.querySelector('script[src*="platform.twitter.com/widgets.js"], script[src*="platform.x.com/widgets.js"]');
 
     if (!script) {
       script = document.createElement("script");
       script.async = true;
       script.src = TWITTER_WIDGETS_SRC;
+      script.charset = "utf-8";
+      script.id = "twitter-wjs";
       document.head.appendChild(script);
     }
 
     script.addEventListener("load", resolveWhenReady, { once: true });
     script.addEventListener(
       "error",
-      () => reject(new Error("Twitter widgets script failed to load")),
+      () => finish(reject, new Error("Twitter widgets script failed to load")),
       { once: true }
     );
 
-    if (window.twttr?.widgets?.createTweet || typeof window.twttr?.ready === "function") {
+    if (hasTwitterWidgetApi() || typeof window.twttr?.ready === "function") {
       resolveWhenReady();
     }
   }).catch((error) => {
@@ -1373,6 +1407,103 @@ function buildTweetEmbedOptions() {
     dnt: true,
     theme: getTweetTheme(),
   };
+}
+
+function getTweetEmbedWidth(container) {
+  const width = Math.floor(container?.getBoundingClientRect?.().width || 0);
+
+  if (!Number.isFinite(width) || width <= 0) {
+    return null;
+  }
+
+  return Math.min(550, Math.max(220, width));
+}
+
+function buildTweetBlockquote(parsed, container) {
+  const blockquote = createElement("blockquote", "twitter-tweet");
+  const link = createElement("a", "", getFallbackTitle(parsed));
+  const width = getTweetEmbedWidth(container);
+
+  blockquote.dataset.dnt = "true";
+  blockquote.dataset.theme = getTweetTheme();
+  blockquote.dataset.align = "center";
+
+  if (width) {
+    blockquote.dataset.width = String(width);
+  }
+
+  link.href = buildTweetWidgetUrl(parsed);
+  link.rel = "nofollow noopener ugc";
+  blockquote.appendChild(link);
+
+  return blockquote;
+}
+
+function isTweetRendered(container) {
+  return Boolean(
+    container?.querySelector(
+      'iframe[id^="twitter-widget-"], iframe.twitter-tweet, iframe[src*="platform.twitter.com"], iframe[src*="platform.x.com"], .twitter-tweet-rendered'
+    )
+  );
+}
+
+function waitForTweetRender(container) {
+  if (isTweetRendered(container)) {
+    return Promise.resolve(true);
+  }
+
+  return new Promise((resolve) => {
+    let observer;
+    const finish = (result) => {
+      window.clearTimeout(timeout);
+      observer?.disconnect();
+      resolve(result);
+    };
+    const timeout = window.setTimeout(() => finish(isTweetRendered(container)), TWITTER_RENDER_TIMEOUT_MS);
+
+    observer = new MutationObserver(() => {
+      if (isTweetRendered(container)) {
+        finish(true);
+      }
+    });
+
+    observer.observe(container, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["class", "src", "id"],
+    });
+  });
+}
+
+async function renderTweetWithBlockquote(twttr, state, tweetWrap) {
+  tweetWrap.replaceChildren(buildTweetBlockquote(state.parsed, tweetWrap));
+
+  if (typeof twttr?.widgets?.load !== "function") {
+    return false;
+  }
+
+  const result = twttr.widgets.load(tweetWrap);
+
+  if (typeof result?.then === "function") {
+    await result.catch(() => null);
+  }
+
+  return waitForTweetRender(tweetWrap);
+}
+
+async function renderTweetWithFactory(twttr, state, tweetWrap) {
+  if (typeof twttr?.widgets?.createTweet !== "function") {
+    return false;
+  }
+
+  tweetWrap.replaceChildren();
+  const embed = await twttr.widgets.createTweet(state.parsed.tweetId, tweetWrap, {
+    ...buildTweetEmbedOptions(),
+    width: getTweetEmbedWidth(tweetWrap) || undefined,
+  });
+
+  return Boolean(embed || isTweetRendered(tweetWrap));
 }
 
 function loadCallbackScript(src, options = {}) {
@@ -2062,7 +2193,7 @@ function buildTweetShell(wrapper) {
   const loading = createElement("div", "bilibili-inline-player__tweet-loading", "加载推文中…");
 
   tweetWrap.appendChild(loading);
-  wrapper.append(tweetWrap, buildLoadedFooter(wrapper));
+  wrapper.appendChild(tweetWrap);
 }
 
 function setButtonLabel(wrapper, text) {
@@ -2427,11 +2558,11 @@ async function renderTweetEmbed(wrapper) {
     }
 
     const twttr = await ensureTwitterWidgetsReady();
-    tweetWrap.replaceChildren();
+    const rendered =
+      (await renderTweetWithBlockquote(twttr, state, tweetWrap)) ||
+      (await renderTweetWithFactory(twttr, state, tweetWrap));
 
-    const embed = await twttr.widgets.createTweet(state.parsed.tweetId, tweetWrap, buildTweetEmbedOptions());
-
-    if (!embed) {
+    if (!rendered) {
       throw new Error("Twitter widget returned no embed");
     }
 

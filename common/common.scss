@@ -7,6 +7,9 @@
   --bili-card-fg: var(--primary, #111);
   --bili-card-muted: var(--primary-medium, #666);
   --bili-card-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
   margin: 1em 0;
   border: 1px solid var(--bili-card-border);
   border-radius: var(--bili-card-radius);
@@ -70,12 +73,15 @@
 
 .bilibili-inline-player--twitter {
   --bili-card-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  background: transparent;
+  box-shadow: none;
 }
 
-.bilibili-inline-player--twitter .bilibili-inline-player__tweet-wrap {
-  background:
-    radial-gradient(circle at 18% 18%, rgb(255 255 255 / 0.05), transparent 34%),
-    linear-gradient(135deg, #0b1017 0%, #101825 52%, #0a111b 100%);
+.bilibili-inline-player--twitter:hover {
+  box-shadow: none;
 }
 
 /* ═══════════════════════════════════════════════════
@@ -360,14 +366,29 @@
   justify-content: center;
   gap: 0.7rem;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 12rem;
   padding: 1rem 0.85rem;
   overflow-x: auto;
+  overflow-y: visible;
   background: color-mix(in srgb, var(--primary-low, #f4f4f4) 58%, var(--secondary, #fff));
+  -webkit-overflow-scrolling: touch;
+}
+
+.bilibili-inline-player--twitter .bilibili-inline-player__tweet-wrap {
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.bilibili-inline-player__tweet-wrap .twitter-tweet {
+  max-width: 100% !important;
+  margin: 0 auto !important;
 }
 
 .bilibili-inline-player__tweet-wrap iframe {
-  max-width: 100%;
+  max-width: 100% !important;
 }
 
 .bilibili-inline-player__tweet-loading {
@@ -377,8 +398,16 @@
   text-align: center;
 }
 
+.bilibili-inline-player--twitter .bilibili-inline-player__tweet-loading {
+  color: var(--bili-card-muted);
+}
+
 .bilibili-inline-player__tweet-loading--failed {
   color: rgb(255 255 255 / 0.82);
+}
+
+.bilibili-inline-player--twitter .bilibili-inline-player__tweet-loading--failed {
+  color: var(--bili-card-fg);
 }
 
 .bilibili-inline-player__tweet-actions {
@@ -542,6 +571,12 @@
   .bilibili-inline-player__footer-actions {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .bilibili-inline-player--twitter {
+    width: 100%;
+    margin-right: 0;
+    margin-left: 0;
   }
 
   /* Compact audio mobile */
