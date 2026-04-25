@@ -416,6 +416,90 @@
   justify-content: center;
 }
 
+.bilibili-inline-player__tweet-static {
+  box-sizing: border-box;
+  width: min(100%, 550px);
+  margin: 0 auto;
+  border: 1px solid color-mix(in srgb, var(--primary-low, #d9d9d9) 88%, transparent);
+  border-radius: 12px;
+  background: var(--secondary, #fff);
+  color: var(--primary, #111);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.08);
+  overflow: hidden;
+}
+
+.bilibili-inline-player__tweet-static-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.8rem 0.95rem 0.55rem;
+}
+
+.bilibili-inline-player__tweet-static-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  background: var(--primary, #111);
+  color: var(--secondary, #fff);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.bilibili-inline-player__tweet-static-title {
+  min-width: 0;
+  color: var(--primary, #111);
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.bilibili-inline-player__tweet-static-body {
+  padding: 0 0.95rem 0.8rem;
+  color: var(--primary, #111);
+  font-size: 0.94rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.bilibili-inline-player__tweet-quote {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+}
+
+.bilibili-inline-player__tweet-quote p {
+  margin: 0 0 0.65rem;
+}
+
+.bilibili-inline-player__tweet-quote p:last-child {
+  margin-bottom: 0;
+}
+
+.bilibili-inline-player__tweet-quote a {
+  color: var(--tertiary, #0a6cff);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.bilibili-inline-player__tweet-quote a:hover {
+  text-decoration: underline;
+}
+
+.bilibili-inline-player__tweet-static-meta {
+  padding: 0.55rem 0.95rem 0.7rem;
+  border-top: 1px solid color-mix(in srgb, var(--primary-low, #d9d9d9) 82%, transparent);
+  color: var(--primary-medium, #666);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
 /* ── Hidden legacy meta ── */
 
 .bilibili-inline-player__meta {
