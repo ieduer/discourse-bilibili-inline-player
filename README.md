@@ -1,6 +1,6 @@
-# Bilibili + NetEase + QQ Music + X Inline Embeds
+# Bilibili + NetEase + QQ Music + Zhihu Inline Embeds
 
-A Discourse theme component that turns supported bilibili, NetEase Cloud Music, QQ Music, and Twitter/X links into inline embeds without requiring a container rebuild.
+A Discourse theme component that turns supported bilibili, NetEase Cloud Music, QQ Music, and Zhihu links into inline embeds or source cards without requiring a container rebuild.
 
 This repository is intentionally implemented as a remote theme component, not a server plugin:
 
@@ -45,14 +45,13 @@ Card takeover with open-on-QQ-Music fallback:
 - `https://y.qq.com/n/ryqq/toplist/...` (QQ Music toplist)
 - `https://i.y.qq.com/n2/m/share/details/taoge.html?id=...` (QQ Music shared playlist)
 
-Direct render:
+Zhihu source-card render:
 
-- `https://twitter.com/<handle>/status/<tweet_id>`
-- `https://x.com/<handle>/status/<tweet_id>`
-- `https://mobile.twitter.com/<handle>/status/<tweet_id>`
-- `https://mobile.x.com/<handle>/status/<tweet_id>`
-- `https://x.com/i/status/<tweet_id>`
-- `https://x.com/i/web/status/<tweet_id>`
+- `https://www.zhihu.com/question/<question_id>`
+- `https://www.zhihu.com/question/<question_id>/answer/<answer_id>`
+- `https://www.zhihu.com/answer/<answer_id>`
+- `https://zhuanlan.zhihu.com/p/<article_id>`
+- `https://www.zhihu.com/p/<article_id>`
 
 Card takeover with open-on-bilibili fallback:
 
@@ -78,6 +77,8 @@ For ordinary bilibili video and bangumi embeds, the component now also exposes a
 
 For NetEase Cloud Music, the component uses the official outchain player paths. Desktop-like environments use `https://music.163.com/outchain/player`, while mobile-like environments use `https://music.163.com/m/outchain/player` directly to avoid NetEase's current mobile 302 downgrade to an insecure `http://` URL. Official NetEase source code shows the outchain player types map to playlist, album, song, DJ program, and DJ radio.
 
+For Zhihu, current public pages and API paths do not expose a reliable public iframe or oEmbed interface. The component therefore renders supported Zhihu URLs as styled source cards using the cooked post metadata already available in Discourse, then opens the canonical Zhihu page on click.
+
 Still not supported:
 
 - opaque short-link tokens that cannot be resolved client-side before Discourse oneboxes them
@@ -100,9 +101,8 @@ The safest input pattern is still a standalone bilibili URL on its own line, whi
 10. For QQ Music single-song cards, the component resolves the real track title on the client with QQ Music's official JSONP song-detail endpoint before the user clicks play.
 11. For NetEase single-song cards, if the cooked post still only exposes a generic provider title in this no-rebuild architecture, the component falls back to loading the official no-autoplay outchain player immediately instead of showing an ID-only fake title.
 12. For QQ Music, the component supports the official outchain player for songs with numeric IDs and the playsong page for songs with songmid identifiers. Playlists, albums, and toplists are rendered as styled cards with an open-on-QQ-Music fallback.
-13. For Twitter/X status links, the component loads `https://platform.twitter.com/widgets.js` on demand, inserts X's official `blockquote.twitter-tweet` markup, and asks `twttr.widgets.load()` to render the post. If that scan path is unavailable, it falls back to `twttr.widgets.createTweet()`, then to X's oEmbed JSONP static markup, and finally to an in-page static embed shell. It does not replace failed Twitter/X embeds with an "open on X" prompt.
-14. If `twitter_oembed_proxy_url` is configured, Twitter/X static content is requested through that server-side cache endpoint before falling back to direct `publish.x.com` JSONP. This is the preferred path for strict CSP deployments.
-15. For content types without a stable official iframe path in this theme-component-only architecture, the component still upgrades the post into a unified media card and falls back to opening the canonical source page.
+13. For Zhihu, the component upgrades supported question, answer, and article links into a unified card and falls back to opening the canonical Zhihu source page.
+14. For content types without a stable official iframe path in this theme-component-only architecture, the component still upgrades the post into a unified media card and falls back to opening the canonical source page.
 
 The component does not modify Discourse core and does not require a rebuild.
 
@@ -116,7 +116,7 @@ The component does not modify Discourse core and does not require a rebuild.
 - QQ Music song detail JSONP: `https://i.y.qq.com/v8/fcg-bin/fcg_play_single_song.fcg`
 - QQ Music outchain player: `https://i.y.qq.com/n2/m/outchain/player/index.html`
 - QQ Music playsong: `https://i.y.qq.com/v8/playsong.html`
-- Twitter/X widgets script: `https://platform.twitter.com/widgets.js`
+- Zhihu source pages: `https://www.zhihu.com` and `https://zhuanlan.zhihu.com`
 
 ## Installation
 
@@ -136,7 +136,6 @@ No rebuild is required.
 - `autoplay_on_click`
 - `max_embeds_per_post`
 - `show_open_link`
-- `twitter_oembed_proxy_url`
 - `enable_experimental_live_embed`
 - `enable_live_danmaku`
 - `auto_open_on_high_risk_env`
@@ -150,8 +149,7 @@ No rebuild is required.
 - If experimental live embeds are enabled, allow `https://www.bilibili.com` in `frame-src`.
 - If NetEase Cloud Music embeds are enabled by CSP, allow `https://music.163.com` in `frame-src`.
 - If QQ Music embeds are enabled by CSP, allow `https://i.y.qq.com` in `frame-src`.
-- If tweet embeds are blocked by a custom CSP, allow `https://platform.twitter.com` and `https://publish.x.com` in `script-src`, plus the corresponding X/Twitter widget origins used by your site policy. The Twitter/X path intentionally uses official widget/oEmbed markup instead of the component's media-card frame so narrow mobile or sidebar containers are not clipped by the component shell.
-- This repository is still a remote theme component, so it cannot install a Discourse server-side cache endpoint by itself. A Cloudflare Worker reference implementation is provided at `workers/twitter-oembed-cache-worker.js`; deploy it, then set `twitter_oembed_proxy_url` to the Worker URL. The Worker caches X oEmbed JSON by normalized upstream request and returns the same static markup consumed by this component.
+- Zhihu cards do not load Zhihu iframe or script resources; they only link to the canonical source page.
 - If a supported media link cannot be parsed, the original cooked content is left untouched.
 
 ## Suggested repository name
