@@ -94,6 +94,31 @@
   box-shadow: 0 10px 24px rgb(11 94 215 / 0.34);
 }
 
+/* ── Xiaohongshu / RedNote provider overrides ── */
+
+.bilibili-inline-player--xiaohongshu {
+  --bili-card-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
+}
+
+.bilibili-inline-player--xiaohongshu .bilibili-inline-player__media {
+  min-height: 5.5rem;
+  background:
+    radial-gradient(circle at 16% 20%, rgb(255 255 255 / 0.18), transparent 34%),
+    linear-gradient(135deg, #b5122b 0%, #ff2442 52%, #8f0d22 100%);
+}
+
+.bilibili-inline-player--xiaohongshu .bilibili-inline-player__play {
+  background: rgb(255 255 255 / 0.95);
+  color: #c51330;
+  box-shadow: 0 6px 18px rgb(143 13 34 / 0.3);
+}
+
+.bilibili-inline-player--xiaohongshu .bilibili-inline-player__play:hover,
+.bilibili-inline-player--xiaohongshu .bilibili-inline-player__play:focus-visible {
+  background: #fff;
+  box-shadow: 0 10px 24px rgb(143 13 34 / 0.36);
+}
+
 /* ═══════════════════════════════════════════════════
    Compact audio card (NetEase single songs / programs)
    Single-row unified dark card — Spotify/Discord style

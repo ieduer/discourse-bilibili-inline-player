@@ -1,7 +1,7 @@
 enabled:
   default: true
   type: bool
-  description: Enable inline bilibili, NetEase Cloud Music, QQ Music, and Zhihu cards for supported URLs.
+  description: Enable inline bilibili, NetEase Cloud Music, QQ Music, Zhihu, Xiaohongshu, and RedNote cards for supported URLs.
 
 autoplay_on_click:
   default: true

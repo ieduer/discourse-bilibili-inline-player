@@ -17,3 +17,9 @@ jobs:
 
       - name: Validate settings.yml
         run: ruby -e 'require "yaml"; YAML.load_file("settings.yml")'
+
+      - name: Check JavaScript syntax
+        run: node --check javascripts/discourse/api-initializers/init-bilibili-inline-player.js
+
+      - name: Test supported URL parsers
+        run: npm test

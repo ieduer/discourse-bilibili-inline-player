@@ -1,6 +1,6 @@
-# Bilibili + NetEase + QQ Music + Zhihu Inline Embeds
+# Bilibili + NetEase + QQ Music Embeds + Zhihu + Xiaohongshu Source Cards
 
-A Discourse theme component that turns supported bilibili, NetEase Cloud Music, QQ Music, and Zhihu links into inline embeds or source cards without requiring a container rebuild.
+A Discourse theme component that turns supported bilibili, NetEase Cloud Music, QQ Music, Zhihu, Xiaohongshu, and RedNote links into inline embeds or source cards without requiring a container rebuild.
 
 This repository is intentionally implemented as a remote theme component, not a server plugin:
 
@@ -53,6 +53,16 @@ Zhihu source-card render:
 - `https://zhuanlan.zhihu.com/p/<article_id>`
 - `https://www.zhihu.com/p/<article_id>`
 
+Xiaohongshu / RedNote source-card render:
+
+- `https://www.xiaohongshu.com/explore/<24-character-note_id>?...`
+- `https://www.xiaohongshu.com/discovery/item/<24-character-note_id>?...`
+- `https://www.rednote.com/explore/<24-character-note_id>?...`
+- `https://xhslink.com/a/<share_code>`
+- `https://xhslink.com/m/<share_code>`
+- `https://xhslink.com/o/<share_code>`
+- schemeless `xhslink.com/...` share text, including links followed by Chinese punctuation
+
 Card takeover with open-on-bilibili fallback:
 
 - `https://www.bilibili.com/audio/au...`
@@ -79,13 +89,17 @@ For NetEase Cloud Music, the component uses the official outchain player paths. 
 
 For Zhihu, current public pages and API paths do not expose a reliable public iframe or oEmbed interface. The component therefore renders supported Zhihu URLs as styled source cards using the cooked post metadata already available in Discourse, then opens the canonical Zhihu page on click.
 
+For Xiaohongshu and RedNote, the official platform documentation reviewed on 2026-08-08 exposes share-to-app and deep-link capabilities, but no supported third-party oEmbed, embed widget, or iframe contract. The component therefore renders a generic source card and opens the user-supplied share target. It normalizes recognized links to HTTPS while preserving their full path, query, and fragment because a usable note link can depend on temporary share parameters. This client component does not resolve short links, call private APIs, load platform scripts or iframes, download media, reuse cooked OG metadata, or persist note data. Discourse server-side Onebox requests happen before this client component and must be controlled separately with `blocked_onebox_domains` when platform fetching is not allowed.
+
 Still not supported:
 
-- opaque short-link tokens that cannot be resolved client-side before Discourse oneboxes them
+- opaque non-Xiaohongshu short-link tokens that cannot be resolved client-side before Discourse oneboxes them
 - inline links inside a sentence
 - favorites, collections, channels, playlists, watch-later, and other multi-item containers
 
 The safest input pattern is still a standalone bilibili URL on its own line, which matches how Discourse onebox-style embeds are normally triggered.
+
+Pasted Xiaohongshu share text without an HTML link is a narrow exception: the original paragraph is preserved and the source card is inserted after it, so surrounding text is never discarded.
 
 ## How it works
 
@@ -102,7 +116,8 @@ The safest input pattern is still a standalone bilibili URL on its own line, whi
 11. For NetEase single-song cards, if the cooked post still only exposes a generic provider title in this no-rebuild architecture, the component falls back to loading the official no-autoplay outchain player immediately instead of showing an ID-only fake title.
 12. For QQ Music, the component supports the official outchain player for songs with numeric IDs and the playsong page for songs with songmid identifiers. Playlists, albums, and toplists are rendered as styled cards with an open-on-QQ-Music fallback.
 13. For Zhihu, the component upgrades supported question, answer, and article links into a unified card and falls back to opening the canonical Zhihu source page.
-14. For content types without a stable official iframe path in this theme-component-only architecture, the component still upgrades the post into a unified media card and falls back to opening the canonical source page.
+14. For Xiaohongshu and RedNote, the component recognizes official note paths and known `xhslink.com` share forms, preserves the complete path/query/fragment while normalizing to HTTPS, and renders an external-only source card without initiating a client-side platform request.
+15. For content types without a stable official iframe path in this theme-component-only architecture, the component still upgrades the post into a unified media card and falls back to opening the canonical source page.
 
 The component does not modify Discourse core and does not require a rebuild.
 
@@ -117,6 +132,9 @@ The component does not modify Discourse core and does not require a rebuild.
 - QQ Music outchain player: `https://i.y.qq.com/n2/m/outchain/player/index.html`
 - QQ Music playsong: `https://i.y.qq.com/v8/playsong.html`
 - Zhihu source pages: `https://www.zhihu.com` and `https://zhuanlan.zhihu.com`
+- Xiaohongshu Share Open Platform documentation: `https://agora.xiaohongshu.com/doc`
+- Xiaohongshu note source pages: `https://www.xiaohongshu.com`
+- RedNote note source pages: `https://www.rednote.com`
 
 ## Installation
 
@@ -145,12 +163,25 @@ No rebuild is required.
 
 - Default Discourse installs should not need `allowed_iframes` changes because this component injects the iframe after cooking, not from raw post HTML.
 - If a site runs a custom reverse-proxy CSP that restricts `frame-src`, allow `https://player.bilibili.com`.
-- If a site runs a strict custom script CSP that blocks dynamic third-party scripts, allow `https://api.bilibili.com` for the click-time metadata request.
+- If a site runs a strict custom script CSP that blocks dynamic third-party scripts, allow `https://api.bilibili.com` for the render-time bilibili metadata request.
 - If experimental live embeds are enabled, allow `https://www.bilibili.com` in `frame-src`.
 - If NetEase Cloud Music embeds are enabled by CSP, allow `https://music.163.com` in `frame-src`.
 - If QQ Music embeds are enabled by CSP, allow `https://i.y.qq.com` in `frame-src`.
 - Zhihu cards do not load Zhihu iframe or script resources; they only link to the canonical source page.
+- Xiaohongshu and RedNote cards do not add iframe, script, image CDN, API, cookie, or CSP dependencies; the client component only links to the normalized source target.
+- Discourse Onebox is a separate server-side stage. To prevent server fetches, add `xiaohongshu.com`, `rednote.com`, and `xhslink.com` to `blocked_onebox_domains`; root entries also cover their subdomains.
 - If a supported media link cannot be parsed, the original cooked content is left untouched.
+
+## Verification standard
+
+1. Source of truth: GitHub `main` and the clean checkout at `/Users/ylsuen/Discourse/discourse-bilibili-inline-player`.
+2. Health probe: `https://forum.rdfzer.com/`, `/srv/status`, and `/session/csrf` must continue returning success.
+3. Contract checks: run `npm test`, validate `about.json` and `settings.yml`, confirm the intended `blocked_onebox_domains` policy, then confirm Discourse remote theme `119` reports the intended Git commit without `last_error_text`.
+4. Deploy command: push a tested commit to GitHub, then update remote theme `119` through Discourse theme administration. Never add this component to `app.yml` or rebuild the container.
+5. Dependency regression: verify one real cooked post for bilibili, NetEase, QQ Music, Zhihu, a full Xiaohongshu note URL, and an `xhslink.com` short share.
+6. Backup and restore: the previous Git commit is the immutable backup; a fresh clone of the repository is the restore path.
+7. Rollback: revert the release commit on GitHub and refresh remote theme `119`, then repeat health and provider regression checks.
+8. Last verified release evidence is recorded in `PROJECT_STATE.md` and the forum operations report; live Discourse readback is authoritative.
 
 ## Suggested repository name
 

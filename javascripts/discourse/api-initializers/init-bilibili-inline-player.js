@@ -9,6 +9,9 @@ const PLAYER_HOSTS = new Set(["player.bilibili.com"]);
 const NETEASE_HOSTS = new Set(["music.163.com", "y.music.163.com"]);
 const QQMUSIC_HOSTS = new Set(["y.qq.com", "i.y.qq.com"]);
 const ZHIHU_HOSTS = new Set(["zhihu.com", "www.zhihu.com", "zhuanlan.zhihu.com"]);
+const XIAOHONGSHU_HOSTS = new Set(["xiaohongshu.com", "www.xiaohongshu.com"]);
+const REDNOTE_HOSTS = new Set(["rednote.com", "www.rednote.com"]);
+const XIAOHONGSHU_SHORT_HOSTS = new Set(["xhslink.com", "www.xhslink.com"]);
 const VIDEO_PATH_RE = /^\/(?:s\/)?video\/(BV[0-9A-Za-z]+|av\d+)\/?$/i;
 const SHORT_VIDEO_PATH_RE = /^\/(?:video\/)?(BV[0-9A-Za-z]+|av\d+)(?:\/p(\d+))?\/?$/i;
 const BANGUMI_PATH_RE = /^\/bangumi\/play\/(ep|ss)(\d+)\/?$/i;
@@ -32,9 +35,17 @@ const ZHIHU_QUESTION_PATH_RE = /^\/question\/(\d+)\/?$/;
 const ZHIHU_ANSWER_PATH_RE = /^\/question\/(\d+)\/answer\/(\d+)\/?$/;
 const ZHIHU_DIRECT_ANSWER_PATH_RE = /^\/answer\/(\d+)\/?$/;
 const ZHIHU_ARTICLE_PATH_RE = /^\/p\/(\d+)\/?$/;
+const XIAOHONGSHU_NOTE_PATH_RE = /^\/(?:explore|discovery\/item)\/([0-9a-f]{24})\/?$/i;
+const REDNOTE_NOTE_PATH_RE = /^\/explore\/([0-9a-f]{24})\/?$/i;
+const XIAOHONGSHU_SHORT_PATH_RE = /^\/(?:a|m|o)\/([A-Za-z0-9_-]{4,})\/?$/i;
+const SCHEMELESS_XIAOHONGSHU_RE =
+  /^(?:www\.)?(?:xiaohongshu\.com|rednote\.com|xhslink\.com)\//i;
+const TRAILING_URL_PUNCTUATION_RE = /[)\],.;!?，。；！？、）】》」』]+$/u;
 const IFRAME_SRC_RE = /<iframe\b[^>]*\bsrc=(["'])([^"']+)\1/gi;
 const URL_LIKE_RE =
   /((?:https?:)?\/\/(?:player\.bilibili\.com\/player\.html|www\.bilibili\.com\/blackboard\/(?:live\/live-mobile-playerV3|live\/live-activity-player|webplayer\/mbplayer)\.html|(?:www\.|m\.)?bilibili\.com\/(?:s\/)?video\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/bangumi\/play\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/audio\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/read\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/opus\/[^\s"'<>]+|t\.bilibili\.com\/[^\s"'<>]+|live\.bilibili\.com\/[^\s"'<>]+|(?:www\.)?(?:b23\.tv|bili2233\.cn)\/[^\s"'<>]+|(?:y\.)?music\.163\.com\/[^\s"'<>]+|(?:i\.)?y\.qq\.com\/[^\s"'<>]+|(?:www\.)?zhihu\.com\/[^\s"'<>]+|zhuanlan\.zhihu\.com\/[^\s"'<>]+))/gi;
+const XIAOHONGSHU_URL_LIKE_RE =
+  /(?:^|[\s(（\[【{《「『])((?:https?:\/\/)?(?:www\.)?(?:xiaohongshu\.com|rednote\.com|xhslink\.com)\/[^\s"'<>，。；！？、（）【】《》「」『』]+)/gi;
 const DEFAULT_ASPECT_RATIO = "16 / 9";
 const JSONP_TIMEOUT_MS = 8000;
 const BILIBILI_STUCK_HELP_DELAY_MS = 5000;
@@ -291,6 +302,22 @@ function createParsedZhihu(contentType, ids = {}, extras = {}) {
     page: 1,
     rawId: String(rawId),
     canonicalUrl: buildZhihuCanonicalUrl(contentType, ids),
+    ...extras,
+  };
+}
+
+function createParsedXiaohongshu(contentType, sourceUrl, extras = {}) {
+  const isRedNote = REDNOTE_HOSTS.has(sourceUrl.hostname.toLowerCase());
+
+  return {
+    provider: "xiaohongshu",
+    kind: "xiaohongshu",
+    contentType,
+    brand: isRedNote ? "rednote" : "xiaohongshu",
+    noteId: extras.noteId ? String(extras.noteId) : "",
+    page: 1,
+    rawId: extras.noteId ? String(extras.noteId) : "share",
+    canonicalUrl: sourceUrl.toString(),
     ...extras,
   };
 }
@@ -730,22 +757,88 @@ function parseZhihuPageUrl(url) {
   return null;
 }
 
-function normalizeUrlLikeString(value) {
+function isSafeXiaohongshuSourceUrl(url) {
+  return (
+    url.protocol === "https:" &&
+    !url.username &&
+    !url.password &&
+    (!url.port || url.port === "443")
+  );
+}
+
+function parseXiaohongshuPageUrl(url) {
+  const hostname = url.hostname.toLowerCase();
+
+  if (!XIAOHONGSHU_HOSTS.has(hostname) && !REDNOTE_HOSTS.has(hostname)) {
+    return null;
+  }
+
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return null;
+  }
+
+  url.protocol = "https:";
+
+  if (!isSafeXiaohongshuSourceUrl(url)) {
+    return null;
+  }
+
+  const match = url.pathname.match(
+    REDNOTE_HOSTS.has(hostname) ? REDNOTE_NOTE_PATH_RE : XIAOHONGSHU_NOTE_PATH_RE
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  return createParsedXiaohongshu("note", url, { noteId: match[1] });
+}
+
+function parseXiaohongshuShortUrl(url) {
+  if (!XIAOHONGSHU_SHORT_HOSTS.has(url.hostname.toLowerCase())) {
+    return null;
+  }
+
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return null;
+  }
+
+  url.protocol = "https:";
+
+  if (!isSafeXiaohongshuSourceUrl(url)) {
+    return null;
+  }
+
+  const match = url.pathname.match(XIAOHONGSHU_SHORT_PATH_RE);
+
+  if (!match) {
+    return null;
+  }
+
+  return createParsedXiaohongshu("share", url, { shortCode: match[1] });
+}
+
+function normalizeUrlLikeString(value, { trimTrailingPunctuation = false } = {}) {
   if (typeof value !== "string") {
     return "";
   }
 
-  const trimmed = value.trim();
+  const raw = value.trim();
+  const trimmed = trimTrailingPunctuation ? raw.replace(TRAILING_URL_PUNCTUATION_RE, "") : raw;
 
   if (!trimmed) {
     return "";
   }
 
   if (trimmed.startsWith("//")) {
-    return `https:${trimmed}`.replace(/[),.;]+$/u, "");
+    return `https:${trimmed}`;
   }
 
-  return trimmed.replace(/[),.;]+$/u, "");
+  if (SCHEMELESS_XIAOHONGSHU_RE.test(trimmed)) {
+    return `https://${trimmed}`;
+  }
+
+  return trimmed;
 }
 
 function parseBilibiliUrl(href) {
@@ -771,7 +864,9 @@ function parseBilibiliUrl(href) {
     parseCompatPlayerUrl(url) ||
     parseNetEasePageUrl(url) ||
     parseQQMusicPageUrl(url) ||
-    parseZhihuPageUrl(url)
+    parseZhihuPageUrl(url) ||
+    parseXiaohongshuPageUrl(url) ||
+    parseXiaohongshuShortUrl(url)
   );
 }
 
@@ -991,7 +1086,11 @@ function extractUrlsFromText(text) {
   }
 
   for (const match of text.matchAll(URL_LIKE_RE)) {
-    urls.push(normalizeUrlLikeString(match[1]));
+    urls.push(normalizeUrlLikeString(match[1], { trimTrailingPunctuation: true }));
+  }
+
+  for (const match of text.matchAll(XIAOHONGSHU_URL_LIKE_RE)) {
+    urls.push(normalizeUrlLikeString(match[1], { trimTrailingPunctuation: true }));
   }
 
   return [...new Set(urls.filter(Boolean))];
@@ -1019,6 +1118,8 @@ function getMetaLine(parsed) {
       return getQQMusicMetaLine(parsed);
     case "zhihu":
       return getZhihuMetaLine(parsed);
+    case "xiaohongshu":
+      return getXiaohongshuMetaLine(parsed);
     default:
       return "bilibili";
   }
@@ -1064,6 +1165,14 @@ function getZhihuMetaLine(parsed) {
     default:
       return "知乎问题";
   }
+}
+
+function getXiaohongshuMetaLine(parsed) {
+  if (parsed.brand === "rednote") {
+    return "RedNote 笔记";
+  }
+
+  return parsed.contentType === "note" ? "小红书笔记" : "小红书分享";
 }
 
 function formatCompactCount(value) {
@@ -1113,6 +1222,7 @@ function getPreviewStatText(parsed, viewCount = null) {
     case "netease":
     case "qqmusic":
     case "zhihu":
+    case "xiaohongshu":
       return getMetaLine(parsed);
     default:
       return "";
@@ -1194,6 +1304,8 @@ function getFallbackTitle(parsed) {
       return getQQMusicFallbackTitle(parsed);
     case "zhihu":
       return getZhihuFallbackTitle(parsed);
+    case "xiaohongshu":
+      return getXiaohongshuMetaLine(parsed);
     default:
       return parsed.rawId || "bilibili";
   }
@@ -1283,6 +1395,12 @@ function getFooterMeta(parsed) {
       return getQQMusicFooterMeta(parsed);
     case "zhihu":
       return "知乎原文卡片";
+    case "xiaohongshu":
+      if (parsed.brand === "rednote") {
+        return "RedNote 原文卡片";
+      }
+
+      return parsed.contentType === "share" ? "小红书分享链接" : "小红书原文卡片";
     default:
       return "bilibili";
   }
@@ -1316,6 +1434,10 @@ function getLiveFooterMeta(parsed) {
 }
 
 function getOpenLabel(parsed) {
+  if (parsed.provider === "xiaohongshu") {
+    return parsed.brand === "rednote" ? "前往 RedNote 查看" : "前往小红书查看";
+  }
+
   if (parsed.provider === "zhihu") {
     return "在知乎打开";
   }
@@ -1328,6 +1450,10 @@ function getOpenLabel(parsed) {
 }
 
 function getEmbedTitle(parsed) {
+  if (parsed.provider === "xiaohongshu") {
+    return parsed.brand === "rednote" ? "RedNote source page" : "Xiaohongshu source page";
+  }
+
   if (parsed.provider === "zhihu") {
     return "Zhihu page";
   }
@@ -1508,8 +1634,12 @@ function normalizeMediaUrl(url) {
 }
 
 function getPlaceholderLabel(parsedOrProvider) {
-  const provider =
-    typeof parsedOrProvider === "string" ? parsedOrProvider : parsedOrProvider?.provider || "bilibili";
+  const parsed = typeof parsedOrProvider === "string" ? null : parsedOrProvider;
+  const provider = typeof parsedOrProvider === "string" ? parsedOrProvider : parsed?.provider || "bilibili";
+
+  if (provider === "xiaohongshu") {
+    return parsed?.brand === "rednote" ? "RedNote" : "小红书";
+  }
 
   if (provider === "zhihu") {
     return "Zhihu";
@@ -1693,8 +1823,11 @@ function extractTitle(target, fallbackAnchor, parsed) {
 function buildMetadata(target, fallbackAnchor, parsed) {
   return {
     parsed,
-    title: extractTitle(target, fallbackAnchor, parsed),
-    poster: extractPoster(target),
+    title:
+      parsed.provider === "xiaohongshu"
+        ? getFallbackTitle(parsed)
+        : extractTitle(target, fallbackAnchor, parsed),
+    poster: parsed.provider === "xiaohongshu" ? "" : extractPoster(target),
     canonicalUrl: parsed.canonicalUrl,
     metaLine: getMetaLine(parsed),
     viewCount: null,
@@ -1873,6 +2006,7 @@ function getPreviewAspectRatio(parsed) {
     case "qqmusic":
       return isCompactQQMusic(parsed) ? "auto" : "4 / 3";
     case "zhihu":
+    case "xiaohongshu":
       return "auto";
     default:
       return "4 / 3";
@@ -2531,21 +2665,36 @@ function collectEmbedTextCandidates(element, existingTargets) {
     }
 
     seen.add(block);
-    results.push({ target: block, anchor: null, parsed });
+    results.push({
+      target: block,
+      anchor: null,
+      parsed,
+      preserveSource: parsed.provider === "xiaohongshu",
+    });
   }
 
   return results;
+}
+
+function placeCandidateReplacement(candidate, replacement) {
+  if (candidate.preserveSource) {
+    candidate.target.dataset.bilibiliInlinePlayer = "done";
+    candidate.target.insertAdjacentElement("afterend", replacement);
+  } else {
+    candidate.target.replaceWith(replacement);
+  }
 }
 
 function replaceCandidate(candidate) {
   candidate.target.dataset.bilibiliInlinePlayer = "processing";
   const replacement = buildWrapper(buildMetadata(candidate.target, candidate.anchor, candidate.parsed));
   replacement.dataset.bilibiliInlinePlayer = "done";
-  candidate.target.replaceWith(replacement);
+
+  placeCandidateReplacement(candidate, replacement);
   maybeResolveMusicPreviewMetadata(replacement);
 }
 
-export default apiInitializer("1.8.0", (api) => {
+export default apiInitializer((api) => {
   if (!getBooleanSetting("enabled", true)) {
     return;
   }

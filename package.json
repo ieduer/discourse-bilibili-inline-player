@@ -1,0 +1,8 @@
+{
+  "name": "discourse-bilibili-inline-player",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}
