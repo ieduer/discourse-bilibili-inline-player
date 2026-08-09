@@ -11,7 +11,12 @@ const QQMUSIC_HOSTS = new Set(["y.qq.com", "i.y.qq.com"]);
 const ZHIHU_HOSTS = new Set(["zhihu.com", "www.zhihu.com", "zhuanlan.zhihu.com"]);
 const XIAOHONGSHU_HOSTS = new Set(["xiaohongshu.com", "www.xiaohongshu.com"]);
 const REDNOTE_HOSTS = new Set(["rednote.com", "www.rednote.com"]);
-const XIAOHONGSHU_SHORT_HOSTS = new Set(["xhslink.com", "www.xhslink.com"]);
+const XIAOHONGSHU_SHORT_HOSTS = new Set([
+  "xhslink.com",
+  "www.xhslink.com",
+  "xhslink.cn",
+  "www.xhslink.cn",
+]);
 const VIDEO_PATH_RE = /^\/(?:s\/)?video\/(BV[0-9A-Za-z]+|av\d+)\/?$/i;
 const SHORT_VIDEO_PATH_RE = /^\/(?:video\/)?(BV[0-9A-Za-z]+|av\d+)(?:\/p(\d+))?\/?$/i;
 const BANGUMI_PATH_RE = /^\/bangumi\/play\/(ep|ss)(\d+)\/?$/i;
@@ -39,13 +44,20 @@ const XIAOHONGSHU_NOTE_PATH_RE = /^\/(?:explore|discovery\/item)\/([0-9a-f]{24})
 const REDNOTE_NOTE_PATH_RE = /^\/explore\/([0-9a-f]{24})\/?$/i;
 const XIAOHONGSHU_SHORT_PATH_RE = /^\/(?:a|m|o)\/([A-Za-z0-9_-]{4,})\/?$/i;
 const SCHEMELESS_XIAOHONGSHU_RE =
-  /^(?:www\.)?(?:xiaohongshu\.com|rednote\.com|xhslink\.com)\//i;
+  /^(?:www\.)?(?:xiaohongshu\.com|rednote\.com|xhslink\.(?:com|cn))\//i;
+const XIAOHONGSHU_SHARE_CTA_RE = /^打开\s*【小红书】(?:App)?[，,]?.{0,120}$/u;
+const XIAOHONGSHU_INLINE_URL_RE =
+  /(?:https?:\/\/)?(?:www\.)?(?:xiaohongshu\.com|rednote\.com|xhslink\.(?:com|cn))\/[^\s"'<>，。；！？、（）【】《》「」『』]+/giu;
+const XIAOHONGSHU_INLINE_CTA_RE =
+  /(?:复制(?:本条|这条)?信息[，,]?\s*)?打开\s*【小红书】(?:App)?[，,]?.*$/u;
+const XIAOHONGSHU_UNUSABLE_TITLE_RE =
+  /(?:访问的页面不见了|页面不见了|not\s+found|page\s+unavailable|^小红书(?:\s*-\s*小红书)?$)/iu;
 const TRAILING_URL_PUNCTUATION_RE = /[)\],.;!?，。；！？、）】》」』]+$/u;
 const IFRAME_SRC_RE = /<iframe\b[^>]*\bsrc=(["'])([^"']+)\1/gi;
 const URL_LIKE_RE =
   /((?:https?:)?\/\/(?:player\.bilibili\.com\/player\.html|www\.bilibili\.com\/blackboard\/(?:live\/live-mobile-playerV3|live\/live-activity-player|webplayer\/mbplayer)\.html|(?:www\.|m\.)?bilibili\.com\/(?:s\/)?video\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/bangumi\/play\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/audio\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/read\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/opus\/[^\s"'<>]+|t\.bilibili\.com\/[^\s"'<>]+|live\.bilibili\.com\/[^\s"'<>]+|(?:www\.)?(?:b23\.tv|bili2233\.cn)\/[^\s"'<>]+|(?:y\.)?music\.163\.com\/[^\s"'<>]+|(?:i\.)?y\.qq\.com\/[^\s"'<>]+|(?:www\.)?zhihu\.com\/[^\s"'<>]+|zhuanlan\.zhihu\.com\/[^\s"'<>]+))/gi;
 const XIAOHONGSHU_URL_LIKE_RE =
-  /(?:^|[\s(（\[【{《「『])((?:https?:\/\/)?(?:www\.)?(?:xiaohongshu\.com|rednote\.com|xhslink\.com)\/[^\s"'<>，。；！？、（）【】《》「」『』]+)/gi;
+  /(?:^|[\s(（\[【{《「『])((?:https?:\/\/)?(?:www\.)?(?:xiaohongshu\.com|rednote\.com|xhslink\.(?:com|cn))\/[^\s"'<>，。；！？、（）【】《》「」『』]+)/gi;
 const DEFAULT_ASPECT_RATIO = "16 / 9";
 const JSONP_TIMEOUT_MS = 8000;
 const BILIBILI_STUCK_HELP_DELAY_MS = 5000;
@@ -1356,6 +1368,10 @@ function getZhihuFallbackTitle(parsed) {
 }
 
 function isKnownInlineKind(parsed) {
+  if (parsed.kind === "xiaohongshu") {
+    return getBooleanSetting("enable_xiaohongshu_inline_page", true);
+  }
+
   if (parsed.kind === "video" || parsed.kind === "bangumi" || parsed.kind === "netease") {
     return true;
   }
@@ -1372,7 +1388,23 @@ function isKnownInlineKind(parsed) {
 }
 
 function getInitialButtonLabel(parsed) {
+  if (parsed.provider === "xiaohongshu" && isKnownInlineKind(parsed)) {
+    return "展开笔记";
+  }
+
   return isKnownInlineKind(parsed) ? getStringSetting("button_label", "点击播放") : getOpenLabel(parsed);
+}
+
+function shouldShowDirectSourceLink(parsed) {
+  return parsed?.provider === "xiaohongshu" || getBooleanSetting("show_open_link", true);
+}
+
+function getLoadedOpenLabel(parsed) {
+  if (parsed?.provider === "xiaohongshu") {
+    return parsed.brand === "rednote" ? "页面空白时在 RedNote 打开" : "页面空白时在小红书打开";
+  }
+
+  return getOpenLabel(parsed);
 }
 
 function getFooterMeta(parsed) {
@@ -1820,14 +1852,137 @@ function extractTitle(target, fallbackAnchor, parsed) {
   return getFallbackTitle(parsed);
 }
 
+function getElementTextLines(element) {
+  if (!element?.cloneNode) {
+    return [];
+  }
+
+  const clone = element.cloneNode(true);
+
+  for (const lineBreak of clone.querySelectorAll("br")) {
+    lineBreak.replaceWith("\n");
+  }
+
+  return (clone.textContent || "")
+    .split(/\n+/u)
+    .map(normalizeTitleText)
+    .filter(Boolean);
+}
+
+function buildXiaohongshuPreviewText(lines) {
+  const contentLines = lines
+    .map(normalizeTitleText)
+    .filter(Boolean)
+    .map((line) =>
+      normalizeTitleText(
+        line
+          .replace(XIAOHONGSHU_INLINE_URL_RE, " ")
+          .replace(XIAOHONGSHU_INLINE_CTA_RE, " ")
+      )
+    )
+    .filter(Boolean);
+
+  if (contentLines.length === 0) {
+    return { title: "", description: "" };
+  }
+
+  const lead = contentLines.length > 1 ? contentLines[0] : "";
+  const primary = contentLines.length > 1 ? contentLines.slice(1).join(" ") : contentLines[0];
+  const sentenceMatch = primary.match(/^(.{2,48}?[。！？!?])\s*(.*)$/u);
+
+  if (sentenceMatch) {
+    const description = [sentenceMatch[2], lead].map(normalizeTitleText).filter(Boolean).join(" · ");
+    return {
+      title: normalizeTitleText(sentenceMatch[1]).slice(0, 120),
+      description: description.slice(0, 360),
+    };
+  }
+
+  return {
+    title: contentLines[0].slice(0, 120),
+    description: contentLines.slice(1).join(" ").slice(0, 360),
+  };
+}
+
+function isXiaohongshuShareTextElement(element) {
+  const childElements = Array.from(element?.children || []);
+
+  return Boolean(
+    element &&
+      ["P", "PRE"].includes(element.tagName) &&
+      normalizeTitleText(element.textContent || "").length <= 800 &&
+      childElements.every((child) => child.tagName === "BR") &&
+      extractUrlsFromText(element.textContent || "").length === 0 &&
+      !element.querySelector("a[href], iframe[src], aside.onebox, article.onebox, .bilibili-inline-player")
+  );
+}
+
+function extractXiaohongshuShareContext(target) {
+  const previous = target?.previousElementSibling;
+  const next = target?.nextElementSibling;
+  const nextText = normalizeTitleText(next?.textContent || "");
+
+  if (
+    isXiaohongshuShareTextElement(previous) &&
+    isXiaohongshuShareTextElement(next) &&
+    XIAOHONGSHU_SHARE_CTA_RE.test(nextText)
+  ) {
+    const preview = buildXiaohongshuPreviewText(getElementTextLines(previous));
+
+    if (preview.title) {
+      return {
+        ...preview,
+      };
+    }
+  }
+
+  if (target?.matches?.("p, pre")) {
+    return {
+      ...buildXiaohongshuPreviewText(getElementTextLines(target)),
+    };
+  }
+
+  return { title: "", description: "" };
+}
+
+function extractXiaohongshuCookedMetadata(target, fallbackAnchor, parsed) {
+  const title = extractTitle(target, fallbackAnchor, parsed);
+  const usableTitle =
+    title && !isPlaceholderTitle(title, parsed) && !XIAOHONGSHU_UNUSABLE_TITLE_RE.test(title);
+  const description = normalizeTitleText(
+    target.querySelector(".onebox-body p, .onebox-body .onebox-description")?.textContent || ""
+  );
+
+  return {
+    title: usableTitle ? title : "",
+    description:
+      usableTitle && !XIAOHONGSHU_UNUSABLE_TITLE_RE.test(description) ? description.slice(0, 360) : "",
+    poster: usableTitle ? extractPoster(target) : "",
+  };
+}
+
 function buildMetadata(target, fallbackAnchor, parsed) {
+  if (parsed.provider === "xiaohongshu") {
+    const context = extractXiaohongshuShareContext(target);
+    const cooked = extractXiaohongshuCookedMetadata(target, fallbackAnchor, parsed);
+
+    return {
+      parsed,
+      title: context.title || cooked.title || getFallbackTitle(parsed),
+      description: context.description || cooked.description,
+      poster: cooked.poster,
+      canonicalUrl: parsed.canonicalUrl,
+      metaLine: getMetaLine(parsed),
+      viewCount: null,
+      environmentRisk: detectEmbedEnvironmentRisk(parsed.provider),
+    };
+  }
+
   return {
     parsed,
-    title:
-      parsed.provider === "xiaohongshu"
-        ? getFallbackTitle(parsed)
-        : extractTitle(target, fallbackAnchor, parsed),
-    poster: parsed.provider === "xiaohongshu" ? "" : extractPoster(target),
+    title: extractTitle(target, fallbackAnchor, parsed),
+    description: "",
+    poster: extractPoster(target),
     canonicalUrl: parsed.canonicalUrl,
     metaLine: getMetaLine(parsed),
     viewCount: null,
@@ -2014,6 +2169,10 @@ function getPreviewAspectRatio(parsed) {
 }
 
 function getLoadedFrameHeight(parsed) {
+  if (parsed.kind === "xiaohongshu") {
+    return 720;
+  }
+
   if (parsed.kind === "qqmusic") {
     return getQQMusicEmbedHeight(parsed);
   }
@@ -2128,13 +2287,20 @@ function buildStandardCard(wrapper, metadata) {
   media.append(scrim, playButton);
   playButton.addEventListener("click", () => activatePlayer(wrapper));
 
-  footerContent.append(title, subline);
+  footerContent.appendChild(title);
+  if (metadata.description) {
+    footerContent.appendChild(
+      createElement("div", "bilibili-inline-player__description", metadata.description)
+    );
+  }
+
+  footerContent.appendChild(subline);
 
   if (metadata.environmentRisk?.message && isKnownInlineKind(metadata.parsed)) {
     footerContent.appendChild(createElement("div", "bilibili-inline-player__notice", metadata.environmentRisk.message));
   }
 
-  if (getBooleanSetting("show_open_link", true)) {
+  if (shouldShowDirectSourceLink(metadata.parsed)) {
     const link = createElement("a", "bilibili-inline-player__footer-link", getOpenLabel(metadata.parsed));
     link.href = metadata.canonicalUrl;
     link.target = "_blank";
@@ -2222,6 +2388,22 @@ function primeEmbedState(wrapper) {
       state.iframeUrl = buildIframeUrl(state.parsed);
       state.standardIframeUrl = state.iframeUrl;
       state.noAutoplayIframeUrl = buildNoAutoplayIframeUrl(state.parsed);
+      state.externalOnly = false;
+    } else {
+      state.iframeUrl = null;
+      state.externalOnly = true;
+      setButtonLabel(wrapper, getOpenLabel(state.parsed));
+    }
+
+    state.resolvePromise = Promise.resolve(state.parsed);
+    return;
+  }
+
+  if (state.parsed.kind === "xiaohongshu") {
+    if (getBooleanSetting("enable_xiaohongshu_inline_page", true)) {
+      state.iframeUrl = state.parsed.canonicalUrl;
+      state.standardIframeUrl = state.iframeUrl;
+      state.noAutoplayIframeUrl = "";
       state.externalOnly = false;
     } else {
       state.iframeUrl = null;
@@ -2394,8 +2576,12 @@ function buildLoadedFooter(wrapper) {
     footerActions.appendChild(retryButton);
   }
 
-  if (getBooleanSetting("show_open_link", true)) {
-    const link = createElement("a", "bilibili-inline-player__footer-link", getOpenLabel(state.parsed));
+  if (shouldShowDirectSourceLink(state.parsed)) {
+    const link = createElement(
+      "a",
+      "bilibili-inline-player__footer-link",
+      getLoadedOpenLabel(state.parsed)
+    );
     link.href = wrapper.dataset.bilibiliUrl;
     link.target = "_blank";
     link.rel = "noopener nofollow ugc";
@@ -2438,6 +2624,10 @@ function renderLoadedPlayer(wrapper, iframeUrl) {
   iframe.allow = "autoplay; fullscreen; picture-in-picture";
   iframe.allowFullscreen = true;
   iframe.title = wrapper.dataset.bilibiliTitle || getEmbedTitle(state.parsed);
+
+  if (state.parsed.provider === "xiaohongshu") {
+    iframe.sandbox = "allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox";
+  }
 
   frameWrap.appendChild(iframe);
 
@@ -2594,7 +2784,13 @@ function collectStandaloneCandidates(element, existingTargets) {
 
     const target = anchor.closest("p");
 
-    if (!target || seen.has(target) || target.dataset.bilibiliInlinePlayer) {
+    if (
+      !target ||
+      seen.has(target) ||
+      target.dataset.bilibiliInlinePlayer ||
+      anchor.closest("aside.onebox, article.onebox, .bilibili-inline-player") ||
+      normalizeTitleText(target.textContent || "") !== normalizeTitleText(anchor.textContent || "")
+    ) {
       continue;
     }
 
@@ -2605,7 +2801,45 @@ function collectStandaloneCandidates(element, existingTargets) {
     }
 
     seen.add(target);
-    results.push({ target, anchor, parsed });
+    results.push({
+      target,
+      anchor,
+      parsed,
+      preserveSource: parsed.provider === "xiaohongshu",
+    });
+  }
+
+  return results;
+}
+
+function collectXiaohongshuInlineCandidates(element, existingTargets) {
+  const limit = Math.max(1, getIntegerSetting("max_embeds_per_post", 4));
+  const results = [];
+  const seen = new Set(existingTargets);
+
+  for (const anchor of element.querySelectorAll("p a[href]")) {
+    if (results.length + existingTargets.length >= limit) {
+      break;
+    }
+
+    if (anchor.closest("aside.onebox, article.onebox, .bilibili-inline-player")) {
+      continue;
+    }
+
+    const target = anchor.closest("p");
+
+    if (!target || seen.has(target) || target.dataset?.bilibiliInlinePlayer) {
+      continue;
+    }
+
+    const parsed = parseBilibiliUrl(anchor.href);
+
+    if (parsed?.provider !== "xiaohongshu") {
+      continue;
+    }
+
+    seen.add(target);
+    results.push({ target, anchor, parsed, preserveSource: true });
   }
 
   return results;
@@ -2619,6 +2853,10 @@ function collectIframeCandidates(element, existingTargets) {
   for (const iframe of element.querySelectorAll("iframe[src]")) {
     if (results.length + existingTargets.length >= limit) {
       break;
+    }
+
+    if (iframe.closest(".bilibili-inline-player, [data-bilibili-inline-player]")) {
+      continue;
     }
 
     const target = iframe.closest("p, figure") || iframe.parentElement || iframe;
@@ -2687,7 +2925,8 @@ function placeCandidateReplacement(candidate, replacement) {
 
 function replaceCandidate(candidate) {
   candidate.target.dataset.bilibiliInlinePlayer = "processing";
-  const replacement = buildWrapper(buildMetadata(candidate.target, candidate.anchor, candidate.parsed));
+  const metadata = buildMetadata(candidate.target, candidate.anchor, candidate.parsed);
+  const replacement = buildWrapper(metadata);
   replacement.dataset.bilibiliInlinePlayer = "done";
 
   placeCandidateReplacement(candidate, replacement);
@@ -2705,16 +2944,33 @@ export default apiInitializer((api) => {
       element,
       oneboxCandidates.map((candidate) => candidate.target)
     );
-    const iframeCandidates = collectIframeCandidates(
+    const xiaohongshuInlineCandidates = collectXiaohongshuInlineCandidates(
       element,
       [...oneboxCandidates, ...standaloneCandidates].map((candidate) => candidate.target)
     );
+    const iframeCandidates = collectIframeCandidates(
+      element,
+      [...oneboxCandidates, ...standaloneCandidates, ...xiaohongshuInlineCandidates].map(
+        (candidate) => candidate.target
+      )
+    );
     const embedTextCandidates = collectEmbedTextCandidates(
       element,
-      [...oneboxCandidates, ...standaloneCandidates, ...iframeCandidates].map((candidate) => candidate.target)
+      [
+        ...oneboxCandidates,
+        ...standaloneCandidates,
+        ...xiaohongshuInlineCandidates,
+        ...iframeCandidates,
+      ].map((candidate) => candidate.target)
     );
 
-    for (const candidate of [...oneboxCandidates, ...standaloneCandidates, ...iframeCandidates, ...embedTextCandidates]) {
+    for (const candidate of [
+      ...oneboxCandidates,
+      ...standaloneCandidates,
+      ...xiaohongshuInlineCandidates,
+      ...iframeCandidates,
+      ...embedTextCandidates,
+    ]) {
       replaceCandidate(candidate);
     }
   });

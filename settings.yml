@@ -30,6 +30,11 @@ enable_live_danmaku:
   type: bool
   description: When live embeds are enabled, request danmaku in the live H5 player.
 
+enable_xiaohongshu_inline_page:
+  default: true
+  type: bool
+  description: Load the official Xiaohongshu or RedNote note page inside the card when the user clicks Expand note. Disable to keep content-rich cards with an external source link only.
+
 auto_open_on_high_risk_env:
   default: true
   type: bool

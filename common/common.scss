@@ -119,6 +119,12 @@
   box-shadow: 0 10px 24px rgb(143 13 34 / 0.36);
 }
 
+.bilibili-inline-player--xiaohongshu .bilibili-inline-player__frame-wrap--fixed {
+  height: min(72vh, var(--bili-frame-height, 720px));
+  min-height: 560px;
+  background: #fff;
+}
+
 /* ═══════════════════════════════════════════════════
    Compact audio card (NetEase single songs / programs)
    Single-row unified dark card — Spotify/Discord style
@@ -459,6 +465,16 @@
   line-height: 1.4;
 }
 
+.bilibili-inline-player__description {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--bili-card-muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
 .bilibili-inline-player__footer-button {
   flex: none;
   padding: 0.36rem 0.68rem;
@@ -527,6 +543,11 @@
 /* ── Mobile ── */
 
 @media (max-width: 767px) {
+  .bilibili-inline-player--xiaohongshu .bilibili-inline-player__frame-wrap--fixed {
+    height: 68vh;
+    min-height: 480px;
+  }
+
   .bilibili-inline-player__play {
     min-height: 2.6rem;
     padding: 0.6rem 1.1rem;

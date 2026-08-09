@@ -4,19 +4,21 @@ Last reviewed: 2026-08-08 (America/Los_Angeles)
 
 ## Current release
 
-- Release target: `0.8.0`
+- Release target: `0.8.1`
 - Production surface: Discourse remote theme component `119`
 - Source branch: GitHub `main`
-- Pre-change rollback commit: `0f8b12426ec894c5b548029ff1fc6ddaff8dcd4c` (`0.7.0`)
+- Immediate rollback commit: `07a74a72e4b6fe488e7c18a008755e9d1ac88bb7` (`0.8.0`)
+- Original pre-Xiaohongshu commit: `0f8b12426ec894c5b548029ff1fc6ddaff8dcd4c` (`0.7.0`)
 - Exact installed commit must be read from `RemoteTheme.local_version`; live readback is authoritative over this file
 
-## 0.8.0 scope
+## 0.8.1 scope
 
-- Add external-only source cards for official Xiaohongshu and RedNote note paths.
-- Add fail-open source cards for known `xhslink.com` share forms and schemeless share text.
+- Render actual Xiaohongshu/RedNote title and description from copied share text, including auto-linkified inline URLs, without deleting the source paragraphs.
+- Support current `xhslink.cn` plus `xhslink.com` share forms and schemeless share text.
+- Load the user-supplied official note page inline on demand while retaining the direct source link and an admin kill switch.
 - Preserve complete path/query/fragment while normalizing recognized links to HTTPS, and reject lookalike hosts, credentials, custom ports, unsupported schemes, and unsupported paths.
 - Add parser regression tests for all existing providers and move to the current one-argument Discourse `apiInitializer` signature.
-- Do not add a Xiaohongshu iframe, API request, short-link resolver, poster hotlink, cookie, media download, CSP source, or server-side dependency.
+- Do not add a private API, custom signature, login cookie, downloaded media, third-party resolver, or server-side dependency.
 
 ## Verification and rollback
 

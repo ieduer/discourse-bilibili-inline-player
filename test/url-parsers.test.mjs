@@ -13,13 +13,21 @@ const executableSource = initializerSource
   .replace("export default apiInitializer((api) => {", "const themeInitializer = apiInitializer((api) => {")
   .concat(`
 globalThis.__themeParserTestApi = {
+  buildXiaohongshuPreviewText,
   collectEmbedTextCandidates,
+  collectIframeCandidates,
+  collectXiaohongshuInlineCandidates,
+  collectStandaloneCandidates,
   extractUrlsFromText,
   getFooterMeta,
+  getInitialButtonLabel,
+  getLoadedFrameHeight,
   getMetaLine,
   getOpenLabel,
   getPreviewAspectRatio,
   isKnownInlineKind,
+  shouldShowDirectSourceLink,
+  extractXiaohongshuShareContext,
   parseBilibiliUrl,
   placeCandidateReplacement,
 };
@@ -37,13 +45,21 @@ vm.runInNewContext(executableSource, context, {
 });
 
 const {
+  buildXiaohongshuPreviewText,
   collectEmbedTextCandidates,
+  collectIframeCandidates,
+  collectXiaohongshuInlineCandidates,
+  collectStandaloneCandidates,
   extractUrlsFromText,
   getFooterMeta,
+  getInitialButtonLabel,
+  getLoadedFrameHeight,
   getMetaLine,
   getOpenLabel,
   getPreviewAspectRatio,
   isKnownInlineKind,
+  shouldShowDirectSourceLink,
+  extractXiaohongshuShareContext,
   parseBilibiliUrl,
   placeCandidateReplacement,
 } = context.__themeParserTestApi;
@@ -57,7 +73,9 @@ test("parses Xiaohongshu note URLs and preserves share parameters", () => {
   assert.equal(parsed.contentType, "note");
   assert.equal(parsed.noteId, "64f000000000000000000001");
   assert.equal(parsed.canonicalUrl, source);
-  assert.equal(isKnownInlineKind(parsed), false);
+  assert.equal(isKnownInlineKind(parsed), true);
+  assert.equal(getInitialButtonLabel(parsed), "展开笔记");
+  assert.equal(getLoadedFrameHeight(parsed), 720);
   assert.equal(getMetaLine(parsed), "小红书笔记");
   assert.equal(getFooterMeta(parsed), "小红书原文卡片");
   assert.equal(getOpenLabel(parsed), "前往小红书查看");
@@ -97,6 +115,19 @@ for (const prefix of ["a", "m", "o"]) {
   });
 }
 
+test("parses the current xhslink.cn share form and upgrades HTTP", () => {
+  const parsed = parseBilibiliUrl(
+    "http://xhslink.cn/o/Fixture123?xsec_token=fixture_value#share"
+  );
+
+  assert.equal(parsed.provider, "xiaohongshu");
+  assert.equal(parsed.contentType, "share");
+  assert.equal(
+    parsed.canonicalUrl,
+    "https://xhslink.cn/o/Fixture123?xsec_token=fixture_value#share"
+  );
+});
+
 test("extracts schemeless Xiaohongshu shares before Chinese punctuation", () => {
   const [url] = extractUrlsFromText("复制后打开（xhslink.com/o/Fixture123），查看笔记");
 
@@ -124,6 +155,120 @@ test("preserves terminal URL characters for direct cooked links", () => {
     "https://www.xiaohongshu.com/explore/64f000000000000000000001?xsec_token=fixture_value!";
 
   assert.equal(parseBilibiliUrl(source).canonicalUrl, source);
+});
+
+test("builds actual Xiaohongshu title and description from copied share text", () => {
+  assert.deepEqual(
+    { ...buildXiaohongshuPreviewText([
+      "这就刷到了…",
+      "赤潮，启动！ 今天有没有在北京少年集遇见这只零宝呢 …",
+    ]) },
+    {
+      title: "赤潮，启动！",
+      description: "今天有没有在北京少年集遇见这只零宝呢 … · 这就刷到了…",
+    }
+  );
+
+  assert.deepEqual(
+    { ...buildXiaohongshuPreviewText([
+      "赤潮，启动！今天有没有在北京少年集遇见这只零宝呢 http://xhslink.cn/o/Fixture123 打开【小红书】，这篇笔记值得一看~",
+    ]) },
+    {
+      title: "赤潮，启动！",
+      description: "今天有没有在北京少年集遇见这只零宝呢",
+    }
+  );
+});
+
+test("reads standard copied-share context without taking ownership of source paragraphs", () => {
+  const textElement = (text, children = []) => ({
+    tagName: "P",
+    children,
+    textContent: text,
+    querySelector: () => null,
+    cloneNode: () => ({
+      textContent: text,
+      querySelectorAll: () => [],
+    }),
+  });
+  const previous = textElement(
+    "这就刷到了…\n赤潮，启动！ 今天有没有在北京少年集遇见这只零宝呢 …"
+  );
+  const next = textElement("打开【小红书】，这篇笔记值得一看~");
+  const target = {
+    previousElementSibling: previous,
+    nextElementSibling: next,
+    matches: () => false,
+  };
+  const context = extractXiaohongshuShareContext(target);
+
+  assert.equal(context.title, "赤潮，启动！");
+  assert.match(context.description, /北京少年集/u);
+  assert.equal("absorbedTargets" in context, false);
+
+  const oldProviderContext = extractXiaohongshuShareContext({
+    previousElementSibling: textElement("https://b23.tv/Fixture123"),
+    nextElementSibling: next,
+    matches: () => false,
+  });
+  assert.equal(oldProviderContext.title, "");
+
+  const richContext = extractXiaohongshuShareContext({
+    previousElementSibling: textElement("不应作为标题", [{ tagName: "IMG" }]),
+    nextElementSibling: next,
+    matches: () => false,
+  });
+  assert.equal(richContext.title, "");
+});
+
+test("collects an auto-linkified Xiaohongshu URL inside copied share text", () => {
+  const paragraph = {
+    dataset: {},
+    textContent:
+      "赤潮，启动！今天有没有在北京少年集遇见这只零宝呢 https://xhslink.cn/o/Fixture123 打开【小红书】，这篇笔记值得一看~",
+  };
+  const anchor = {
+    href: "https://xhslink.cn/o/Fixture123",
+    textContent: "https://xhslink.cn/o/Fixture123",
+    closest(selector) {
+      return selector === "p" ? paragraph : null;
+    },
+  };
+  const cooked = {
+    querySelectorAll: (selector) =>
+      ["p > a[href]:only-child", "p a[href]"].includes(selector) ? [anchor] : [],
+  };
+  const standalone = collectStandaloneCandidates(cooked, []);
+  const [candidate] = collectXiaohongshuInlineCandidates(
+    cooked,
+    standalone.map((item) => item.target)
+  );
+
+  assert.equal(standalone.length, 0);
+  assert.equal(candidate.target, paragraph);
+  assert.equal(candidate.parsed.provider, "xiaohongshu");
+  assert.equal(candidate.preserveSource, true);
+});
+
+test("keeps a standalone Xiaohongshu source paragraph beside its card", () => {
+  const source = "https://xhslink.cn/o/Fixture123";
+  const paragraph = {
+    dataset: {},
+    textContent: source,
+  };
+  const anchor = {
+    href: source,
+    textContent: source,
+    closest(selector) {
+      return selector === "p" ? paragraph : null;
+    },
+  };
+  const cooked = {
+    querySelectorAll: (selector) => (selector === "p > a[href]:only-child" ? [anchor] : []),
+  };
+  const [candidate] = collectStandaloneCandidates(cooked, []);
+
+  assert.equal(candidate.preserveSource, true);
 });
 
 test("keeps surrounding pasted share text when adding a source card", () => {
@@ -162,6 +307,7 @@ test("rejects lookalike hosts, unsupported paths, credentials, and custom ports"
     "https://www.xiaohongshu.com/user/profile/64f000000000000000000001",
     "https://xhslink.com/live/Fixture123",
     "https://xhslink.com/Fixture123",
+    "https://xhslink.cn/Fixture123",
     "ftp://www.xiaohongshu.com/explore/64f000000000000000000001",
     "https://user@example.com@www.xiaohongshu.com/explore/64f000000000000000000001",
     "https://www.xiaohongshu.com:444/explore/64f000000000000000000001",
@@ -186,6 +332,31 @@ test("keeps representative existing providers working", () => {
     parseBilibiliUrl("https://www.zhihu.com/question/123456/answer/789012").provider,
     "zhihu"
   );
+});
+
+test("always keeps a direct source link for Xiaohongshu", () => {
+  context.settings.show_open_link = false;
+
+  assert.equal(shouldShowDirectSourceLink(parseBilibiliUrl("https://xhslink.cn/o/Fixture123")), true);
+  assert.equal(
+    shouldShowDirectSourceLink(parseBilibiliUrl("https://www.bilibili.com/video/BV1xx411c7mD")),
+    false
+  );
+
+  delete context.settings.show_open_link;
+});
+
+test("does not re-decorate an iframe owned by the component", () => {
+  const iframe = {
+    closest(selector) {
+      return selector === ".bilibili-inline-player, [data-bilibili-inline-player]" ? {} : null;
+    },
+  };
+  const cooked = {
+    querySelectorAll: (selector) => (selector === "iframe[src]" ? [iframe] : []),
+  };
+
+  assert.deepEqual(Array.from(collectIframeCandidates(cooked, [])), []);
 });
 
 test("uses the current single-argument apiInitializer signature", () => {
