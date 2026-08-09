@@ -95,18 +95,18 @@ For Xiaohongshu and RedNote, the official platform documentation reviewed on 202
 Still not supported:
 
 - opaque non-Xiaohongshu short-link tokens that cannot be resolved client-side before Discourse oneboxes them
-- inline links inside a sentence
+- non-Xiaohongshu inline links inside a sentence
 - favorites, collections, channels, playlists, watch-later, and other multi-item containers
 
 The safest input pattern is still a standalone bilibili URL on its own line, which matches how Discourse onebox-style embeds are normally triggered.
 
-Pasted Xiaohongshu share text without an HTML link is a narrow exception: the original paragraph is preserved and the source card is inserted after it, so surrounding text is never discarded.
+Pasted Xiaohongshu share text, with either plain or auto-linkified share URLs, is a narrow exception: the original paragraph is preserved and the content card is inserted after it, so surrounding text is never discarded.
 
 ## How it works
 
 1. The cooked post is scanned on the client with Discourse's `decorateCookedElement` JS API.
 2. Existing bilibili oneboxes are detected first, and standalone links, official iframe URLs, and pasted iframe code are handled as fallbacks.
-3. The original cooked block is replaced with a poster card using the data already present in the cooked post.
+3. The original cooked block is normally replaced with a poster card using the data already present in the cooked post; Xiaohongshu source paragraphs remain in place and receive a content card after them.
 4. For ordinary bilibili videos, the component fetches official bilibili metadata in the background to fill in the correct title and preview image when the cooked post does not already contain them.
 5. When the user clicks the card, the component resolves the correct bilibili page context, including `cid` when available.
 6. If bilibili exposes a valid public embed context, the official external player iframe is inserted in place.
