@@ -26,6 +26,7 @@ globalThis.__themeParserTestApi = {
   getOpenLabel,
   getPreviewAspectRatio,
   isKnownInlineKind,
+  shouldAutoExpandXiaohongshu,
   shouldShowDirectSourceLink,
   extractXiaohongshuShareContext,
   parseBilibiliUrl,
@@ -58,6 +59,7 @@ const {
   getOpenLabel,
   getPreviewAspectRatio,
   isKnownInlineKind,
+  shouldAutoExpandXiaohongshu,
   shouldShowDirectSourceLink,
   extractXiaohongshuShareContext,
   parseBilibiliUrl,
@@ -74,6 +76,7 @@ test("parses Xiaohongshu note URLs and preserves share parameters", () => {
   assert.equal(parsed.noteId, "64f000000000000000000001");
   assert.equal(parsed.canonicalUrl, source);
   assert.equal(isKnownInlineKind(parsed), true);
+  assert.equal(shouldAutoExpandXiaohongshu(parsed), true);
   assert.equal(getInitialButtonLabel(parsed), "展开笔记");
   assert.equal(getLoadedFrameHeight(parsed), 720);
   assert.equal(getMetaLine(parsed), "小红书笔记");
@@ -344,6 +347,20 @@ test("always keeps a direct source link for Xiaohongshu", () => {
   );
 
   delete context.settings.show_open_link;
+});
+
+test("defaults Xiaohongshu to expanded and obeys the admin kill switch", () => {
+  const parsed = parseBilibiliUrl("https://xhslink.cn/o/Fixture123");
+
+  assert.equal(shouldAutoExpandXiaohongshu(parsed), true);
+  assert.match(
+    initializerSource,
+    /if \(shouldAutoExpandXiaohongshu\(metadata\.parsed\)\)[\s\S]{0,240}renderLoadedPlayer\(wrapper, state\.iframeUrl\)/u
+  );
+
+  context.settings.enable_xiaohongshu_inline_page = false;
+  assert.equal(shouldAutoExpandXiaohongshu(parsed), false);
+  delete context.settings.enable_xiaohongshu_inline_page;
 });
 
 test("does not re-decorate an iframe owned by the component", () => {

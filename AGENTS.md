@@ -18,7 +18,7 @@ Keep the component fail-open: unsupported or failed URLs must leave the original
 - Do not add this repository to `/var/discourse/containers/app.yml`.
 - Do not rebuild or restart Discourse for a theme update.
 - Do not modify nginx, the forum front proxy, uploads, R2, Redis, CSP, or Discourse core for ordinary component work.
-- Do not add private APIs, login cookies, custom request signatures, downloaded media, or third-party resolver services. Loading the user-supplied official note page on click is the supported inline path for this component.
+- Do not add private APIs, login cookies, custom request signatures, downloaded media, or third-party resolver services. Lazy-loading the user-supplied official note page in the default expanded state is the supported inline path for this component.
 - Preserve Xiaohongshu/RedNote path, query, and fragment while normalizing recognized links to HTTPS; never log full share URLs that may contain temporary capability parameters.
 - Treat Discourse Onebox as a separate server-side fetch path. The preview must remain complete from copied share text when those domains are blocked.
 - Keep existing bilibili, NetEase, QQ Music, and Zhihu behavior unless a regression test proves a change is needed.

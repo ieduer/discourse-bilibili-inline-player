@@ -1367,9 +1367,16 @@ function getZhihuFallbackTitle(parsed) {
   }
 }
 
+function shouldAutoExpandXiaohongshu(parsed) {
+  return (
+    parsed?.kind === "xiaohongshu" &&
+    getBooleanSetting("enable_xiaohongshu_inline_page", true)
+  );
+}
+
 function isKnownInlineKind(parsed) {
   if (parsed.kind === "xiaohongshu") {
-    return getBooleanSetting("enable_xiaohongshu_inline_page", true);
+    return shouldAutoExpandXiaohongshu(parsed);
   }
 
   if (parsed.kind === "video" || parsed.kind === "bangumi" || parsed.kind === "netease") {
@@ -2212,6 +2219,14 @@ function buildWrapper(metadata) {
   }
 
   primeEmbedState(wrapper);
+
+  if (shouldAutoExpandXiaohongshu(metadata.parsed)) {
+    const state = wrapperState.get(wrapper);
+
+    if (state?.iframeUrl) {
+      renderLoadedPlayer(wrapper, state.iframeUrl);
+    }
+  }
 
   return wrapper;
 }

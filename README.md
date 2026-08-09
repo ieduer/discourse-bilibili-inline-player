@@ -90,7 +90,7 @@ For NetEase Cloud Music, the component uses the official outchain player paths. 
 
 For Zhihu, current public pages and API paths do not expose a reliable public iframe or oEmbed interface. The component therefore renders supported Zhihu URLs as styled source cards using the cooked post metadata already available in Discourse, then opens the canonical Zhihu page on click.
 
-For Xiaohongshu and RedNote, the official platform documentation reviewed on 2026-08-08 exposes no supported third-party oEmbed or embed widget. Version `0.8.1` therefore builds a content-rich preview from the title and description included in the copied share text, including auto-linkified URLs embedded in a sentence. The original cooked post text remains untouched. Clicking **展开笔记** then loads the user-supplied official note page inside the card; the footer always retains a direct source link even when the general open-link setting is disabled. Recognized links are normalized to HTTPS while their full path, query, and fragment are preserved because note access can depend on temporary share parameters. No private API, login cookie, custom signature, media download, or persisted note cache is used.
+For Xiaohongshu and RedNote, the official platform documentation reviewed on 2026-08-08 exposes no supported third-party oEmbed or embed widget. Version `0.8.2` builds a content-rich preview from the title and description included in the copied share text, including auto-linkified URLs embedded in a sentence, then defaults the card to an expanded, browser-native lazy-loaded official note page. The original cooked post text remains untouched, and the footer always retains a direct source link even when the general open-link setting is disabled. Recognized links are normalized to HTTPS while their full path, query, and fragment are preserved because note access can depend on temporary share parameters. No private API, login cookie, custom signature, media download, or persisted note cache is used.
 
 Still not supported:
 
@@ -117,7 +117,7 @@ Pasted Xiaohongshu share text, with either plain or auto-linkified share URLs, i
 11. For NetEase single-song cards, if the cooked post still only exposes a generic provider title in this no-rebuild architecture, the component falls back to loading the official no-autoplay outchain player immediately instead of showing an ID-only fake title.
 12. For QQ Music, the component supports the official outchain player for songs with numeric IDs and the playsong page for songs with songmid identifiers. Playlists, albums, and toplists are rendered as styled cards with an open-on-QQ-Music fallback.
 13. For Zhihu, the component upgrades supported question, answer, and article links into a unified card and falls back to opening the canonical Zhihu source page.
-14. For Xiaohongshu and RedNote, the component recognizes official note paths plus known `xhslink.com` / `xhslink.cn` share forms, turns copied share text into a real title and description, and loads the official note page inline on demand while preserving the direct source link.
+14. For Xiaohongshu and RedNote, the component recognizes official note paths plus known `xhslink.com` / `xhslink.cn` share forms, turns copied share text into a real title and description, and defaults to the lazy-loaded expanded official note page while preserving the direct source link.
 15. For content types without a stable official iframe path in this theme-component-only architecture, the component still upgrades the post into a unified media card and falls back to opening the canonical source page.
 
 The component does not modify Discourse core and does not require a rebuild.
@@ -170,7 +170,7 @@ No rebuild is required.
 - If NetEase Cloud Music embeds are enabled by CSP, allow `https://music.163.com` in `frame-src`.
 - If QQ Music embeds are enabled by CSP, allow `https://i.y.qq.com` in `frame-src`.
 - Zhihu cards do not load Zhihu iframe or script resources; they only link to the canonical source page.
-- Xiaohongshu and RedNote cards load the official user-supplied note URL in an iframe only after **展开笔记** is clicked. A strict custom `frame-src` policy must allow both the root and wildcard forms of `xiaohongshu.com`, `xhslink.com`, `xhslink.cn`, and `rednote.com` (for example, `https://xiaohongshu.com https://*.xiaohongshu.com`).
+- Xiaohongshu and RedNote cards default to an expanded lazy-loaded iframe for the official user-supplied note URL. A strict custom `frame-src` policy must allow both the root and wildcard forms of `xiaohongshu.com`, `xhslink.com`, `xhslink.cn`, and `rednote.com` (for example, `https://xiaohongshu.com https://*.xiaohongshu.com`).
 - Discourse Onebox is a separate server-side stage. The component does not require Onebox metadata; copied share text supplies the preview content, and `blocked_onebox_domains` can prevent redundant server fetches.
 - If a supported media link cannot be parsed, the original cooked content is left untouched.
 
@@ -180,7 +180,7 @@ No rebuild is required.
 2. Health probe: `https://forum.rdfzer.com/`, `/srv/status`, and `/session/csrf` must continue returning success.
 3. Contract checks: run `npm test`, validate `about.json` and `settings.yml`, confirm the intended `blocked_onebox_domains` policy, then confirm Discourse remote theme `119` reports the intended Git commit without `last_error_text`.
 4. Deploy command: push a tested commit to GitHub, then update remote theme `119` through Discourse theme administration. Never add this component to `app.yml` or rebuild the container.
-5. Dependency regression: verify one real cooked post for bilibili, NetEase, QQ Music, Zhihu, a full Xiaohongshu note URL, and an `xhslink.cn` short share; the Xiaohongshu card must show a real title/description and **展开笔记** must load the official page inline.
+5. Dependency regression: verify one real cooked post for bilibili, NetEase, QQ Music, Zhihu, a full Xiaohongshu note URL, and an `xhslink.cn` short share; the Xiaohongshu card must default to an expanded official page with real title, text, and media.
 6. Backup and restore: the previous Git commit is the immutable backup; a fresh clone of the repository is the restore path.
 7. Rollback: revert the release commit on GitHub and refresh remote theme `119`, then repeat health and provider regression checks.
 8. Last verified release evidence is recorded in `PROJECT_STATE.md` and the forum operations report; live Discourse readback is authoritative.
