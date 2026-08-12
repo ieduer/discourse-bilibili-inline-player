@@ -514,3 +514,11 @@ test("uses the current single-argument apiInitializer signature", () => {
   assert.doesNotMatch(initializerSource, /apiInitializer\("1\.8\.0"/u);
   assert.match(initializerSource, /export default apiInitializer\(\(api\) =>/u);
 });
+
+test("reads Discourse's injected theme settings rather than a window property", () => {
+  assert.match(
+    initializerSource,
+    /const themeSettings = typeof settings === "object" && settings \? settings : \{\};/u
+  );
+  assert.doesNotMatch(initializerSource, /globalThis\.settings/u);
+});

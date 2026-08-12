@@ -81,7 +81,7 @@ const NETEASE_MEDIA_BY_OUTCHAIN_TYPE = Object.fromEntries(
   Object.entries(NETEASE_OUTCHAIN_TYPE_BY_MEDIA).map(([mediaType, type]) => [type, mediaType])
 );
 
-const themeSettings = globalThis.settings || {};
+const themeSettings = typeof settings === "object" && settings ? settings : {};
 const wrapperState = new WeakMap();
 const videoInfoCache = new Map();
 const qqMusicSongInfoCache = new Map();
