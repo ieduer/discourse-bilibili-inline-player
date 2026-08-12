@@ -4,8 +4,8 @@ Last reviewed: 2026-08-12 (America/Los_Angeles)
 
 ## Current release
 
-- Source candidate: `0.9.0`
-- Production remains `0.8.2` until remote theme `119` is explicitly refreshed and verified
+- Current release: `0.9.0`
+- Production theme `119` is installed and live-verified on `forum.rdfzer.com`
 - Production surface: Discourse remote theme component `119`
 - Source branch: GitHub `main`
 - Immediate rollback commit: `83d81781c1c17f32305db5ab4516a0f3ba545f94` (`0.8.2`)
@@ -21,6 +21,7 @@ Last reviewed: 2026-08-12 (America/Los_Angeles)
 - Keep PDF entirely under the installed official `discourse-pdf-previews` component; this repository rejects `.pdf` in its ebook parser.
 - Treat book content as untrusted: remove active markup and dangerous URL attributes before rendition, preserve the forum's strict CSP, never send book bytes to a third party, and do not attempt DRM bypass.
 - Keep existing provider parsing and fallbacks; apply the shared default-expanded behavior to safe inline providers.
+- Live fix: read Discourse's lexically injected `settings` object so `theme_uploads.foliate_reader` resolves in production. The original `globalThis.settings` lookup failed before either the reader asset or attachment was requested.
 
 ## 0.8.2 retained scope
 
@@ -33,6 +34,8 @@ Last reviewed: 2026-08-12 (America/Los_Angeles)
 
 ## Verification and rollback
 
-The executable verification standard is in `README.md` and `AGENTS.md`. The rollback anchor is the pre-change commit above; revert the release commit, push GitHub `main`, refresh theme `119`, and repeat the public health and provider regression checks.
+The executable verification standard is in `README.md` and `AGENTS.md`. On 2026-08-12, GitHub CI passed; live post `13365/3` automatically opened its EPUB as *The Kite Runner*, exposed 29 TOC entries, reported 1% progress, and moved to chapter `ONE` after next-page navigation. Theme `119` reported matching local/remote source commits with no import error, and the forum root, `/srv/status`, and `/session/csrf` returned HTTP 200.
+
+The immediate rollback anchor is `83d81781c1c17f32305db5ab4516a0f3ba545f94` (`0.8.2`): revert the `0.9.0` release commits, push GitHub `main`, refresh theme `119`, and repeat the public health and provider regression checks. The forum currently accepts EPUB uploads; MOBI and AZW3 ordinary attachment extensions remain site-setting prerequisites owned by the forum operator.
 
 No Cloudflare capability, shared BDFZ hub contract, user-system path, mobile App contract, forum proxy, container, or database resource is changed by this release.
