@@ -1,8 +1,11 @@
 {
-  "name": "Bilibili + Music Embeds + Zhihu/Xiaohongshu Source Cards",
+  "name": "Extended Preview & Embed Suite",
   "about_url": "https://github.com/ieduer/discourse-bilibili-inline-player",
   "license_url": "https://github.com/ieduer/discourse-bilibili-inline-player/blob/main/LICENSE",
   "component": true,
   "authors": "suen",
-  "theme_version": "0.8.2"
+  "theme_version": "0.9.0",
+  "assets": {
+    "foliate_reader": "assets/vendor/foliate-reader.min.js"
+  }
 }

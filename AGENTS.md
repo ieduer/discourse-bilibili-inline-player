@@ -1,6 +1,6 @@
 # Project operating instructions
 
-This repository is a Git-backed Discourse remote theme component. It is not a server plugin.
+This repository is a Git-backed Discourse remote theme component. It is not a server plugin. Its permanent role is to supplement preview/embed formats that are not already supported by Discourse core or an official Discourse component.
 
 ## Scope and architecture
 
@@ -10,8 +10,11 @@ This repository is a Git-backed Discourse remote theme component. It is not a se
 - Runtime: client-side cooked-post enhancement through `decorateCookedElement`
 - Data class: `none`; the component has no database, account, cookie, or student-data path
 - Cloudflare capability receipt: `no-new-capability`; this change does not use or modify Cloudflare resources
+- Official-support boundary: never take over a format already handled by Discourse core or an official component. PDF remains owned by `discourse-pdf-previews`.
 
-Keep the component fail-open: unsupported or failed URLs must leave the original cooked content or original source link available. Preserve `max_embeds_per_post` and do not add unbounded client fetches.
+Keep the component fail-open: unsupported or failed URLs must leave the original cooked content or original source link available. Preserve `max_embeds_per_post`, bound attachment size, and do not add unbounded client fetches.
+
+Safe inline players and readers are visible by default through `auto_expand_embeds`. Automatic expansion must never force media autoplay; click activation may continue to follow `autoplay_on_click`. Source-only content without a safe renderer remains a card.
 
 ## Change boundaries
 
@@ -22,6 +25,9 @@ Keep the component fail-open: unsupported or failed URLs must leave the original
 - Preserve Xiaohongshu/RedNote path, query, and fragment while normalizing recognized links to HTTPS; never log full share URLs that may contain temporary capability parameters.
 - Treat Discourse Onebox as a separate server-side fetch path. The preview must remain complete from copied share text when those domains are blocked.
 - Keep existing bilibili, NetEase, QQ Music, and Zhihu behavior unless a regression test proves a change is needed.
+- Ebook bytes must remain in the user's browser. Do not add a converter service, upload API, DRM bypass, credential forwarding, or persistent book cache.
+- Ebook content is untrusted active content: strip scripts, event handlers, nested frames/objects, dangerous URLs, and rely on the existing strict forum CSP. Never loosen forum `script-src` for a book.
+- Keep Foliate pinned, self-hosted as a theme asset, license-retained, reproducibly hashed, and free of the PDF adapter.
 
 ## Required validation
 
@@ -33,9 +39,10 @@ node --check javascripts/discourse/api-initializers/init-bilibili-inline-player.
 jq . about.json >/dev/null
 ruby -e 'require "yaml"; YAML.load_file("settings.yml")'
 git diff --check
+sha256sum assets/vendor/foliate-reader.min.js
 ```
 
-After GitHub push, verify the remote branch commit. After updating theme `119`, read back `RemoteTheme.local_version`, `remote_version`, `theme_version`, and `last_error_text`, then smoke-test the public forum and representative provider posts. The exact live commit, verification evidence, and rollback anchor belong in the forum operations report and agent action log.
+After GitHub push, verify the remote branch commit. After updating theme `119`, read back `RemoteTheme.local_version`, `remote_version`, `theme_version`, and `last_error_text`, then smoke-test the public forum, representative provider posts, real EPUB/MOBI/AZW3 attachments, and a PDF non-takeover control. The exact live commit, verification evidence, and rollback anchor belong in the forum operations report and agent action log.
 
 ## Resource location and restore
 

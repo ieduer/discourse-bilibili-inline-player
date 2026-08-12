@@ -125,6 +125,126 @@
   background: #fff;
 }
 
+/* ── EPUB / MOBI / AZW3 local reader ── */
+
+.bilibili-inline-player--ebook .bilibili-inline-player__media {
+  min-height: 8rem;
+  background:
+    radial-gradient(circle at 18% 20%, rgb(255 255 255 / 0.16), transparent 34%),
+    linear-gradient(135deg, #27364a 0%, #435f78 52%, #1c2938 100%);
+}
+
+.bilibili-inline-player--ebook .bilibili-inline-player__play {
+  background: rgb(246 237 213 / 0.96);
+  color: #27364a;
+  box-shadow: 0 6px 18px rgb(15 28 42 / 0.34);
+}
+
+.bilibili-inline-player--ebook .bilibili-inline-player__play:hover,
+.bilibili-inline-player--ebook .bilibili-inline-player__play:focus-visible {
+  background: #fff9e9;
+  box-shadow: 0 10px 24px rgb(15 28 42 / 0.4);
+}
+
+.bilibili-inline-player__ebook-reader {
+  display: flex;
+  flex-direction: column;
+  height: min(76vh, var(--ebook-reader-height, 680px));
+  min-height: 480px;
+  background: color-mix(in srgb, var(--secondary, #fff) 96%, #e9edf2);
+  color: var(--primary, #111);
+}
+
+.bilibili-inline-player__ebook-toolbar,
+.bilibili-inline-player__ebook-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem 0.8rem;
+  background: var(--secondary, #fff);
+}
+
+.bilibili-inline-player__ebook-toolbar {
+  border-bottom: 1px solid var(--bili-card-border);
+}
+
+.bilibili-inline-player__ebook-footer {
+  justify-content: space-between;
+  border-top: 1px solid var(--bili-card-border);
+}
+
+.bilibili-inline-player__ebook-title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--primary, #111);
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bilibili-inline-player__ebook-button,
+.bilibili-inline-player__ebook-toc {
+  min-height: 2.2rem;
+  border: 1px solid var(--bili-card-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--secondary, #fff) 92%, var(--primary-low, #ececec));
+  color: var(--primary, #111);
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.bilibili-inline-player__ebook-button {
+  padding: 0.4rem 0.68rem;
+  cursor: pointer;
+}
+
+.bilibili-inline-player__ebook-button:disabled,
+.bilibili-inline-player__ebook-toc:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.bilibili-inline-player__ebook-toc {
+  max-width: 12rem;
+  padding: 0.35rem 0.45rem;
+}
+
+.bilibili-inline-player__ebook-viewport {
+  position: relative;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--secondary, #fff) 97%, #d7dde5);
+}
+
+.bilibili-inline-player__ebook-viewport foliate-view {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.bilibili-inline-player__ebook-status {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--primary-medium, #666);
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bilibili-inline-player__ebook-error {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  padding: 2rem;
+  color: var(--primary-medium, #666);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  text-align: center;
+}
+
 /* ═══════════════════════════════════════════════════
    Compact audio card (NetEase single songs / programs)
    Single-row unified dark card — Spotify/Discord style
@@ -552,6 +672,26 @@
     min-height: 2.6rem;
     padding: 0.6rem 1.1rem;
     font-size: 0.88rem;
+  }
+
+  .bilibili-inline-player__ebook-reader {
+    height: 68vh;
+    min-height: 460px;
+  }
+
+  .bilibili-inline-player__ebook-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .bilibili-inline-player__ebook-title {
+    order: -1;
+    flex-basis: 100%;
+  }
+
+  .bilibili-inline-player__ebook-toc {
+    min-width: 0;
+    flex: 1;
+    max-width: none;
   }
 
   .bilibili-inline-player__footer {

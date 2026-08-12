@@ -14,6 +14,7 @@ const executableSource = initializerSource
   .concat(`
 globalThis.__themeParserTestApi = {
   buildXiaohongshuPreviewText,
+  collectEbookAttachmentCandidates,
   collectEmbedTextCandidates,
   collectIframeCandidates,
   collectXiaohongshuInlineCandidates,
@@ -27,10 +28,13 @@ globalThis.__themeParserTestApi = {
   getPreviewAspectRatio,
   isKnownInlineKind,
   shouldAutoExpandXiaohongshu,
+  shouldAutoExpandEmbed,
   shouldShowDirectSourceLink,
   extractXiaohongshuShareContext,
   parseBilibiliUrl,
+  parseEbookAttachmentUrl,
   placeCandidateReplacement,
+  sanitizeEbookCss,
 };
 `);
 const context = {
@@ -47,6 +51,7 @@ vm.runInNewContext(executableSource, context, {
 
 const {
   buildXiaohongshuPreviewText,
+  collectEbookAttachmentCandidates,
   collectEmbedTextCandidates,
   collectIframeCandidates,
   collectXiaohongshuInlineCandidates,
@@ -60,11 +65,132 @@ const {
   getPreviewAspectRatio,
   isKnownInlineKind,
   shouldAutoExpandXiaohongshu,
+  shouldAutoExpandEmbed,
   shouldShowDirectSourceLink,
   extractXiaohongshuShareContext,
   parseBilibiliUrl,
+  parseEbookAttachmentUrl,
   placeCandidateReplacement,
+  sanitizeEbookCss,
 } = context.__themeParserTestApi;
+
+test("parses only EPUB, MOBI, and AZW3 attachment URLs", () => {
+  for (const [extension, format] of [
+    ["epub", "epub"],
+    ["MOBI", "mobi"],
+    ["azw3", "azw3"],
+  ]) {
+    const source = `https://files.rdfzer.com/original/ebook/sample.${extension}?download=1`;
+    const parsed = parseEbookAttachmentUrl(source);
+
+    assert.equal(parsed.provider, "ebook");
+    assert.equal(parsed.kind, "ebook");
+    assert.equal(parsed.format, format);
+    assert.equal(parsed.filename, `sample.${extension}`);
+    assert.equal(parsed.canonicalUrl, source);
+    assert.equal(isKnownInlineKind(parsed), true);
+    assert.equal(getInitialButtonLabel(parsed), "打开阅读");
+    assert.equal(getMetaLine(parsed), `${format.toUpperCase()} 电子书`);
+    assert.equal(getFooterMeta(parsed), "浏览器本地阅读 · 不上传第三方");
+    assert.equal(getOpenLabel(parsed), "下载原文件");
+    assert.equal(getPreviewAspectRatio(parsed), "auto");
+    assert.equal(shouldShowDirectSourceLink(parsed), true);
+  }
+});
+
+test("leaves official and unsupported document formats alone", () => {
+  for (const extension of ["pdf", "txt", "docx", "fb2", "cbz", "zip"]) {
+    assert.equal(
+      parseEbookAttachmentUrl(`https://files.rdfzer.com/original/document.${extension}`),
+      null,
+      extension
+    );
+  }
+
+  assert.equal(parseEbookAttachmentUrl("javascript:alert(1).epub"), null);
+  assert.equal(parseEbookAttachmentUrl("https://user@example.com/private.epub"), null);
+});
+
+test("collects supported ebook attachments without taking over PDF", () => {
+  const makeAnchor = (href) => {
+    const paragraph = {
+      dataset: {},
+      querySelectorAll: () => [anchor],
+    };
+    const anchor = {
+      dataset: {},
+      href,
+      textContent: href.split("/").at(-1),
+      closest(selector) {
+        if (selector === "p") {
+          return paragraph;
+        }
+
+        return null;
+      },
+    };
+    return { anchor, paragraph };
+  };
+  const epub = makeAnchor("https://files.rdfzer.com/books/fixture.epub");
+  const mobi = makeAnchor("https://files.rdfzer.com/books/fixture.mobi");
+  const azw3 = makeAnchor("https://files.rdfzer.com/books/fixture.azw3");
+  const pdf = makeAnchor("https://files.rdfzer.com/books/official.pdf");
+  const cooked = {
+    querySelectorAll: (selector) =>
+      selector === "a.attachment[href]" ? [epub.anchor, mobi.anchor, azw3.anchor, pdf.anchor] : [],
+  };
+  const candidates = collectEbookAttachmentCandidates(cooked, []);
+
+  assert.deepEqual(
+    Array.from(candidates, ({ parsed }) => parsed.format),
+    ["epub", "mobi", "azw3"]
+  );
+  assert.equal(candidates.some(({ target }) => target === pdf.paragraph), false);
+});
+
+test("ebook reader has an admin kill switch and permanent download fallback", () => {
+  const parsed = parseEbookAttachmentUrl("https://files.rdfzer.com/books/fixture.epub");
+
+  context.settings.show_open_link = false;
+  assert.equal(shouldShowDirectSourceLink(parsed), true);
+
+  context.settings.enable_ebook_reader = false;
+  assert.equal(isKnownInlineKind(parsed), false);
+  delete context.settings.enable_ebook_reader;
+  delete context.settings.show_open_link;
+});
+
+test("ebook sanitizer removes remote CSS loads while keeping bundled resources", () => {
+  const css = [
+    '@import "https://tracker.example/import.css";',
+    ".remote { background: url(//tracker.example/pixel.png); }",
+    ".active { background: url(javascript:alert(1)); }",
+    ".local { background: url(blob:https://forum.example/local); }",
+    ".inline { background: url(data:image/png;base64,fixture); }",
+  ].join("\n");
+  const sanitized = sanitizeEbookCss(css);
+
+  assert.doesNotMatch(sanitized, /@import|tracker\.example|javascript:/u);
+  assert.match(sanitized, /blob:https:\/\/forum\.example\/local/u);
+  assert.match(sanitized, /data:image\/png;base64,fixture/u);
+  assert.match(initializerSource, /if \(detail\.isScript\) \{\s*detail\.allow = false;/u);
+});
+
+test("safe inline providers default to expanded without forcing source cards", () => {
+  const ebook = parseEbookAttachmentUrl("https://files.rdfzer.com/books/fixture.epub");
+  const video = parseBilibiliUrl("https://www.bilibili.com/video/BV1xx411c7mD");
+  const zhihu = parseBilibiliUrl("https://www.zhihu.com/question/123456");
+
+  assert.equal(shouldAutoExpandEmbed(ebook), true);
+  assert.equal(shouldAutoExpandEmbed(video), true);
+  assert.equal(shouldAutoExpandEmbed(zhihu), false);
+
+  context.settings.auto_expand_embeds = false;
+  assert.equal(shouldAutoExpandEmbed(ebook), false);
+  assert.equal(shouldAutoExpandEmbed(video), false);
+  assert.equal(shouldAutoExpandXiaohongshu(parseBilibiliUrl("https://xhslink.cn/o/Fixture123")), false);
+  delete context.settings.auto_expand_embeds;
+});
 
 test("parses Xiaohongshu note URLs and preserves share parameters", () => {
   const source =
@@ -349,13 +475,21 @@ test("always keeps a direct source link for Xiaohongshu", () => {
   delete context.settings.show_open_link;
 });
 
-test("defaults Xiaohongshu to expanded and obeys the admin kill switch", () => {
+test("routes safe embeds through the shared automatic expansion path", () => {
   const parsed = parseBilibiliUrl("https://xhslink.cn/o/Fixture123");
 
   assert.equal(shouldAutoExpandXiaohongshu(parsed), true);
   assert.match(
     initializerSource,
-    /if \(shouldAutoExpandXiaohongshu\(metadata\.parsed\)\)[\s\S]{0,240}renderLoadedPlayer\(wrapper, state\.iframeUrl\)/u
+    /if \(shouldAutoExpandEmbed\(metadata\.parsed\)\)[\s\S]{0,160}autoExpandWrapper\(wrapper\)/u
+  );
+  assert.match(
+    initializerSource,
+    /const nonAutoplayUrl = state\.noAutoplayIframeUrl \|\| state\.iframeUrl;[\s\S]{0,120}renderLoadedPlayer\(wrapper, nonAutoplayUrl\)/u
+  );
+  assert.match(
+    initializerSource,
+    /function renderLoadedPlayer\(wrapper, iframeUrl, \{ allowAutoplay = false \} = \{\}\)/u
   );
 
   context.settings.enable_xiaohongshu_inline_page = false;

@@ -1,12 +1,17 @@
 enabled:
   default: true
   type: bool
-  description: Enable inline bilibili, NetEase Cloud Music, QQ Music, Zhihu, Xiaohongshu, and RedNote cards for supported URLs.
+  description: Enable this supplemental preview suite for formats and providers that Discourse does not preview natively.
 
 autoplay_on_click:
   default: true
   type: bool
   description: Add autoplay=1 when the user clicks the cover card.
+
+auto_expand_embeds:
+  default: true
+  type: bool
+  description: Show every safe inline player or reader immediately. Automatic expansion always uses a non-autoplay media URL; disable to restore click-to-expand cards.
 
 max_embeds_per_post:
   default: 4
@@ -14,6 +19,25 @@ max_embeds_per_post:
   min: 1
   max: 20
   description: Maximum number of supported media URLs to enhance in one cooked post.
+
+enable_ebook_reader:
+  default: true
+  type: bool
+  description: Render EPUB, MOBI, and AZW3 attachments in the browser. PDF remains owned by Discourse's official PDF Previews component.
+
+max_ebook_size_mb:
+  default: 50
+  type: integer
+  min: 1
+  max: 100
+  description: Maximum ebook size to load into the inline browser reader. Larger files keep their download fallback.
+
+ebook_reader_height:
+  default: 680
+  type: integer
+  min: 360
+  max: 1000
+  description: Desktop inline ebook reader height in pixels; mobile uses a viewport-relative height.
 
 show_open_link:
   default: true

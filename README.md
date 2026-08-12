@@ -1,6 +1,15 @@
-# Bilibili + NetEase + QQ Music Embeds + Zhihu + Xiaohongshu Source Cards
+# Extended Preview & Embed Suite for Discourse
 
-A Discourse theme component that turns supported bilibili, NetEase Cloud Music, QQ Music, Zhihu, Xiaohongshu, and RedNote links into inline embeds or source cards without requiring a container rebuild.
+A Discourse theme component that fills preview and embed gaps left by Discourse core and official Discourse components. It currently adds bilibili, NetEase Cloud Music, QQ Music, Zhihu, Xiaohongshu/RedNote, plus inline EPUB, MOBI, and AZW3 reading without requiring a container rebuild.
+
+## Ownership boundary
+
+This repository is the supplemental layer for content that Discourse does not preview natively. It must not take over a format once Discourse core or an official Discourse component provides the required preview.
+
+- Images and supported audio/video remain owned by Discourse core.
+- PDF remains owned by the official [`discourse-pdf-previews`](https://github.com/discourse/discourse-pdf-previews) component and is deliberately rejected by this component's ebook parser.
+- Unsupported attachments always retain a direct download fallback.
+- Future providers and formats must pass the same official-support audit before being added here.
 
 This repository is intentionally implemented as a remote theme component, not a server plugin:
 
@@ -10,6 +19,16 @@ This repository is intentionally implemented as a remote theme component, not a 
 - open-source and portable across self-hosted Discourse instances
 
 ## Support matrix
+
+Inline ebook reading for Discourse attachments:
+
+- `.epub` (EPUB)
+- `.mobi` (Mobipocket, including legacy MOBI)
+- `.azw3` (KF8/AZW3)
+
+The reader is visible by default, fetches the attachment only in the user's browser, never uploads book bytes to a conversion service, and provides table-of-contents navigation, previous/next paging, reading progress, keyboard arrows, responsive mobile layout, and a permanent original-file link. It uses a pinned MIT-licensed Foliate JS bundle stored as a remote-theme asset. Active book markup is stripped before rendition and the forum CSP remains the final script-execution boundary.
+
+Every safe inline player and reader is expanded by default. Automatic media expansion uses the provider's non-autoplay URL when available; the `auto_expand_embeds` administrator setting restores click-to-expand behavior when disabled. Content types without a safe inline renderer, such as Zhihu source pages, remain source cards.
 
 Inline playback:
 
@@ -97,6 +116,9 @@ Still not supported:
 - opaque non-Xiaohongshu short-link tokens that cannot be resolved client-side before Discourse oneboxes them
 - non-Xiaohongshu inline links inside a sentence
 - favorites, collections, channels, playlists, watch-later, and other multi-item containers
+- DRM-encrypted EPUB/MOBI/AZW3 files
+- PDF, because the official Discourse PDF Previews component owns that format
+- FB2 and CBZ until the forum enables those upload extensions and they receive independent acceptance
 
 The safest input pattern is still a standalone bilibili URL on its own line, which matches how Discourse onebox-style embeds are normally triggered.
 
@@ -119,6 +141,7 @@ Pasted Xiaohongshu share text, with either plain or auto-linkified share URLs, i
 13. For Zhihu, the component upgrades supported question, answer, and article links into a unified card and falls back to opening the canonical Zhihu source page.
 14. For Xiaohongshu and RedNote, the component recognizes official note paths plus known `xhslink.com` / `xhslink.cn` share forms, turns copied share text into a real title and description, and defaults to the lazy-loaded expanded official note page while preserving the direct source link.
 15. For content types without a stable official iframe path in this theme-component-only architecture, the component still upgrades the post into a unified media card and falls back to opening the canonical source page.
+16. For EPUB, MOBI, and AZW3 attachment links, the component downloads the bounded file in the current browser, removes active markup, and opens it in the local Foliate reader. Parse, size, CORS, or DRM failures leave the original download available.
 
 The component does not modify Discourse core and does not require a rebuild.
 
@@ -153,11 +176,15 @@ No rebuild is required.
 
 - `enabled`
 - `autoplay_on_click`
+- `auto_expand_embeds`
 - `max_embeds_per_post`
 - `show_open_link`
 - `enable_experimental_live_embed`
 - `enable_live_danmaku`
 - `enable_xiaohongshu_inline_page`
+- `enable_ebook_reader`
+- `max_ebook_size_mb`
+- `ebook_reader_height`
 - `auto_open_on_high_risk_env`
 - `button_label`
 
@@ -173,14 +200,18 @@ No rebuild is required.
 - Xiaohongshu and RedNote cards default to an expanded lazy-loaded iframe for the official user-supplied note URL. A strict custom `frame-src` policy must allow both the root and wildcard forms of `xiaohongshu.com`, `xhslink.com`, `xhslink.cn`, and `rednote.com` (for example, `https://xiaohongshu.com https://*.xiaohongshu.com`).
 - Discourse Onebox is a separate server-side stage. The component does not require Onebox metadata; copied share text supplies the preview content, and `blocked_onebox_domains` can prevent redundant server fetches.
 - If a supported media link cannot be parsed, the original cooked content is left untouched.
+- Ebook parsing only applies to cooked Discourse attachment links ending in `.epub`, `.mobi`, or `.azw3`; arbitrary inline URLs and PDF attachments are not taken over.
+- The reader bundle is self-hosted as a theme asset. No runtime CDN, resolver, converter, account, cookie, or API key is required.
+- The default ebook inline limit is 50 MiB and can be configured from 1–100 MiB. The site upload limit is separate; a larger attachment remains downloadable.
+- The current forum CSP blocks untrusted book scripts. Do not loosen `script-src` to include `blob:` or unsafe inline script for ebook compatibility.
 
 ## Verification standard
 
 1. Source of truth: GitHub `main` and the clean checkout at `/Users/ylsuen/Discourse/discourse-bilibili-inline-player`.
 2. Health probe: `https://forum.rdfzer.com/`, `/srv/status`, and `/session/csrf` must continue returning success.
-3. Contract checks: run `npm test`, validate `about.json` and `settings.yml`, confirm the intended `blocked_onebox_domains` policy, then confirm Discourse remote theme `119` reports the intended Git commit without `last_error_text`.
+3. Contract checks: run `npm test`, validate `about.json` and `settings.yml`, verify the vendored Foliate bundle hash/license, confirm the intended `blocked_onebox_domains` policy, then confirm Discourse remote theme `119` reports the intended Git commit without `last_error_text`.
 4. Deploy command: push a tested commit to GitHub, then update remote theme `119` through Discourse theme administration. Never add this component to `app.yml` or rebuild the container.
-5. Dependency regression: verify one real cooked post for bilibili, NetEase, QQ Music, Zhihu, a full Xiaohongshu note URL, and an `xhslink.cn` short share; the Xiaohongshu card must default to an expanded official page with real title, text, and media.
+5. Dependency regression: verify one real cooked post for bilibili, NetEase, QQ Music, Zhihu, a full Xiaohongshu note URL, and an `xhslink.cn` short share; also open, page, and navigate the TOC of real EPUB, MOBI, and KF8/AZW3 attachments. Confirm a PDF attachment is still owned by the official PDF component.
 6. Backup and restore: the previous Git commit is the immutable backup; a fresh clone of the repository is the restore path.
 7. Rollback: revert the release commit on GitHub and refresh remote theme `119`, then repeat health and provider regression checks.
 8. Last verified release evidence is recorded in `PROJECT_STATE.md` and the forum operations report; live Discourse readback is authoritative.

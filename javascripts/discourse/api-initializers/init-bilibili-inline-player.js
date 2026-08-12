@@ -17,6 +17,12 @@ const XIAOHONGSHU_SHORT_HOSTS = new Set([
   "xhslink.cn",
   "www.xhslink.cn",
 ]);
+const EBOOK_EXTENSIONS = new Set(["epub", "mobi", "azw3"]);
+const EBOOK_MIME_TYPES = {
+  epub: "application/epub+zip",
+  mobi: "application/x-mobipocket-ebook",
+  azw3: "application/vnd.amazon.ebook",
+};
 const VIDEO_PATH_RE = /^\/(?:s\/)?video\/(BV[0-9A-Za-z]+|av\d+)\/?$/i;
 const SHORT_VIDEO_PATH_RE = /^\/(?:video\/)?(BV[0-9A-Za-z]+|av\d+)(?:\/p(\d+))?\/?$/i;
 const BANGUMI_PATH_RE = /^\/bangumi\/play\/(ep|ss)(\d+)\/?$/i;
@@ -59,6 +65,9 @@ const URL_LIKE_RE =
 const XIAOHONGSHU_URL_LIKE_RE =
   /(?:^|[\s(（\[【{《「『])((?:https?:\/\/)?(?:www\.)?(?:xiaohongshu\.com|rednote\.com|xhslink\.(?:com|cn))\/[^\s"'<>，。；！？、（）【】《》「」『』]+)/gi;
 const DEFAULT_ASPECT_RATIO = "16 / 9";
+const DEFAULT_EBOOK_READER_HEIGHT = 680;
+const DEFAULT_MAX_EBOOK_SIZE_MB = 50;
+const BYTES_PER_MEBIBYTE = 1024 * 1024;
 const JSONP_TIMEOUT_MS = 8000;
 const BILIBILI_STUCK_HELP_DELAY_MS = 5000;
 const NETEASE_OUTCHAIN_TYPE_BY_MEDIA = {
@@ -76,6 +85,9 @@ const themeSettings = globalThis.settings || {};
 const wrapperState = new WeakMap();
 const videoInfoCache = new Map();
 const qqMusicSongInfoCache = new Map();
+const themeModulePromises = new Map();
+const activeEbookReaders = new Map();
+let ebookCleanupObserver = null;
 
 function getBooleanSetting(name, fallback) {
   const value = themeSettings[name];
@@ -90,6 +102,15 @@ function getIntegerSetting(name, fallback) {
 function getStringSetting(name, fallback) {
   const value = themeSettings[name];
   return typeof value === "string" && value.length > 0 ? value : fallback;
+}
+
+function getBoundedIntegerSetting(name, fallback, min, max) {
+  return Math.min(max, Math.max(min, getIntegerSetting(name, fallback)));
+}
+
+function getThemeUploadUrl(name) {
+  const value = themeSettings.theme_uploads?.[name];
+  return typeof value === "string" && value.length > 0 ? value : "";
 }
 
 function buildVideoCanonicalUrl(id, page) {
@@ -853,6 +874,54 @@ function normalizeUrlLikeString(value, { trimTrailingPunctuation = false } = {})
   return trimmed;
 }
 
+function getUrlFilename(url) {
+  const rawName = url.pathname.split("/").filter(Boolean).at(-1) || "";
+
+  try {
+    return decodeURIComponent(rawName);
+  } catch {
+    return rawName;
+  }
+}
+
+function parseEbookAttachmentUrl(href) {
+  let url;
+
+  try {
+    url = new URL(
+      normalizeUrlLikeString(href),
+      globalThis.location?.href || "https://forum.invalid/"
+    );
+  } catch {
+    return null;
+  }
+
+  if (
+    !["http:", "https:"].includes(url.protocol) ||
+    url.username ||
+    url.password
+  ) {
+    return null;
+  }
+
+  const filename = getUrlFilename(url);
+  const extension = filename.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase() || "";
+
+  if (!EBOOK_EXTENSIONS.has(extension)) {
+    return null;
+  }
+
+  return {
+    provider: "ebook",
+    kind: "ebook",
+    format: extension,
+    filename,
+    page: 1,
+    rawId: filename,
+    canonicalUrl: url.toString(),
+  };
+}
+
 function parseBilibiliUrl(href) {
   let url;
 
@@ -1132,6 +1201,8 @@ function getMetaLine(parsed) {
       return getZhihuMetaLine(parsed);
     case "xiaohongshu":
       return getXiaohongshuMetaLine(parsed);
+    case "ebook":
+      return `${parsed.format.toUpperCase()} 电子书`;
     default:
       return "bilibili";
   }
@@ -1236,6 +1307,8 @@ function getPreviewStatText(parsed, viewCount = null) {
     case "zhihu":
     case "xiaohongshu":
       return getMetaLine(parsed);
+    case "ebook":
+      return getMetaLine(parsed);
     default:
       return "";
   }
@@ -1318,6 +1391,8 @@ function getFallbackTitle(parsed) {
       return getZhihuFallbackTitle(parsed);
     case "xiaohongshu":
       return getXiaohongshuMetaLine(parsed);
+    case "ebook":
+      return parsed.filename || `${parsed.format.toUpperCase()} 电子书`;
     default:
       return parsed.rawId || "bilibili";
   }
@@ -1370,11 +1445,20 @@ function getZhihuFallbackTitle(parsed) {
 function shouldAutoExpandXiaohongshu(parsed) {
   return (
     parsed?.kind === "xiaohongshu" &&
+    getBooleanSetting("auto_expand_embeds", true) &&
     getBooleanSetting("enable_xiaohongshu_inline_page", true)
   );
 }
 
+function shouldAutoExpandEmbed(parsed) {
+  return getBooleanSetting("auto_expand_embeds", true) && isKnownInlineKind(parsed);
+}
+
 function isKnownInlineKind(parsed) {
+  if (parsed.kind === "ebook") {
+    return getBooleanSetting("enable_ebook_reader", true);
+  }
+
   if (parsed.kind === "xiaohongshu") {
     return shouldAutoExpandXiaohongshu(parsed);
   }
@@ -1395,6 +1479,10 @@ function isKnownInlineKind(parsed) {
 }
 
 function getInitialButtonLabel(parsed) {
+  if (parsed.provider === "ebook" && isKnownInlineKind(parsed)) {
+    return "打开阅读";
+  }
+
   if (parsed.provider === "xiaohongshu" && isKnownInlineKind(parsed)) {
     return "展开笔记";
   }
@@ -1403,7 +1491,11 @@ function getInitialButtonLabel(parsed) {
 }
 
 function shouldShowDirectSourceLink(parsed) {
-  return parsed?.provider === "xiaohongshu" || getBooleanSetting("show_open_link", true);
+  return (
+    parsed?.provider === "xiaohongshu" ||
+    parsed?.provider === "ebook" ||
+    getBooleanSetting("show_open_link", true)
+  );
 }
 
 function getLoadedOpenLabel(parsed) {
@@ -1440,6 +1532,8 @@ function getFooterMeta(parsed) {
       }
 
       return parsed.contentType === "share" ? "小红书分享链接" : "小红书原文卡片";
+    case "ebook":
+      return "浏览器本地阅读 · 不上传第三方";
     default:
       return "bilibili";
   }
@@ -1473,6 +1567,10 @@ function getLiveFooterMeta(parsed) {
 }
 
 function getOpenLabel(parsed) {
+  if (parsed.provider === "ebook") {
+    return "下载原文件";
+  }
+
   if (parsed.provider === "xiaohongshu") {
     return parsed.brand === "rednote" ? "前往 RedNote 查看" : "前往小红书查看";
   }
@@ -1489,6 +1587,10 @@ function getOpenLabel(parsed) {
 }
 
 function getEmbedTitle(parsed) {
+  if (parsed.provider === "ebook") {
+    return `${parsed.format.toUpperCase()} ebook reader`;
+  }
+
   if (parsed.provider === "xiaohongshu") {
     return parsed.brand === "rednote" ? "RedNote source page" : "Xiaohongshu source page";
   }
@@ -1969,6 +2071,21 @@ function extractXiaohongshuCookedMetadata(target, fallbackAnchor, parsed) {
 }
 
 function buildMetadata(target, fallbackAnchor, parsed) {
+  if (parsed.provider === "ebook") {
+    const anchorTitle = normalizeTitleText(fallbackAnchor?.textContent || "");
+
+    return {
+      parsed,
+      title: anchorTitle || parsed.filename || getFallbackTitle(parsed),
+      description: `${parsed.format.toUpperCase()} 格式将在此浏览器中本地解析。`,
+      poster: "",
+      canonicalUrl: parsed.canonicalUrl,
+      metaLine: getMetaLine(parsed),
+      viewCount: null,
+      environmentRisk: { level: "none", message: "" },
+    };
+  }
+
   if (parsed.provider === "xiaohongshu") {
     const context = extractXiaohongshuShareContext(target);
     const cooked = extractXiaohongshuCookedMetadata(target, fallbackAnchor, parsed);
@@ -2169,6 +2286,7 @@ function getPreviewAspectRatio(parsed) {
       return isCompactQQMusic(parsed) ? "auto" : "4 / 3";
     case "zhihu":
     case "xiaohongshu":
+    case "ebook":
       return "auto";
     default:
       return "4 / 3";
@@ -2220,12 +2338,8 @@ function buildWrapper(metadata) {
 
   primeEmbedState(wrapper);
 
-  if (shouldAutoExpandXiaohongshu(metadata.parsed)) {
-    const state = wrapperState.get(wrapper);
-
-    if (state?.iframeUrl) {
-      renderLoadedPlayer(wrapper, state.iframeUrl);
-    }
+  if (shouldAutoExpandEmbed(metadata.parsed)) {
+    Promise.resolve().then(() => autoExpandWrapper(wrapper));
   }
 
   return wrapper;
@@ -2430,6 +2544,18 @@ function primeEmbedState(wrapper) {
     return;
   }
 
+  if (state.parsed.kind === "ebook") {
+    state.iframeUrl = null;
+    state.externalOnly = !getBooleanSetting("enable_ebook_reader", true);
+    state.resolvePromise = Promise.resolve(state.parsed);
+
+    if (state.externalOnly) {
+      setButtonLabel(wrapper, getOpenLabel(state.parsed));
+    }
+
+    return;
+  }
+
   if (state.parsed.kind !== "video") {
     state.iframeUrl = null;
     state.externalOnly = true;
@@ -2476,6 +2602,33 @@ function primeEmbedState(wrapper) {
       setButtonLabel(wrapper, getOpenLabel(state.parsed));
       return null;
     });
+}
+
+async function autoExpandWrapper(wrapper) {
+  const state = wrapperState.get(wrapper);
+
+  if (!state?.parsed || wrapper.dataset.bilibiliLoaded === "1") {
+    return;
+  }
+
+  if (state.parsed.kind === "ebook") {
+    await activateEbookReader(wrapper);
+    return;
+  }
+
+  if (state.resolvePromise) {
+    await state.resolvePromise;
+  }
+
+  if (state.externalOnly) {
+    return;
+  }
+
+  const nonAutoplayUrl = state.noAutoplayIframeUrl || state.iframeUrl;
+
+  if (nonAutoplayUrl) {
+    renderLoadedPlayer(wrapper, nonAutoplayUrl);
+  }
 }
 
 function supportsNoAutoplayRetry(state) {
@@ -2611,7 +2764,7 @@ function buildLoadedFooter(wrapper) {
   return footer;
 }
 
-function renderLoadedPlayer(wrapper, iframeUrl) {
+function renderLoadedPlayer(wrapper, iframeUrl, { allowAutoplay = false } = {}) {
   const state = wrapperState.get(wrapper);
 
   if (!state?.parsed || !iframeUrl) {
@@ -2636,7 +2789,9 @@ function renderLoadedPlayer(wrapper, iframeUrl) {
   iframe.src = iframeUrl;
   iframe.loading = "lazy";
   iframe.referrerPolicy = "strict-origin-when-cross-origin";
-  iframe.allow = "autoplay; fullscreen; picture-in-picture";
+  iframe.allow = allowAutoplay
+    ? "autoplay; fullscreen; picture-in-picture"
+    : "fullscreen; picture-in-picture";
   iframe.allowFullscreen = true;
   iframe.title = wrapper.dataset.bilibiliTitle || getEmbedTitle(state.parsed);
 
@@ -2708,15 +2863,395 @@ function maybeResolveMusicPreviewMetadata(wrapper) {
   }
 }
 
+function loadThemeModule(assetName, ready) {
+  if (ready()) {
+    return Promise.resolve();
+  }
+
+  if (themeModulePromises.has(assetName)) {
+    return themeModulePromises.get(assetName);
+  }
+
+  const assetUrl = getThemeUploadUrl(assetName);
+
+  if (!assetUrl) {
+    return Promise.reject(new Error(`Missing theme asset: ${assetName}`));
+  }
+
+  const promise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.type = "module";
+    script.src = assetUrl;
+    script.async = true;
+    script.addEventListener("load", () => (ready() ? resolve() : reject(new Error("Module did not register"))), {
+      once: true,
+    });
+    script.addEventListener("error", () => reject(new Error("Module failed to load")), { once: true });
+    document.head.appendChild(script);
+  }).catch((error) => {
+    themeModulePromises.delete(assetName);
+    throw error;
+  });
+
+  themeModulePromises.set(assetName, promise);
+  return promise;
+}
+
+function getMaxEbookBytes() {
+  return (
+    getBoundedIntegerSetting(
+      "max_ebook_size_mb",
+      DEFAULT_MAX_EBOOK_SIZE_MB,
+      1,
+      100
+    ) * BYTES_PER_MEBIBYTE
+  );
+}
+
+async function fetchEbookFile(parsed) {
+  const maxBytes = getMaxEbookBytes();
+  const response = await fetch(parsed.canonicalUrl, {
+    credentials: "same-origin",
+    redirect: "follow",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Attachment request failed (${response.status})`);
+  }
+
+  const declaredBytes = Number.parseInt(response.headers.get("content-length") || "", 10);
+
+  if (Number.isFinite(declaredBytes) && declaredBytes > maxBytes) {
+    throw new RangeError("Ebook exceeds the inline reader size limit");
+  }
+
+  const blob = await response.blob();
+
+  if (blob.size > maxBytes) {
+    throw new RangeError("Ebook exceeds the inline reader size limit");
+  }
+
+  return new File([blob], parsed.filename, {
+    type: blob.type || EBOOK_MIME_TYPES[parsed.format] || "application/octet-stream",
+  });
+}
+
+function formatEbookMetadataValue(value) {
+  if (Array.isArray(value)) {
+    return value.map(formatEbookMetadataValue).filter(Boolean).join(" / ");
+  }
+
+  if (value && typeof value === "object") {
+    if (value.name) {
+      return formatEbookMetadataValue(value.name);
+    }
+
+    const firstValue = Object.values(value).find(Boolean);
+    return formatEbookMetadataValue(firstValue);
+  }
+
+  return typeof value === "string" ? normalizeTitleText(value) : "";
+}
+
+function flattenEbookToc(items, depth = 0, result = []) {
+  for (const item of items || []) {
+    if (item?.href) {
+      result.push({
+        href: item.href,
+        label: `${"　".repeat(depth)}${formatEbookMetadataValue(item.label) || "未命名章节"}`,
+      });
+    }
+
+    flattenEbookToc(item?.subitems || item?.children, depth + 1, result);
+  }
+
+  return result;
+}
+
+function sanitizeEbookCss(source) {
+  return String(source ?? "")
+    .replace(/@import\s+[^;]+;?/giu, "")
+    .replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/giu, (match, quote, value) =>
+      /^(?:https?:|\/\/|javascript:)/iu.test(value.trim()) ? 'url("")' : match
+    );
+}
+
+async function sanitizeEbookResource(data, type = "") {
+  const normalizedType = String(type).toLowerCase();
+  const wasBlob = data instanceof Blob;
+
+  if (normalizedType.includes("css")) {
+    const source = wasBlob ? await data.text() : String(data ?? "");
+    const sanitized = sanitizeEbookCss(source);
+    return wasBlob ? new Blob([sanitized], { type: data.type }) : sanitized;
+  }
+
+  const isMarkup =
+    normalizedType.includes("html") ||
+    normalizedType.includes("xhtml") ||
+    normalizedType.includes("svg+xml");
+
+  if (!isMarkup || !globalThis.DOMParser || !globalThis.XMLSerializer) {
+    return data;
+  }
+
+  const source = wasBlob ? await data.text() : String(data ?? "");
+  const xmlMode = normalizedType.includes("xhtml") || normalizedType.includes("svg+xml");
+  const parser = new DOMParser();
+  const documentType = normalizedType.includes("svg+xml")
+    ? "image/svg+xml"
+    : xmlMode
+      ? "application/xhtml+xml"
+      : "text/html";
+  const parsed = parser.parseFromString(source, documentType);
+
+  if (parsed.querySelector("parsererror")) {
+    return "";
+  }
+
+  for (const element of parsed.querySelectorAll(
+    "script, iframe, object, embed, base, foreignObject, form, input, button, textarea, select, meta[http-equiv]"
+  )) {
+    element.remove();
+  }
+
+  for (const element of parsed.querySelectorAll("*")) {
+    for (const attribute of Array.from(element.attributes)) {
+      const name = attribute.name.toLowerCase();
+      const value = attribute.value.trim().toLowerCase();
+      const isUrlAttribute = [
+        "action",
+        "data",
+        "formaction",
+        "poster",
+        "src",
+        "srcset",
+        "xlink:href",
+      ].includes(name);
+      const isExternalOrActiveUrl = /^(?:https?:|\/\/|javascript:)/iu.test(value);
+
+      if (
+        name.startsWith("on") ||
+        name === "autoplay" ||
+        (name === "href" && value.startsWith("javascript:")) ||
+        (isUrlAttribute && isExternalOrActiveUrl)
+      ) {
+        element.removeAttribute(attribute.name);
+      } else if (name === "style") {
+        element.setAttribute(attribute.name, sanitizeEbookCss(attribute.value));
+      }
+    }
+  }
+
+  const sanitized = xmlMode
+    ? new XMLSerializer().serializeToString(parsed)
+    : parsed.documentElement.outerHTML;
+
+  return wasBlob ? new Blob([sanitized], { type: data.type }) : sanitized;
+}
+
+function buildEbookReaderShell(wrapper, state) {
+  const reader = createElement("section", "bilibili-inline-player__ebook-reader");
+  const toolbar = createElement("div", "bilibili-inline-player__ebook-toolbar");
+  const previous = createElement("button", "bilibili-inline-player__ebook-button", "上一页");
+  const title = createElement(
+    "div",
+    "bilibili-inline-player__ebook-title",
+    wrapper.dataset.bilibiliTitle || state.parsed.filename
+  );
+  const toc = document.createElement("select");
+  const next = createElement("button", "bilibili-inline-player__ebook-button", "下一页");
+  const viewport = createElement("div", "bilibili-inline-player__ebook-viewport");
+  const status = createElement("div", "bilibili-inline-player__ebook-status", "正在安全加载电子书…");
+  const download = createElement("a", "bilibili-inline-player__footer-link", "下载原文件");
+  const footer = createElement("div", "bilibili-inline-player__ebook-footer");
+
+  previous.type = "button";
+  next.type = "button";
+  previous.disabled = true;
+  next.disabled = true;
+  toc.className = "bilibili-inline-player__ebook-toc";
+  toc.disabled = true;
+  toc.setAttribute("aria-label", "电子书目录");
+  toc.appendChild(new Option("目录", ""));
+  download.href = state.parsed.canonicalUrl;
+  download.target = "_blank";
+  download.rel = "noopener nofollow ugc";
+  reader.style.setProperty(
+    "--ebook-reader-height",
+    `${getBoundedIntegerSetting("ebook_reader_height", DEFAULT_EBOOK_READER_HEIGHT, 360, 1000)}px`
+  );
+  toolbar.append(previous, title, toc, next);
+  footer.append(status, download);
+  reader.append(toolbar, viewport, footer);
+  wrapper.replaceChildren(reader);
+
+  return { reader, previous, title, toc, next, viewport, status };
+}
+
+function ensureEbookCleanupObserver() {
+  if (ebookCleanupObserver || typeof MutationObserver === "undefined" || !document.body) {
+    return;
+  }
+
+  ebookCleanupObserver = new MutationObserver(() => {
+    for (const [wrapper, view] of activeEbookReaders) {
+      if (!wrapper.isConnected) {
+        view.close?.();
+        activeEbookReaders.delete(wrapper);
+      }
+    }
+
+    if (activeEbookReaders.size === 0) {
+      ebookCleanupObserver.disconnect();
+      ebookCleanupObserver = null;
+    }
+  });
+  ebookCleanupObserver.observe(document.body, { childList: true, subtree: true });
+}
+
+function handleEbookArrowKey(event, view) {
+  if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    view.goLeft();
+  } else if (event.key === "ArrowRight") {
+    event.preventDefault();
+    view.goRight();
+  }
+}
+
+async function activateEbookReader(wrapper) {
+  if (wrapper.dataset.bilibiliLoaded === "1" || wrapper.dataset.bilibiliLoading === "1") {
+    return;
+  }
+
+  const state = wrapperState.get(wrapper);
+
+  if (!state?.parsed || state.parsed.kind !== "ebook") {
+    return;
+  }
+
+  if (!getBooleanSetting("enable_ebook_reader", true)) {
+    window.open(state.parsed.canonicalUrl, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  wrapper.dataset.bilibiliLoading = "1";
+  wrapper.classList.add("bilibili-inline-player--loading");
+  const shell = buildEbookReaderShell(wrapper, state);
+
+  try {
+    await loadThemeModule("foliate_reader", () => Boolean(customElements.get("foliate-view")));
+    const file = await fetchEbookFile(state.parsed);
+    const view = document.createElement("foliate-view");
+
+    view.addEventListener("external-link", (event) => {
+      event.preventDefault();
+
+      try {
+        const externalUrl = new URL(event.detail?.href_, state.parsed.canonicalUrl);
+
+        if (["http:", "https:"].includes(externalUrl.protocol)) {
+          window.open(externalUrl.toString(), "_blank", "noopener,noreferrer");
+        }
+      } catch {
+        // Ignore malformed links embedded in untrusted books.
+      }
+    });
+    view.addEventListener("load", (event) => {
+      event.detail?.doc?.addEventListener("keydown", (keyEvent) => handleEbookArrowKey(keyEvent, view));
+    });
+    view.addEventListener("relocate", (event) => {
+      const fraction = Number(event.detail?.fraction);
+      const chapter = formatEbookMetadataValue(event.detail?.tocItem?.label);
+      const progress = Number.isFinite(fraction) ? `${Math.round(fraction * 100)}%` : "阅读中";
+      shell.status.textContent = chapter ? `${progress} · ${chapter}` : progress;
+    });
+
+    shell.viewport.appendChild(view);
+    activeEbookReaders.set(wrapper, view);
+    ensureEbookCleanupObserver();
+    await view.open(file);
+
+    view.book.transformTarget?.addEventListener("load", ({ detail }) => {
+      if (detail.isScript) {
+        detail.allow = false;
+      }
+    });
+    view.book.transformTarget?.addEventListener("data", ({ detail }) => {
+      detail.data = Promise.resolve(detail.data).then((data) => sanitizeEbookResource(data, detail.type));
+    });
+    view.renderer?.setStyles?.(`
+      html { color-scheme: light dark; }
+      body { line-height: 1.65; padding: 0 1rem; }
+      img, svg, video { max-width: 100%; max-height: 100%; }
+      pre { white-space: pre-wrap !important; }
+    `);
+
+    const bookTitle = formatEbookMetadataValue(view.book.metadata?.title);
+    const bookAuthor = formatEbookMetadataValue(view.book.metadata?.author);
+
+    if (bookTitle) {
+      shell.title.textContent = bookAuthor ? `${bookTitle} — ${bookAuthor}` : bookTitle;
+      wrapper.dataset.bilibiliTitle = bookTitle;
+    }
+
+    for (const item of flattenEbookToc(view.book.toc)) {
+      shell.toc.appendChild(new Option(item.label, item.href));
+    }
+
+    shell.toc.disabled = shell.toc.options.length <= 1;
+    shell.previous.disabled = false;
+    shell.next.disabled = false;
+    shell.previous.addEventListener("click", () => view.goLeft());
+    shell.next.addEventListener("click", () => view.goRight());
+    shell.toc.addEventListener("change", () => {
+      if (shell.toc.value) {
+        view.goTo(shell.toc.value);
+      }
+    });
+    shell.reader.tabIndex = 0;
+    shell.reader.addEventListener("keydown", (event) => handleEbookArrowKey(event, view));
+    await view.init({ showTextStart: true });
+
+    wrapper.dataset.bilibiliLoading = "0";
+    wrapper.dataset.bilibiliLoaded = "1";
+    wrapper.classList.remove("bilibili-inline-player--loading");
+    shell.status.textContent = "已在浏览器本地打开";
+  } catch (error) {
+    wrapper.dataset.bilibiliLoading = "0";
+    wrapper.classList.remove("bilibili-inline-player--loading");
+    shell.previous.disabled = true;
+    shell.next.disabled = true;
+    shell.toc.disabled = true;
+    shell.viewport.replaceChildren(
+      createElement(
+        "div",
+        "bilibili-inline-player__ebook-error",
+        error instanceof RangeError
+          ? `文件超过 ${getMaxEbookBytes() / BYTES_PER_MEBIBYTE} MiB 的内嵌阅读限制，请下载阅读。`
+          : "此电子书无法安全内嵌，原文件仍可下载。"
+      )
+    );
+    shell.status.textContent = "内嵌读取失败";
+  }
+}
+
 async function activatePlayer(wrapper) {
   if (wrapper.dataset.bilibiliLoaded === "1" || wrapper.dataset.bilibiliLoading === "1") {
+    return;
+  }
+
+  const state = wrapperState.get(wrapper);
+
+  if (state?.parsed?.kind === "ebook") {
+    await activateEbookReader(wrapper);
     return;
   }
 
   wrapper.dataset.bilibiliLoading = "1";
   wrapper.classList.add("bilibili-inline-player--loading");
 
-  const state = wrapperState.get(wrapper);
   setButtonLabel(wrapper, "加载中…");
 
   if (state?.resolvePromise) {
@@ -2734,7 +3269,9 @@ async function activatePlayer(wrapper) {
     return;
   }
 
-  renderLoadedPlayer(wrapper, state.iframeUrl);
+  renderLoadedPlayer(wrapper, state.iframeUrl, {
+    allowAutoplay: getBooleanSetting("autoplay_on_click", true),
+  });
 }
 
 function collectOneboxCandidates(element) {
@@ -2860,6 +3397,41 @@ function collectXiaohongshuInlineCandidates(element, existingTargets) {
   return results;
 }
 
+function collectEbookAttachmentCandidates(element, existingTargets) {
+  const limit = Math.max(1, getIntegerSetting("max_embeds_per_post", 4));
+  const results = [];
+  const seen = new Set(existingTargets);
+
+  for (const anchor of element.querySelectorAll("a.attachment[href]")) {
+    if (results.length + existingTargets.length >= limit) {
+      break;
+    }
+
+    if (anchor.closest(".bilibili-inline-player, [data-bilibili-inline-player]")) {
+      continue;
+    }
+
+    const parsed = parseEbookAttachmentUrl(anchor.href);
+
+    if (!parsed) {
+      continue;
+    }
+
+    const paragraph = anchor.closest("p");
+    const target =
+      paragraph?.querySelectorAll?.("a.attachment[href]").length === 1 ? paragraph : anchor;
+
+    if (!target || seen.has(target) || target.dataset?.bilibiliInlinePlayer) {
+      continue;
+    }
+
+    seen.add(target);
+    results.push({ target, anchor, parsed });
+  }
+
+  return results;
+}
+
 function collectIframeCandidates(element, existingTargets) {
   const limit = Math.max(1, getIntegerSetting("max_embeds_per_post", 4));
   const results = [];
@@ -2963,11 +3535,20 @@ export default apiInitializer((api) => {
       element,
       [...oneboxCandidates, ...standaloneCandidates].map((candidate) => candidate.target)
     );
-    const iframeCandidates = collectIframeCandidates(
+    const ebookAttachmentCandidates = collectEbookAttachmentCandidates(
       element,
       [...oneboxCandidates, ...standaloneCandidates, ...xiaohongshuInlineCandidates].map(
         (candidate) => candidate.target
       )
+    );
+    const iframeCandidates = collectIframeCandidates(
+      element,
+      [
+        ...oneboxCandidates,
+        ...standaloneCandidates,
+        ...xiaohongshuInlineCandidates,
+        ...ebookAttachmentCandidates,
+      ].map((candidate) => candidate.target)
     );
     const embedTextCandidates = collectEmbedTextCandidates(
       element,
@@ -2975,6 +3556,7 @@ export default apiInitializer((api) => {
         ...oneboxCandidates,
         ...standaloneCandidates,
         ...xiaohongshuInlineCandidates,
+        ...ebookAttachmentCandidates,
         ...iframeCandidates,
       ].map((candidate) => candidate.target)
     );
@@ -2983,6 +3565,7 @@ export default apiInitializer((api) => {
       ...oneboxCandidates,
       ...standaloneCandidates,
       ...xiaohongshuInlineCandidates,
+      ...ebookAttachmentCandidates,
       ...iframeCandidates,
       ...embedTextCandidates,
     ]) {
