@@ -20,16 +20,21 @@ globalThis.__themeParserTestApi = {
   collectXiaohongshuInlineCandidates,
   collectStandaloneCandidates,
   extractUrlsFromText,
+  getFallbackTitle,
   getFooterMeta,
   getInitialButtonLabel,
+  supportsExpandReader,
   getLoadedFrameHeight,
+  getMarxistsDescription,
   getMetaLine,
   getOpenLabel,
   getPreviewAspectRatio,
   isKnownInlineKind,
+  isMarxistsInlineMedia,
   shouldAutoExpandXiaohongshu,
   shouldAutoExpandEmbed,
   shouldShowDirectSourceLink,
+  themeSettings,
   extractXiaohongshuShareContext,
   parseBilibiliUrl,
   parseEbookAttachmentUrl,
@@ -57,16 +62,21 @@ const {
   collectXiaohongshuInlineCandidates,
   collectStandaloneCandidates,
   extractUrlsFromText,
+  getFallbackTitle,
   getFooterMeta,
   getInitialButtonLabel,
+  supportsExpandReader,
   getLoadedFrameHeight,
+  getMarxistsDescription,
   getMetaLine,
   getOpenLabel,
   getPreviewAspectRatio,
   isKnownInlineKind,
+  isMarxistsInlineMedia,
   shouldAutoExpandXiaohongshu,
   shouldAutoExpandEmbed,
   shouldShowDirectSourceLink,
+  themeSettings,
   extractXiaohongshuShareContext,
   parseBilibiliUrl,
   parseEbookAttachmentUrl,
@@ -521,4 +531,145 @@ test("reads Discourse's injected theme settings rather than a window property", 
     /const themeSettings = typeof settings === "object" && settings \? settings : \{\};/u
   );
   assert.doesNotMatch(initializerSource, /globalThis\.settings/u);
+});
+
+test("parses Marxists Internet Archive documents into structured source cards", () => {
+  const manifesto = parseBilibiliUrl(
+    "https://www.marxists.org/archive/marx/works/1848/communist-manifesto/ch01.htm"
+  );
+
+  assert.equal(manifesto.provider, "marxists");
+  assert.equal(manifesto.kind, "marxists");
+  assert.equal(manifesto.contentType, "document");
+  assert.equal(manifesto.authorName, "Karl Marx & Frederick Engels");
+  assert.equal(manifesto.workTitle, "Communist Manifesto");
+  assert.equal(manifesto.dateText, "1848年");
+  assert.equal(manifesto.chapter, "1");
+  assert.equal(
+    manifesto.canonicalUrl,
+    "https://www.marxists.org/archive/marx/works/1848/communist-manifesto/ch01.htm"
+  );
+
+  const glossary = parseBilibiliUrl("https://www.marxists.org/glossary/people/m/a.htm");
+
+  assert.equal(glossary.sectionLabel, "马克思主义文库·术语库·人物");
+  assert.equal(getFallbackTitle(glossary), "马克思主义文库·术语库·人物");
+});
+
+test("reads the Chinese archive's date-bearing filename convention", () => {
+  const onContradiction = parseBilibiliUrl(
+    "https://www.marxists.org/chinese/maozedong/marxist.org-chinese-mao-193708.htm"
+  );
+
+  assert.equal(onContradiction.language, "chinese");
+  assert.equal(onContradiction.authorName, "毛泽东");
+  assert.equal(onContradiction.dateText, "1937年8月");
+  assert.equal(onContradiction.sectionLabel, "中文马克思主义文库");
+  assert.equal(getMarxistsDescription(onContradiction), "1937年8月");
+
+  const classAnalysis = parseBilibiliUrl(
+    "https://www.marxists.org/chinese/maozedong/marxist.org-chinese-mao-19251201.htm"
+  );
+
+  assert.equal(classAnalysis.dateText, "1925年12月1日");
+
+  const paddedDay = parseBilibiliUrl(
+    "https://www.marxists.org/chinese/maozedong/marxist.org-chinese-mao-19370800.htm"
+  );
+
+  assert.equal(paddedDay.dateText, "1937年8月");
+});
+
+test("prefers the author over the archive's opaque work abbreviations", () => {
+  const stateAndRevolution = parseBilibiliUrl(
+    "https://www.marxists.org/archive/lenin/works/1917/staterev/index.htm"
+  );
+
+  assert.equal(stateAndRevolution.workTitle, "");
+  assert.equal(getFallbackTitle(stateAndRevolution), "Vladimir Lenin");
+  assert.equal(getMarxistsDescription(stateAndRevolution), "1917年");
+});
+
+test("plays archive audio and video inline without framing the site", () => {
+  const speech = parseBilibiliUrl(
+    "https://marxists.org/archive/kollonta/audio/to-the-workers.mp3"
+  );
+
+  assert.equal(speech.contentType, "audio");
+  assert.equal(speech.canonicalUrl, "https://www.marxists.org/archive/kollonta/audio/to-the-workers.mp3");
+  assert.equal(getFallbackTitle(speech), "To The Workers");
+  assert.equal(getInitialButtonLabel(speech), "播放录音");
+  assert.equal(isMarxistsInlineMedia(speech), true);
+  assert.equal(isKnownInlineKind(speech), true);
+  assert.equal(shouldAutoExpandEmbed(speech), true);
+
+  const lecture = parseBilibiliUrl(
+    "https://www.marxists.org/audiobooks/farsi/lenin/ThreeSourcesComponentsOfMarxism.mp4"
+  );
+
+  assert.equal(lecture.contentType, "video");
+  assert.equal(getFallbackTitle(lecture), "Three Sources Components Of Marxism");
+  assert.equal(getPreviewAspectRatio(lecture), "16 / 9");
+});
+
+test("marxists documents stay cards and never claim an inline renderer", () => {
+  const document = parseBilibiliUrl("https://www.marxists.org/archive/trotsky/1930/hrr/index.htm");
+
+  assert.equal(isMarxistsInlineMedia(document), false);
+  assert.equal(isKnownInlineKind(document), false);
+  assert.equal(shouldAutoExpandEmbed(document), false);
+  assert.equal(shouldShowDirectSourceLink(document), true);
+  assert.equal(getOpenLabel(document), "在马克思主义文库打开");
+  assert.equal(getFooterMeta(document), "原文经 BDFZ 阅读服务展开 · 该站禁止页面被外部内嵌");
+
+  const ebook = parseBilibiliUrl("https://www.marxists.org/ebooks/marx/capital.epub");
+
+  assert.equal(ebook.contentType, "download");
+  assert.equal(isKnownInlineKind(ebook), false);
+  assert.equal(getOpenLabel(ebook), "下载原文件");
+});
+
+test("leaves marxists PDFs, images, and lookalike hosts alone", () => {
+  assert.equal(parseBilibiliUrl("https://www.marxists.org/chinese/maozedong/collect/mao.pdf"), null);
+  assert.equal(parseBilibiliUrl("https://www.marxists.org/chinese/images/back02.jpg"), null);
+  assert.equal(parseBilibiliUrl("https://marxists.org.evil.example/archive/marx/index.htm"), null);
+  assert.equal(parseBilibiliUrl("https://www.marxists.org:8443/archive/marx/index.htm"), null);
+  assert.equal(parseBilibiliUrl("https://user:pass@www.marxists.org/archive/marx/index.htm"), null);
+});
+
+test("finds a bare marxists link inside cooked text", () => {
+  assert.deepEqual(
+    Array.from(extractUrlsFromText("参见 https://www.marxists.org/chinese/marx/index.htm 。")),
+    ["https://www.marxists.org/chinese/marx/index.htm"]
+  );
+});
+
+test("documents route through the shared expand-reader service, media does not", () => {
+  const document = parseBilibiliUrl("https://www.marxists.org/archive/trotsky/1930/hrr/index.htm");
+  const audio = parseBilibiliUrl("https://www.marxists.org/archive/kollonta/audio/to-the-workers.mp3");
+  const download = parseBilibiliUrl("https://www.marxists.org/ebooks/marx/capital.epub");
+
+  assert.equal(supportsExpandReader(document), true);
+  assert.equal(supportsExpandReader(audio), false, "audio already plays natively");
+  assert.equal(supportsExpandReader(download), false, "a download has no reading view");
+  assert.equal(supportsExpandReader(parseBilibiliUrl("https://www.zhihu.com/question/123")), false);
+});
+
+test("the reader is skipped when disabled or pointed at a non-HTTPS endpoint", () => {
+  const document = parseBilibiliUrl("https://www.marxists.org/archive/trotsky/1930/hrr/index.htm");
+
+  themeSettings.enable_expand_reader = false;
+  assert.equal(supportsExpandReader(document), false);
+  assert.equal(getFooterMeta(document), "马克思主义文库原文卡片 · 该站禁止页面被外部内嵌");
+  delete themeSettings.enable_expand_reader;
+
+  themeSettings.expand_reader_endpoint = "http://reader.example/read";
+  assert.equal(supportsExpandReader(document), false, "plaintext endpoints are refused");
+  themeSettings.expand_reader_endpoint = "http://localhost:8817/read";
+  assert.equal(supportsExpandReader(document), true, "a loopback endpoint is a development affordance");
+  themeSettings.expand_reader_endpoint = "not a url";
+  assert.equal(supportsExpandReader(document), false);
+  delete themeSettings.expand_reader_endpoint;
+
+  assert.equal(supportsExpandReader(document), true);
 });

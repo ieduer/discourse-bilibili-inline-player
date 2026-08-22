@@ -24,7 +24,12 @@ Safe inline players and readers are visible by default through `auto_expand_embe
 - Do not add private APIs, login cookies, custom request signatures, downloaded media, or third-party resolver services. Lazy-loading the user-supplied official note page in the default expanded state is the supported inline path for this component.
 - Preserve Xiaohongshu/RedNote path, query, and fragment while normalizing recognized links to HTTPS; never log full share URLs that may contain temporary capability parameters.
 - Treat Discourse Onebox as a separate server-side fetch path. The preview must remain complete from copied share text when those domains are blocked.
-- Keep existing bilibili, NetEase, QQ Music, and Zhihu behavior unless a regression test proves a change is needed.
+- Keep existing bilibili, NetEase, QQ Music, Zhihu, and Marxists Internet Archive behavior unless a regression test proves a change is needed.
+- `marxists.org` sends `X-Frame-Options: SAMEORIGIN`, `frame-ancestors 'self'`, and no CORS header, and its reachable mirrors repeat that policy. It can never be framed or fetched by the browser. Its audio and video still play through native media elements, which need neither framing nor a cross-origin read.
+- Content that cannot be expanded directly goes through the operator's `expand-reader` service and nowhere else. Decided 2026-08-22. Do not add a second proxy, a third-party resolver, a mirror rewrite, or a per-provider fetch path. Adding a new source means allowlisting its host in that service, which is an operator decision about the site's terms — not a component change.
+- Treat every reader fragment as untrusted even though the service sanitizes it. Keep the local allowlist re-sanitization, keep the reader failure path falling back to the source card, and never loosen the forum CSP for it.
+- Keep `expand_reader_endpoint` HTTPS-only apart from the loopback development affordance.
+- Do not let `marxists.org` claim `.pdf`; that format stays with `discourse-pdf-previews`.
 - Ebook bytes must remain in the user's browser. Do not add a converter service, upload API, DRM bypass, credential forwarding, or persistent book cache.
 - Ebook content is untrusted active content: strip scripts, event handlers, nested frames/objects, dangerous URLs, and rely on the existing strict forum CSP. Never loosen forum `script-src` for a book.
 - Keep Foliate pinned, self-hosted as a theme asset, license-retained, reproducibly hashed, and free of the PDF adapter.

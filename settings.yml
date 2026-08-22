@@ -59,6 +59,28 @@ enable_xiaohongshu_inline_page:
   type: bool
   description: Automatically expand the official Xiaohongshu or RedNote note page in a lazy-loaded iframe. Disable to keep content-rich cards with an external source link only.
 
+enable_expand_reader:
+  default: true
+  type: bool
+  description: Expand the full text of sources that refuse to be framed or read by the browser, using the shared BDFZ expand-reader service. Disable to fall back to link-only source cards.
+
+expand_reader_endpoint:
+  default: "https://reader.bdfz.net/read"
+  type: string
+  description: HTTPS endpoint of the shared expand-reader service. Must be a service you operate; it is called with the linked page URL and returns an already-sanitized reading fragment.
+
+expand_reader_height:
+  default: 560
+  type: integer
+  min: 240
+  max: 1200
+  description: Height in pixels of the expanded reading pane before it scrolls internally.
+
+enable_marxists_inline_media:
+  default: true
+  type: bool
+  description: Play audio and video files hosted on marxists.org inline with the browser's own media element. Marxists.org documents always stay source cards because the archive forbids being framed.
+
 auto_open_on_high_risk_env:
   default: true
   type: bool

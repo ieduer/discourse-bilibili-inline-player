@@ -30,6 +30,20 @@ The reader is visible by default, fetches the attachment only in the user's brow
 
 Every safe inline player and reader is expanded by default. Automatic media expansion uses the provider's non-autoplay URL when available; the `auto_expand_embeds` administrator setting restores click-to-expand behavior when disabled. Content types without a safe inline renderer, such as Zhihu source pages, remain source cards.
 
+Marxists Internet Archive (`marxists.org`):
+
+- documents under `/archive/`, `/reference/`, `/history/`, `/subject/`, `/glossary/`, `/ebooks/`, `/audiobooks/`, and every language section including `/chinese/`
+- audio and video files hosted by the archive (`.mp3`, `.m4a`, `.oga`, `.ogg`, `.wav`, `.flac`, `.mp4`, `.m4v`, `.webm`, `.ogv`)
+- `.epub`, `.mobi`, and `.azw3` archive files, as download cards only
+
+Archive audio and video play inline in a native media element, expanded on load and never autoplaying. Archive documents render as an always-open reading card with no cover button and no click-to-open step, and their full text is expanded in place through the shared expand-reader service. The section, the resolved author name, the work title, the chapter, and the date the archive encodes in its URLs are all visible immediately. `.pdf` under `marxists.org` is deliberately not claimed, because the official PDF Previews component owns that format.
+
+### The expand-reader service
+
+Some sources refuse to be framed **and** refuse cross-origin reads, which leaves a client-side component with nothing but a link. For those, the component calls a reading-view service the forum operator runs — [`expand-reader`](https://github.com/ieduer/expand-reader) — which fetches the page server-side and returns an already-sanitized reading fragment. The component re-sanitizes that fragment against its own allowlist before it touches the DOM, and any failure falls back silently to the URL-derived source card.
+
+This is the single sanctioned path for content that cannot be expanded directly. It is configured with three settings: `enable_expand_reader`, `expand_reader_endpoint`, and `expand_reader_height`. The endpoint must be HTTPS and must be a service the operator controls; the service keeps its own allowlist of which sites it will read.
+
 Inline playback:
 
 - `https://www.bilibili.com/video/BV...`
@@ -107,6 +121,8 @@ For ordinary bilibili video and bangumi embeds, the component now also exposes a
 
 For NetEase Cloud Music, the component uses the official outchain player paths. Desktop-like environments use `https://music.163.com/outchain/player`, while mobile-like environments use `https://music.163.com/m/outchain/player` directly to avoid NetEase's current mobile 302 downgrade to an insecure `http://` URL. Official NetEase source code shows the outchain player types map to playlist, album, song, DJ program, and DJ radio.
 
+For the Marxists Internet Archive, `www.marxists.org` answers with `X-Frame-Options: SAMEORIGIN`, a `frame-ancestors 'self'` content security policy, and no `Access-Control-Allow-Origin` header. Every reachable mirror listed on the archive's own mirror page repeats the same framing policy, and the one mirror that sends CORS headers restricts them to its own hosts. A client-side theme component therefore cannot frame an archive page and cannot read one, so the full article body cannot be shown inline without a server-side fetch, which is outside this repository's architecture. Document cards are built entirely from the canonical URL instead. The archive's own media files are unaffected, because `<audio>` and `<video>` playback is subject to neither framing policy nor CORS, so those play inline for real.
+
 For Zhihu, current public pages and API paths do not expose a reliable public iframe or oEmbed interface. The component therefore renders supported Zhihu URLs as styled source cards using the cooked post metadata already available in Discourse, then opens the canonical Zhihu page on click.
 
 For Xiaohongshu and RedNote, the official platform documentation reviewed on 2026-08-08 exposes no supported third-party oEmbed or embed widget. Version `0.8.2` builds a content-rich preview from the title and description included in the copied share text, including auto-linkified URLs embedded in a sentence, then defaults the card to an expanded, browser-native lazy-loaded official note page. The original cooked post text remains untouched, and the footer always retains a direct source link even when the general open-link setting is disabled. Recognized links are normalized to HTTPS while their full path, query, and fragment are preserved because note access can depend on temporary share parameters. No private API, login cookie, custom signature, media download, or persisted note cache is used.
@@ -118,6 +134,7 @@ Still not supported:
 - favorites, collections, channels, playlists, watch-later, and other multi-item containers
 - DRM-encrypted EPUB/MOBI/AZW3 files
 - PDF, because the official Discourse PDF Previews component owns that format
+- the article body of a `marxists.org` page when `enable_expand_reader` is off or no reader endpoint is configured, because the archive forbids both framing and cross-origin reads
 - FB2 and CBZ until the forum enables those upload extensions and they receive independent acceptance
 
 The safest input pattern is still a standalone bilibili URL on its own line, which matches how Discourse onebox-style embeds are normally triggered.
@@ -142,6 +159,8 @@ Pasted Xiaohongshu share text, with either plain or auto-linkified share URLs, i
 14. For Xiaohongshu and RedNote, the component recognizes official note paths plus known `xhslink.com` / `xhslink.cn` share forms, turns copied share text into a real title and description, and defaults to the lazy-loaded expanded official note page while preserving the direct source link.
 15. For content types without a stable official iframe path in this theme-component-only architecture, the component still upgrades the post into a unified media card and falls back to opening the canonical source page.
 16. For EPUB, MOBI, and AZW3 attachment links, the component downloads the bounded file in the current browser, removes active markup, and opens it in the local Foliate reader. Parse, size, CORS, or DRM failures leave the original download available.
+17. For sources that can be neither framed nor read by the browser, the component asks the operator's expand-reader service for a sanitized reading fragment and renders it expanded in place, with no click step. Reader output is re-sanitized locally against an element and attribute allowlist, links are forced to `target="_blank" rel="noopener nofollow ugc"`, an over-long page is trimmed with a notice, and any failure leaves the source card untouched.
+18. For the Marxists Internet Archive, the component reads the archive's own URL grammar. It resolves the section, the author slug against a curated English and Chinese name table, the year from a path segment such as `1848` or `1867-c1`, the date the Chinese archive encodes in filenames such as `marxist.org-chinese-mao-19251201.htm`, and the chapter from files such as `ch01.htm`. Opaque archive abbreviations such as `staterev` are not promoted to titles; the resolved author is used instead. Archive audio and video are attached to a native media element and expand without a click; documents render as an already-open reading card.
 
 The component does not modify Discourse core and does not require a rebuild.
 
@@ -182,6 +201,10 @@ No rebuild is required.
 - `enable_experimental_live_embed`
 - `enable_live_danmaku`
 - `enable_xiaohongshu_inline_page`
+- `enable_marxists_inline_media`
+- `enable_expand_reader`
+- `expand_reader_endpoint`
+- `expand_reader_height`
 - `enable_ebook_reader`
 - `max_ebook_size_mb`
 - `ebook_reader_height`

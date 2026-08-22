@@ -245,6 +245,210 @@
   text-align: center;
 }
 
+/* ── Marxists Internet Archive source cards and native media ── */
+
+.bilibili-inline-player--marxists .bilibili-inline-player__media {
+  min-height: 6.5rem;
+  background:
+    radial-gradient(circle at 18% 22%, rgb(255 255 255 / 0.14), transparent 36%),
+    linear-gradient(135deg, #7a1114 0%, #a8231f 52%, #4d0c0e 100%);
+}
+
+.bilibili-inline-player--marxists .bilibili-inline-player__placeholder {
+  letter-spacing: 0.08em;
+}
+
+.bilibili-inline-player--marxists .bilibili-inline-player__play {
+  background: rgb(250 244 232 / 0.96);
+  color: #7a1114;
+  box-shadow: 0 6px 18px rgb(77 12 14 / 0.32);
+}
+
+.bilibili-inline-player--marxists .bilibili-inline-player__play:hover,
+.bilibili-inline-player--marxists .bilibili-inline-player__play:focus-visible {
+  background: #fff8ec;
+  box-shadow: 0 10px 24px rgb(77 12 14 / 0.38);
+}
+
+.bilibili-inline-player--reading {
+  border-left: 3px solid #a8231f;
+}
+
+.bilibili-inline-player__reading-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 1rem 1.15rem 0.9rem;
+}
+
+.bilibili-inline-player__reading-badge {
+  align-self: flex-start;
+  padding: 0.14rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, #a8231f 12%, transparent);
+  color: #8d1c19;
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  line-height: 1.5;
+}
+
+.bilibili-inline-player__reading-title {
+  margin: 0;
+  color: var(--bili-card-fg, #111);
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.bilibili-inline-player__reading-byline {
+  color: var(--bili-card-muted, #666);
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+
+.bilibili-inline-player__reading-text {
+  margin: 0.1rem 0 0;
+  color: var(--bili-card-fg, #111);
+  font-size: 0.9rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.bilibili-inline-player__reading-status {
+  color: var(--bili-card-muted, #666);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.bilibili-inline-player--reader-loading .bilibili-inline-player__reading-status::after {
+  content: "";
+  display: inline-block;
+  width: 0.6em;
+  animation: bilibili-inline-player-reader-dots 1.2s steps(4, end) infinite;
+}
+
+@keyframes bilibili-inline-player-reader-dots {
+  0% { content: ""; }
+  25% { content: "."; }
+  50% { content: ".."; }
+  75% { content: "..."; }
+}
+
+.bilibili-inline-player__reader-pane {
+  max-height: min(78vh, var(--bili-reader-height, 560px));
+  padding: 0 1.15rem 0.4rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-top: 1px solid var(--bili-card-border);
+}
+
+.bilibili-inline-player__reader-article {
+  color: var(--bili-card-fg, #111);
+  font-size: 0.95rem;
+  line-height: 1.85;
+  overflow-wrap: anywhere;
+}
+
+.bilibili-inline-player__reader-article p {
+  margin: 0 0 0.9em;
+}
+
+.bilibili-inline-player__reader-article h1,
+.bilibili-inline-player__reader-article h2,
+.bilibili-inline-player__reader-article h3,
+.bilibili-inline-player__reader-article h4 {
+  margin: 1.4em 0 0.6em;
+  font-size: 1.02rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.bilibili-inline-player__reader-article blockquote {
+  margin: 0 0 0.9em;
+  padding: 0.1em 0 0.1em 0.9em;
+  border-left: 2px solid var(--bili-card-border);
+  color: var(--bili-card-muted, #666);
+}
+
+.bilibili-inline-player__reader-article img {
+  max-width: 100%;
+  height: auto;
+}
+
+.bilibili-inline-player__reader-article table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.bilibili-inline-player__reader-article td,
+.bilibili-inline-player__reader-article th {
+  padding: 0.3em 0.6em;
+  border: 1px solid var(--bili-card-border);
+}
+
+.bilibili-inline-player__reader-article hr {
+  margin: 1.2em 0;
+  border: 0;
+  border-top: 1px solid var(--bili-card-border);
+}
+
+.bilibili-inline-player__reader-article sup {
+  font-size: 0.72em;
+}
+
+.bilibili-inline-player__reader-truncated {
+  margin: 0.4rem 0 0.6rem;
+  color: var(--bili-card-muted, #666);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.bilibili-inline-player__native-media {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.9rem 1rem;
+  background: var(--bili-card-bg, #fff);
+}
+
+.bilibili-inline-player__native-media-title {
+  color: var(--bili-card-fg, #111);
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.bilibili-inline-player__native-media-element {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+.bilibili-inline-player__native-media--video .bilibili-inline-player__native-media-element {
+  aspect-ratio: var(--bili-aspect-ratio, 16 / 9);
+  background: #000;
+  object-fit: contain;
+}
+
+.bilibili-inline-player__native-media-status {
+  color: var(--primary-medium, #666);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.bilibili-inline-player__native-media-status:empty {
+  display: none;
+}
+
+.bilibili-inline-player__native-media-status--error {
+  color: var(--danger, #b5121b);
+}
+
 /* ═══════════════════════════════════════════════════
    Compact audio card (NetEase single songs / programs)
    Single-row unified dark card — Spotify/Discord style

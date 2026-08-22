@@ -17,6 +17,307 @@ const XIAOHONGSHU_SHORT_HOSTS = new Set([
   "xhslink.cn",
   "www.xhslink.cn",
 ]);
+/* Marxists Internet Archive. www.marxists.org answers with X-Frame-Options:
+   SAMEORIGIN, a frame-ancestors 'self' policy, and no CORS header, so a forum page
+   can neither frame nor read its documents; its listed mirrors repeat the same
+   policy or are unreachable. Documents therefore stay structured source cards built
+   from the canonical URL alone, while the archive's own audio and video files play
+   through native media elements, which need neither framing nor a cross-origin read.
+   PDF stays with the official discourse-pdf-previews component. */
+const MARXISTS_HOSTS = new Set(["marxists.org", "www.marxists.org"]);
+const MARXISTS_AUDIO_EXTENSIONS = new Set(["mp3", "m4a", "oga", "ogg", "wav", "flac"]);
+const MARXISTS_VIDEO_EXTENSIONS = new Set(["mp4", "m4v", "webm", "ogv"]);
+const MARXISTS_DOWNLOAD_EXTENSIONS = new Set(["epub", "mobi", "azw3"]);
+const MARXISTS_DOCUMENT_EXTENSIONS = new Set(["", "htm", "html", "xhtml", "shtml", "txt"]);
+const MARXISTS_SECTION_LABELS = {
+  archive: "马克思主义文库·著作馆",
+  reference: "马克思主义文库·参考馆",
+  history: "马克思主义文库·历史馆",
+  subject: "马克思主义文库·专题馆",
+  glossary: "马克思主义文库·术语库",
+  ebooks: "马克思主义文库·电子书库",
+  audiobooks: "马克思主义文库·有声书库",
+  admin: "马克思主义文库·文库事务",
+};
+const MARXISTS_GLOSSARY_LABELS = {
+  terms: "术语",
+  people: "人物",
+  events: "事件",
+  orgs: "组织",
+  places: "地理",
+  periodicals: "报刊",
+};
+const MARXISTS_LANGUAGE_LABELS = {
+  arabic: "阿拉伯文",
+  bangla: "孟加拉文",
+  catala: "加泰罗尼亚文",
+  cestina: "捷克文",
+  chinese: "中文",
+  dansk: "丹麦文",
+  deutsch: "德文",
+  ellinika: "希腊文",
+  esperanto: "世界语",
+  espanol: "西班牙文",
+  euskara: "巴斯克文",
+  farsi: "波斯文",
+  francais: "法文",
+  hayeren: "亚美尼亚文",
+  hebrew: "希伯来文",
+  indonesia: "印尼文",
+  italiano: "意大利文",
+  korean: "朝鲜文",
+  kurdi: "库尔德文",
+  magyar: "匈牙利文",
+  makedonski: "马其顿文",
+  nederlands: "荷兰文",
+  nihon: "日文",
+  norsk: "挪威文",
+  polski: "波兰文",
+  portugues: "葡萄牙文",
+  romana: "罗马尼亚文",
+  russkij: "俄文",
+  shqip: "阿尔巴尼亚文",
+  slovenian: "斯洛文尼亚文",
+  suomi: "芬兰文",
+  svenska: "瑞典文",
+  tagalog: "他加禄文",
+  thai: "泰文",
+  turkce: "土耳其文",
+  urdu: "乌尔都文",
+  vietnamese: "越南文",
+  xlang: "多语种",
+};
+const MARXISTS_AUTHOR_NAMES = {
+  "adorno": "Theodor Adorno",
+  "allende": "Salvador Allende",
+  "althusser": "Louis Althusser",
+  "bakunin": "Mikhail Bakunin",
+  "bebel": "August Bebel",
+  "bernal": "J. D. Bernal",
+  "bernstein": "Eduard Bernstein",
+  "bhagat-singh": "Bhagat Singh",
+  "blanqui": "Auguste Blanqui",
+  "bloch": "Ernst Bloch",
+  "blum": "Leon Blum",
+  "bogdanov": "Alexander Bogdanov",
+  "bookchin": "Murray Bookchin",
+  "bordiga": "Amadeo Bordiga",
+  "braverman": "Harry Braverman",
+  "bryant": "Louise Bryant",
+  "bukharin": "Nikolai Bukharin",
+  "cannon": "James Cannon",
+  "castoriadis": "Cornelius Castoriadis",
+  "castro": "Fidel Castro",
+  "caudwell": "Christopher Caudwell",
+  "chernyshevsky": "Nicholas Chernyshevsky",
+  "cliff": "Tony Cliff",
+  "connolly": "James Connolly",
+  "debord": "Guy Debord",
+  "debs": "Eugene Debs",
+  "deleon": "Daniel DeLeon",
+  "deutscher": "Isaac Deutscher",
+  "dewey": "John Dewey",
+  "dietzgen": "Joseph Dietzgen",
+  "draper": "Hal Draper",
+  "dunayevskaya": "Raya Dunayevskaya",
+  "feuerbach": "Ludwig Feuerbach",
+  "fourier": "Charles Fourier",
+  "freud": "Sigmund Freud",
+  "fromm": "Erich Fromm",
+  "giap": "Võ Nguyên Giáp",
+  "goldman": "Emma Goldman",
+  "gomez": "Manuel Gómez",
+  "gorter": "Herman Gorter",
+  "gramsci": "Antonio Gramsci",
+  "guevara": "Che Guevara",
+  "haldane": "JBS Haldane",
+  "hansen": "Joseph Hansen",
+  "harman": "Chris Harman",
+  "hegel": "G W F Hegel",
+  "hill-christopher": "Christopher Hill",
+  "ibarruri": "Dolores Ibárruri",
+  "james-clr": "CLR James",
+  "jaures": "Jean Jaurès",
+  "kamenev": "Leon Kamenev",
+  "kautsky": "Karl Kautsky",
+  "kollonta": "Alexandra Kollontai",
+  "korsch": "Karl Korsch",
+  "kropotkin-peter": "Peter Kropotkin",
+  "krupskaya": "Nadezhada Krupskaya",
+  "labriola": "Antonio Labriola",
+  "lafargue": "Paul Lafargue",
+  "lassalle": "Ferdinand Lassalle",
+  "lenin": "Vladimir Lenin",
+  "leontev": "Alexei Leont'ev",
+  "levi-paul": "Paul Levi",
+  "liebknecht-k": "Karl Liebknecht",
+  "liebknecht-w": "Wilhelm Liebknecht",
+  "lukacs": "Georg Lukács",
+  "lunachar": "Anatoly Lunacharsky",
+  "luxemburg": "Rosa Luxemburg",
+  "malcolm-x": "Malcolm X",
+  "mandel": "Ernest Mandel",
+  "mao": "Mao Zedong",
+  "marcuse": "Herbert Marcuse",
+  "mariateg": "José Carlos Mariátegui",
+  "marx": "Karl Marx & Frederick Engels",
+  "mattick-paul": "Paul Mattick",
+  "miliband": "Ralph Miliband",
+  "morris": "William Morris",
+  "novack": "George Novack",
+  "padmore": "George Padmore",
+  "pannekoe": "Anton Pannekoek",
+  "pashukanis": "Evgeny Pashukanis",
+  "plekhanov": "Georgi Plekhanov",
+  "preobrazhensky": "Evgenii Preobrazhensky",
+  "radek": "Karl Radek",
+  "rakovsky": "Christian Rakovsky",
+  "reed": "John Reed",
+  "riazanov": "David Riazanov",
+  "rosdolsky": "Roman Rosdolsky",
+  "roy": "M N Roy",
+  "rubin": "Isaak Illich Rubin",
+  "ruhle": "Otto Rühle",
+  "sartre": "Jean-Paul Sartre",
+  "serge": "Victor Serge",
+  "shachtma": "Max Shachtman",
+  "smith-adam": "Adam Smith",
+  "stalin": "Josef Stalin",
+  "stirner": "Max Stirner",
+  "thompson-ep": "E. P. Thompson",
+  "togliatti": "Palmiro Togliatti",
+  "trotsky": "Leon Trotsky",
+  "vygotsky": "Lev Vygotsky",
+  "zetkin": "Clara Zetkin",
+  "zinoviev": "Gregory Zinoviev",};
+const MARXISTS_CHINESE_AUTHOR_NAMES = {
+  "abc": "马克思主义简介",
+  "adam-schaff": "亚当·沙夫",
+  "adorno": "阿多诺",
+  "albums": "图片馆",
+  "althusser": "阿尔都塞",
+  "babushkin": "巴布石金",
+  "bajin": "巴金",
+  "bakunin": "巴枯宁",
+  "beble": "倍倍尔",
+  "bell-hooks": "贝尔·胡克斯",
+  "bernstein": "伯恩斯坦",
+  "blanqui": "布朗基",
+  "bogdanov": "波格丹诺夫",
+  "braverman": "布雷弗曼",
+  "broue": "勃鲁埃",
+  "bukharin": "布哈林",
+  "castro": "卡斯特罗",
+  "chenbilan": "陈碧兰",
+  "chenduxiu": "陈独秀",
+  "chenqichang": "陈其昌",
+  "clara-zetkin": "蔡特金",
+  "communist-international": "第三国际",
+  "daniel-bensaid": "本赛德",
+  "david-graeber": "大卫·格雷伯",
+  "dengzhongxia": "邓中夏",
+  "dunayevskaya": "杜娜叶夫斯卡娅",
+  "emma-goldman": "爱玛·戈德曼",
+  "engels": "恩格斯",
+  "ernest-mandel": "曼德尔",
+  "first-international": "第一国际",
+  "foster": "福斯特",
+  "fourth-international": "第四国际",
+  "frank": "弗朗克",
+  "frank-glass": "李福仁",
+  "fromm": "弗洛姆",
+  "frunze": "伏龙芝",
+  "georg-lukacs": "卢卡奇",
+  "gramsci": "葛兰西",
+  "guevara": "格瓦拉",
+  "harold-r-isaacs": "伊罗生",
+  "helphand-parvus": "帕尔乌斯",
+  "hobsbawm": "霍布斯鲍姆",
+  "isaac-deutcher": "多伊彻",
+  "jaures": "饶勒斯",
+  "jiangjunyang": "姜君羊",
+  "john-reed": "约翰·里德",
+  "josef-dietzgen": "约瑟夫·狄慈根",
+  "joseph-hansen": "韩生",
+  "kamenev": "加米涅夫",
+  "kardelj-edvard": "爱德华·卡德尔",
+  "kautsky": "考茨基",
+  "kollontai": "柯伦泰",
+  "korsch-karl": "科尔施",
+  "kropotkin": "克鲁泡特金",
+  "krupskaya": "克鲁普斯卡娅",
+  "kun-bela": "库恩·贝拉",
+  "lafargue": "拉法格",
+  "laski": "拉斯基",
+  "lassalle": "拉萨尔",
+  "lenin": "列宁",
+  "lenin-cworks": "《列宁全集》",
+  "lidazhao": "李大钊",
+  "liebknecht-k": "卡尔·李卜克内西",
+  "liebknecht-w": "威廉·李卜克内西",
+  "linbiao": "林彪",
+  "liupingmei": "刘平梅",
+  "liushaoqi": "刘少奇",
+  "liushifu": "刘师复",
+  "louguohua": "楼国华",
+  "lunacharsky": "卢那察尔斯基",
+  "luoyinong": "罗亦农",
+  "luozhanglong": "罗章龙",
+  "maitan": "迈坦",
+  "makhno": "马赫诺",
+  "maozedong": "毛泽东",
+  "marcuse": "马尔库塞",
+  "markovic": "米·马尔科维奇",
+  "marx": "马克思",
+  "marx-engels": "《马克思恩格斯全集》",
+  "marx-engels2": "《马克思恩格斯文集（十卷）》",
+  "miliband": "密利本德",
+  "novack": "诺瓦克",
+  "otto-bauer": "奥托·鲍威尔",
+  "pannekoek": "潘涅库克",
+  "paul-levi": "保尔·列维",
+  "pengshuzhi": "彭述之",
+  "petrovic": "加约·彼得洛维奇",
+  "plekhanov": "普列汉诺夫",
+  "preobrazhensky": "普列奥布拉任斯基",
+  "proudon": "蒲鲁东",
+  "quqiubai": "瞿秋白",
+  "rakovsky": "拉柯夫斯基",
+  "raymond-williams": "威廉斯",
+  "riazanov": "梁赞诺夫",
+  "rogovin": "罗高文",
+  "rosa-luxemburg": "罗莎·卢森堡",
+  "roy": "罗易",
+  "sartre": "萨特",
+  "second-international": "第二国际",
+  "shliapnikov": "施略普尼科夫",
+  "stalin": "斯大林",
+  "sweezy": "斯威齐",
+  "tamas": "塔马什",
+  "thalmann": "台尔曼",
+  "thompson": "汤普森",
+  "trotsky": "托洛茨基",
+  "vorovsky": "沃罗夫斯基",
+  "voznesensky": "沃兹涅先斯基",
+  "vranicki": "弗兰尼茨基",
+  "wangfanxi": "王凡西",
+  "xiangjingyu": "向警予",
+  "xieshan": "谢山",
+  "xiongandong": "熊安东",
+  "yinkuan": "尹宽",
+  "yundaiying": "恽代英",
+  "zhaofangju": "赵芳举",
+  "zhengchaolin": "郑超麟",
+  "zhouenlai": "周恩来",
+  "zhourensheng": "周仁生",
+  "zinoviev": "季诺维也夫",};
+const MARXISTS_YEAR_SEGMENT_RE = /^((?:1[5-9]|20)\d{2})(?:-[a-z0-9]{1,4})?$/i;
+const MARXISTS_FILENAME_DATE_RE = /(?:^|[-_.])((?:1[5-9]|20)\d{2})(\d{2})?(\d{2})?[a-z]{0,2}$/;
+const MARXISTS_CHAPTER_FILE_RE = /^(?:ch|chap|chapter|pt|part)[-_]?0*(\d{1,3})[a-z]?$/i;
+const MARXISTS_INDEX_FILE_RE = /^(?:index|default|home|contents?|toc)$/i;
+const MARXISTS_OPAQUE_FILENAME_RE = /^(?:marxist\.org|marxists\.org|mia)[-_.]/i;
+const MARXISTS_FILE_SEGMENT_RE = /\.[a-z0-9]{1,5}$/i;
+const MARXISTS_STRUCTURAL_SLUGS = new Set(["works", "archive", "subject", "reference", "download", "audio", "video", "bio", "photo"]);
 const EBOOK_EXTENSIONS = new Set(["epub", "mobi", "azw3"]);
 const EBOOK_MIME_TYPES = {
   epub: "application/epub+zip",
@@ -61,7 +362,7 @@ const XIAOHONGSHU_UNUSABLE_TITLE_RE =
 const TRAILING_URL_PUNCTUATION_RE = /[)\],.;!?，。；！？、）】》」』]+$/u;
 const IFRAME_SRC_RE = /<iframe\b[^>]*\bsrc=(["'])([^"']+)\1/gi;
 const URL_LIKE_RE =
-  /((?:https?:)?\/\/(?:player\.bilibili\.com\/player\.html|www\.bilibili\.com\/blackboard\/(?:live\/live-mobile-playerV3|live\/live-activity-player|webplayer\/mbplayer)\.html|(?:www\.|m\.)?bilibili\.com\/(?:s\/)?video\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/bangumi\/play\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/audio\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/read\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/opus\/[^\s"'<>]+|t\.bilibili\.com\/[^\s"'<>]+|live\.bilibili\.com\/[^\s"'<>]+|(?:www\.)?(?:b23\.tv|bili2233\.cn)\/[^\s"'<>]+|(?:y\.)?music\.163\.com\/[^\s"'<>]+|(?:i\.)?y\.qq\.com\/[^\s"'<>]+|(?:www\.)?zhihu\.com\/[^\s"'<>]+|zhuanlan\.zhihu\.com\/[^\s"'<>]+))/gi;
+  /((?:https?:)?\/\/(?:player\.bilibili\.com\/player\.html|www\.bilibili\.com\/blackboard\/(?:live\/live-mobile-playerV3|live\/live-activity-player|webplayer\/mbplayer)\.html|(?:www\.|m\.)?bilibili\.com\/(?:s\/)?video\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/bangumi\/play\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/audio\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/read\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/opus\/[^\s"'<>]+|t\.bilibili\.com\/[^\s"'<>]+|live\.bilibili\.com\/[^\s"'<>]+|(?:www\.)?(?:b23\.tv|bili2233\.cn)\/[^\s"'<>]+|(?:y\.)?music\.163\.com\/[^\s"'<>]+|(?:i\.)?y\.qq\.com\/[^\s"'<>]+|(?:www\.)?zhihu\.com\/[^\s"'<>]+|zhuanlan\.zhihu\.com\/[^\s"'<>]+|(?:www\.)?marxists\.org\/[^\s"'<>]+))/gi;
 const XIAOHONGSHU_URL_LIKE_RE =
   /(?:^|[\s(（\[【{《「『])((?:https?:\/\/)?(?:www\.)?(?:xiaohongshu\.com|rednote\.com|xhslink\.(?:com|cn))\/[^\s"'<>，。；！？、（）【】《》「」『』]+)/gi;
 const DEFAULT_ASPECT_RATIO = "16 / 9";
@@ -851,6 +1152,314 @@ function parseXiaohongshuShortUrl(url) {
   return createParsedXiaohongshu("share", url, { shortCode: match[1] });
 }
 
+function isSafeMarxistsSourceUrl(url) {
+  return (
+    ["http:", "https:"].includes(url.protocol) &&
+    !url.username &&
+    !url.password &&
+    (!url.port || url.port === "80" || url.port === "443")
+  );
+}
+
+function buildMarxistsCanonicalUrl(url) {
+  const canonical = new URL(url.toString());
+
+  canonical.protocol = "https:";
+  canonical.hostname = "www.marxists.org";
+  canonical.port = "";
+
+  return canonical.toString();
+}
+
+function decodeUrlSegment(segment) {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
+
+function getMarxistsExtension(url) {
+  return getUrlFilename(url).match(/\.([a-z0-9]{1,5})$/i)?.[1]?.toLowerCase() || "";
+}
+
+function getMarxistsContentType(extension) {
+  if (MARXISTS_AUDIO_EXTENSIONS.has(extension)) {
+    return "audio";
+  }
+
+  if (MARXISTS_VIDEO_EXTENSIONS.has(extension)) {
+    return "video";
+  }
+
+  if (MARXISTS_DOWNLOAD_EXTENSIONS.has(extension)) {
+    return "download";
+  }
+
+  return MARXISTS_DOCUMENT_EXTENSIONS.has(extension) ? "document" : "";
+}
+
+function humanizeMarxistsSlug(slug) {
+  const text = String(slug || "")
+    .replace(MARXISTS_FILE_SEGMENT_RE, "")
+    .replace(/[-_+]+/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!text || /^[\d\s]+$/.test(text)) {
+    return "";
+  }
+
+  return text.replace(/(^|\s)([a-z])/g, (match, lead, letter) => `${lead}${letter.toUpperCase()}`);
+}
+
+function describeMarxistsPath(pathname) {
+  const segments = pathname.split("/").filter(Boolean).map(decodeUrlSegment);
+  const [first = "", second = "", third = ""] = segments;
+  const namedSegment = (segment) => (MARXISTS_FILE_SEGMENT_RE.test(segment) ? "" : segment);
+  const descriptor = {
+    section: "",
+    language: "",
+    authorSlug: "",
+    topic: "",
+    year: "",
+    month: "",
+    day: "",
+    workSlug: "",
+    chapter: "",
+    filename: segments.at(-1) || "",
+  };
+
+  if (first === "archive") {
+    descriptor.section = "archive";
+    descriptor.authorSlug = namedSegment(second);
+  } else if (first === "reference") {
+    descriptor.section = "reference";
+    descriptor.authorSlug = second === "archive" ? namedSegment(third) : "";
+    descriptor.topic = second === "subject" ? namedSegment(third) : "";
+  } else if (first === "glossary") {
+    descriptor.section = "glossary";
+    descriptor.topic = namedSegment(second);
+  } else if (first === "history" || first === "subject") {
+    descriptor.section = first;
+    descriptor.topic = namedSegment(second);
+  } else if (first === "ebooks" || first === "audiobooks" || first === "admin") {
+    descriptor.section = first;
+  } else if (MARXISTS_LANGUAGE_LABELS[first]) {
+    descriptor.section = "language";
+    descriptor.language = first;
+    descriptor.authorSlug = namedSegment(second);
+  }
+
+  for (const segment of segments) {
+    const yearMatch = segment.match(MARXISTS_YEAR_SEGMENT_RE);
+
+    if (yearMatch) {
+      descriptor.year = yearMatch[1];
+      break;
+    }
+  }
+
+  const stem = descriptor.filename.replace(MARXISTS_FILE_SEGMENT_RE, "");
+  const dateMatch = stem.match(MARXISTS_FILENAME_DATE_RE);
+
+  if (dateMatch) {
+    const month = Number.parseInt(dateMatch[2] || "", 10);
+    const day = Number.parseInt(dateMatch[3] || "", 10);
+
+    descriptor.year = descriptor.year || dateMatch[1];
+
+    if (descriptor.year === dateMatch[1]) {
+      descriptor.month = month >= 1 && month <= 12 ? String(month) : "";
+      descriptor.day = descriptor.month && day >= 1 && day <= 31 ? String(day) : "";
+    }
+  }
+
+  const chapterMatch = stem.match(MARXISTS_CHAPTER_FILE_RE);
+
+  if (chapterMatch) {
+    descriptor.chapter = chapterMatch[1];
+  }
+
+  const parentSlug = segments.length > 1 ? segments.at(-2) : "";
+  const candidateWorkSlug =
+    MARXISTS_INDEX_FILE_RE.test(stem) || chapterMatch || MARXISTS_OPAQUE_FILENAME_RE.test(stem)
+      ? parentSlug
+      : stem;
+
+  if (
+    candidateWorkSlug &&
+    candidateWorkSlug !== descriptor.authorSlug &&
+    candidateWorkSlug !== descriptor.topic &&
+    candidateWorkSlug !== descriptor.language &&
+    !MARXISTS_STRUCTURAL_SLUGS.has(candidateWorkSlug.toLowerCase()) &&
+    !MARXISTS_YEAR_SEGMENT_RE.test(candidateWorkSlug)
+  ) {
+    descriptor.workSlug = candidateWorkSlug;
+  }
+
+  return descriptor;
+}
+
+function getMarxistsSectionLabel(descriptor) {
+  if (descriptor.section === "language") {
+    const language = MARXISTS_LANGUAGE_LABELS[descriptor.language];
+
+    if (descriptor.language === "chinese") {
+      return "中文马克思主义文库";
+    }
+
+    return language ? `马克思主义文库·${language}` : "马克思主义文库";
+  }
+
+  if (descriptor.section === "glossary") {
+    const topic = MARXISTS_GLOSSARY_LABELS[descriptor.topic];
+
+    return topic ? `${MARXISTS_SECTION_LABELS.glossary}·${topic}` : MARXISTS_SECTION_LABELS.glossary;
+  }
+
+  return MARXISTS_SECTION_LABELS[descriptor.section] || "马克思主义文库";
+}
+
+function getMarxistsAuthorName(descriptor) {
+  if (!descriptor.authorSlug) {
+    return "";
+  }
+
+  const slug = descriptor.authorSlug.toLowerCase();
+  const authored =
+    descriptor.language === "chinese"
+      ? MARXISTS_CHINESE_AUTHOR_NAMES[slug]
+      : MARXISTS_AUTHOR_NAMES[slug];
+
+  return authored || humanizeMarxistsSlug(slug);
+}
+
+function getMarxistsWorkTitle(descriptor) {
+  const slug = descriptor.workSlug;
+
+  if (!/[-_]/.test(slug) && !/[\u4e00-\u9fff]/u.test(slug)) {
+    return "";
+  }
+
+  const title = humanizeMarxistsSlug(slug);
+
+  return title.length > 0 && title.length <= 80 ? title : "";
+}
+
+function getMarxistsDateText(descriptor) {
+  if (!descriptor.year) {
+    return "";
+  }
+
+  return [
+    `${descriptor.year}年`,
+    descriptor.month ? `${descriptor.month}月` : "",
+    descriptor.day ? `${descriptor.day}日` : "",
+  ].join("");
+}
+
+function createParsedMarxists(url, contentType, extension) {
+  const descriptor = describeMarxistsPath(url.pathname);
+
+  return {
+    provider: "marxists",
+    kind: "marxists",
+    contentType,
+    format: extension,
+    section: descriptor.section,
+    sectionLabel: getMarxistsSectionLabel(descriptor),
+    language: descriptor.language,
+    authorSlug: descriptor.authorSlug,
+    authorName: getMarxistsAuthorName(descriptor),
+    workTitle: getMarxistsWorkTitle(descriptor),
+    dateText: getMarxistsDateText(descriptor),
+    chapter: descriptor.chapter,
+    filename: descriptor.filename,
+    page: 1,
+    rawId: url.pathname,
+    canonicalUrl: buildMarxistsCanonicalUrl(url),
+  };
+}
+
+function parseMarxistsUrl(url) {
+  if (!MARXISTS_HOSTS.has(url.hostname.toLowerCase()) || !isSafeMarxistsSourceUrl(url)) {
+    return null;
+  }
+
+  const extension = getMarxistsExtension(url);
+
+  if (extension === "pdf") {
+    return null;
+  }
+
+  const contentType = getMarxistsContentType(extension);
+
+  return contentType ? createParsedMarxists(url, contentType, extension) : null;
+}
+
+function isMarxistsMedia(parsed) {
+  return parsed?.kind === "marxists" && ["audio", "video"].includes(parsed.contentType);
+}
+
+function isMarxistsInlineMedia(parsed) {
+  return isMarxistsMedia(parsed) && getBooleanSetting("enable_marxists_inline_media", true);
+}
+
+function isMarxistsReadingCard(parsed) {
+  return parsed?.kind === "marxists" && !isMarxistsMedia(parsed);
+}
+
+function getMarxistsMetaLine(parsed) {
+  switch (parsed.contentType) {
+    case "audio":
+      return "马克思主义文库·音频";
+    case "video":
+      return "马克思主义文库·影像";
+    case "download":
+      return `马克思主义文库·${parsed.format.toUpperCase()}`;
+    default:
+      return parsed.sectionLabel || "马克思主义文库";
+  }
+}
+
+function getMarxistsFallbackTitle(parsed) {
+  if (parsed.contentType === "audio" || parsed.contentType === "video" || parsed.contentType === "download") {
+    return humanizeMarxistsSlug(parsed.filename) || parsed.filename || getMarxistsMetaLine(parsed);
+  }
+
+  return parsed.workTitle || parsed.authorName || parsed.sectionLabel || "马克思主义文库";
+}
+
+function getMarxistsDescription(parsed) {
+  const shownElsewhere = new Set([getMarxistsFallbackTitle(parsed), getMarxistsMetaLine(parsed)]);
+  const parts = [
+    parsed.authorName,
+    parsed.dateText,
+    parsed.chapter ? `第 ${parsed.chapter} 章` : "",
+    parsed.sectionLabel,
+  ];
+
+  return [...new Set(parts.filter((part) => part && !shownElsewhere.has(part)))].join(" · ");
+}
+
+function getMarxistsFooterMeta(parsed) {
+  if (isMarxistsMedia(parsed)) {
+    return isMarxistsInlineMedia(parsed) ? "文库原始音视频 · 浏览器直接播放" : "在马克思主义文库播放";
+  }
+
+  if (parsed.contentType === "download") {
+    return `马克思主义文库 ${parsed.format.toUpperCase()} 原文件`;
+  }
+
+  if (supportsExpandReader(parsed)) {
+    return "原文经 BDFZ 阅读服务展开 · 该站禁止页面被外部内嵌";
+  }
+
+  return "马克思主义文库原文卡片 · 该站禁止页面被外部内嵌";
+}
+
 function normalizeUrlLikeString(value, { trimTrailingPunctuation = false } = {}) {
   if (typeof value !== "string") {
     return "";
@@ -947,7 +1556,8 @@ function parseBilibiliUrl(href) {
     parseQQMusicPageUrl(url) ||
     parseZhihuPageUrl(url) ||
     parseXiaohongshuPageUrl(url) ||
-    parseXiaohongshuShortUrl(url)
+    parseXiaohongshuShortUrl(url) ||
+    parseMarxistsUrl(url)
   );
 }
 
@@ -1201,6 +1811,8 @@ function getMetaLine(parsed) {
       return getZhihuMetaLine(parsed);
     case "xiaohongshu":
       return getXiaohongshuMetaLine(parsed);
+    case "marxists":
+      return getMarxistsMetaLine(parsed);
     case "ebook":
       return `${parsed.format.toUpperCase()} 电子书`;
     default:
@@ -1306,6 +1918,7 @@ function getPreviewStatText(parsed, viewCount = null) {
     case "qqmusic":
     case "zhihu":
     case "xiaohongshu":
+    case "marxists":
       return getMetaLine(parsed);
     case "ebook":
       return getMetaLine(parsed);
@@ -1391,6 +2004,8 @@ function getFallbackTitle(parsed) {
       return getZhihuFallbackTitle(parsed);
     case "xiaohongshu":
       return getXiaohongshuMetaLine(parsed);
+    case "marxists":
+      return getMarxistsFallbackTitle(parsed);
     case "ebook":
       return parsed.filename || `${parsed.format.toUpperCase()} 电子书`;
     default:
@@ -1463,6 +2078,10 @@ function isKnownInlineKind(parsed) {
     return shouldAutoExpandXiaohongshu(parsed);
   }
 
+  if (parsed.kind === "marxists") {
+    return isMarxistsInlineMedia(parsed);
+  }
+
   if (parsed.kind === "video" || parsed.kind === "bangumi" || parsed.kind === "netease") {
     return true;
   }
@@ -1487,6 +2106,10 @@ function getInitialButtonLabel(parsed) {
     return "展开笔记";
   }
 
+  if (isMarxistsInlineMedia(parsed)) {
+    return parsed.contentType === "video" ? "播放影像" : "播放录音";
+  }
+
   return isKnownInlineKind(parsed) ? getStringSetting("button_label", "点击播放") : getOpenLabel(parsed);
 }
 
@@ -1494,6 +2117,7 @@ function shouldShowDirectSourceLink(parsed) {
   return (
     parsed?.provider === "xiaohongshu" ||
     parsed?.provider === "ebook" ||
+    parsed?.provider === "marxists" ||
     getBooleanSetting("show_open_link", true)
   );
 }
@@ -1532,6 +2156,8 @@ function getFooterMeta(parsed) {
       }
 
       return parsed.contentType === "share" ? "小红书分享链接" : "小红书原文卡片";
+    case "marxists":
+      return getMarxistsFooterMeta(parsed);
     case "ebook":
       return "浏览器本地阅读 · 不上传第三方";
     default:
@@ -1579,6 +2205,10 @@ function getOpenLabel(parsed) {
     return "在知乎打开";
   }
 
+  if (parsed.provider === "marxists") {
+    return parsed.contentType === "download" ? "下载原文件" : "在马克思主义文库打开";
+  }
+
   if (parsed.provider === "qqmusic") {
     return "在QQ音乐打开";
   }
@@ -1597,6 +2227,10 @@ function getEmbedTitle(parsed) {
 
   if (parsed.provider === "zhihu") {
     return "Zhihu page";
+  }
+
+  if (parsed.provider === "marxists") {
+    return "Marxists Internet Archive";
   }
 
   if (parsed.provider === "qqmusic") {
@@ -1786,6 +2420,10 @@ function getPlaceholderLabel(parsedOrProvider) {
     return "Zhihu";
   }
 
+  if (provider === "marxists") {
+    return "马克思主义文库";
+  }
+
   if (provider === "qqmusic") {
     return "QQ Music";
   }
@@ -1854,11 +2492,18 @@ function cleanProviderTitle(title, parsed) {
     cleaned = cleaned.replace(/\s*-\s*知乎专栏\s*$/iu, "");
   }
 
+  if (parsed?.provider === "marxists") {
+    cleaned = cleaned.replace(
+      /\s*[-|–—]\s*(?:marxists internet archive|marxists\.org|中文马克思主义文库|马克思主义文库)\s*$/iu,
+      ""
+    );
+  }
+
   return normalizeTitleText(cleaned);
 }
 
 const GENERIC_TITLE_RE =
-  /^(?:bilibili|哔哩哔哩|b站|网易云音乐|netease\s*(?:cloud\s*)?music|music\.163\.com|(?:www\.)?bilibili\.com|qq音乐|qqmusic|qq\s*music|(?:i\.)?y\.qq\.com|知乎|zhihu|(?:www\.)?zhihu\.com|zhuanlan\.zhihu\.com|(?:https?:\/\/)?(?:music\.163\.com|(?:www\.)?bilibili\.com|(?:i\.)?y\.qq\.com|(?:www\.)?zhihu\.com|zhuanlan\.zhihu\.com)\/\S*)$/i;
+  /^(?:bilibili|哔哩哔哩|b站|网易云音乐|netease\s*(?:cloud\s*)?music|music\.163\.com|(?:www\.)?bilibili\.com|qq音乐|qqmusic|qq\s*music|(?:i\.)?y\.qq\.com|知乎|zhihu|(?:www\.)?zhihu\.com|zhuanlan\.zhihu\.com|marxists\s*internet\s*archive|马克思主义文库|中文马克思主义文库|(?:https?:\/\/)?(?:music\.163\.com|(?:www\.)?bilibili\.com|(?:i\.)?y\.qq\.com|(?:www\.)?zhihu\.com|zhuanlan\.zhihu\.com|(?:www\.)?marxists\.org)(?:\/\S*)?)$/i;
 
 function extractStructuredProviderTitle(candidate, parsed) {
   const text = normalizeTitleText(candidate);
@@ -2070,6 +2715,14 @@ function extractXiaohongshuCookedMetadata(target, fallbackAnchor, parsed) {
   };
 }
 
+function extractMarxistsCookedText(target) {
+  const description = normalizeTitleText(
+    target.querySelector(".onebox-body p, .onebox-body .onebox-description")?.textContent || ""
+  );
+
+  return isGenericTitle(description) ? "" : description.slice(0, 400);
+}
+
 function buildMetadata(target, fallbackAnchor, parsed) {
   if (parsed.provider === "ebook") {
     const anchorTitle = normalizeTitleText(fallbackAnchor?.textContent || "");
@@ -2079,6 +2732,20 @@ function buildMetadata(target, fallbackAnchor, parsed) {
       title: anchorTitle || parsed.filename || getFallbackTitle(parsed),
       description: `${parsed.format.toUpperCase()} 格式将在此浏览器中本地解析。`,
       poster: "",
+      canonicalUrl: parsed.canonicalUrl,
+      metaLine: getMetaLine(parsed),
+      viewCount: null,
+      environmentRisk: { level: "none", message: "" },
+    };
+  }
+
+  if (parsed.provider === "marxists") {
+    return {
+      parsed,
+      title: extractTitle(target, fallbackAnchor, parsed),
+      description: getMarxistsDescription(parsed),
+      sourceText: extractMarxistsCookedText(target),
+      poster: extractPoster(target),
       canonicalUrl: parsed.canonicalUrl,
       metaLine: getMetaLine(parsed),
       viewCount: null,
@@ -2284,6 +2951,8 @@ function getPreviewAspectRatio(parsed) {
       return isCompactNetEase(parsed) ? "auto" : "4 / 3";
     case "qqmusic":
       return isCompactQQMusic(parsed) ? "auto" : "4 / 3";
+    case "marxists":
+      return parsed.contentType === "video" ? "16 / 9" : "auto";
     case "zhihu":
     case "xiaohongshu":
     case "ebook":
@@ -2321,7 +2990,10 @@ function buildWrapper(metadata) {
   wrapper.classList.add(`bilibili-inline-player--${metadata.parsed.provider || "bilibili"}`);
   wrapperState.set(wrapper, metadata);
 
-  if (compact) {
+  if (isMarxistsReadingCard(metadata.parsed)) {
+    wrapper.classList.add("bilibili-inline-player--reading");
+    buildMarxistsReadingCard(wrapper, metadata);
+  } else if (compact) {
     wrapper.classList.add("bilibili-inline-player--compact-audio");
     buildCompactAudioCard(wrapper, metadata);
   } else {
@@ -2343,6 +3015,57 @@ function buildWrapper(metadata) {
   }
 
   return wrapper;
+}
+
+function buildMarxistsReadingCard(wrapper, metadata) {
+  const body = createElement("div", "bilibili-inline-player__reading-body");
+  const badge = createElement("span", "bilibili-inline-player__reading-badge", metadata.metaLine);
+  const title = createElement("h3", "bilibili-inline-player__reading-title", metadata.title);
+
+  body.append(badge, title);
+
+  if (metadata.description) {
+    body.appendChild(
+      createElement("div", "bilibili-inline-player__reading-byline", metadata.description)
+    );
+  }
+
+  if (metadata.sourceText) {
+    body.appendChild(
+      createElement("p", "bilibili-inline-player__reading-text", metadata.sourceText)
+    );
+  }
+
+  if (supportsExpandReader(metadata.parsed)) {
+    body.appendChild(
+      createElement("div", "bilibili-inline-player__reading-status", "正在展开原文…")
+    );
+  }
+
+  const footer = createElement("div", "bilibili-inline-player__footer");
+  const footerContent = createElement("div", "bilibili-inline-player__footer-content");
+  const footerActions = createElement("div", "bilibili-inline-player__footer-actions");
+  const link = createElement(
+    "a",
+    "bilibili-inline-player__footer-link",
+    getOpenLabel(metadata.parsed)
+  );
+
+  footerContent.appendChild(
+    createElement("div", "bilibili-inline-player__footer-meta", getFooterMeta(metadata.parsed))
+  );
+  link.href = metadata.canonicalUrl;
+  link.target = "_blank";
+  link.rel = "noopener nofollow ugc";
+  footerActions.appendChild(link);
+  footer.append(footerContent, footerActions);
+
+  wrapper.dataset.bilibiliLoaded = "1";
+  wrapper.append(body, footer);
+
+  if (supportsExpandReader(metadata.parsed)) {
+    Promise.resolve().then(() => expandThroughReader(wrapper));
+  }
 }
 
 function buildCompactAudioCard(wrapper, metadata) {
@@ -2544,6 +3267,20 @@ function primeEmbedState(wrapper) {
     return;
   }
 
+  if (state.parsed.kind === "marxists") {
+    state.iframeUrl = null;
+    state.standardIframeUrl = "";
+    state.noAutoplayIframeUrl = "";
+    state.externalOnly = !isMarxistsInlineMedia(state.parsed);
+    state.resolvePromise = Promise.resolve(state.parsed);
+
+    if (state.externalOnly) {
+      setButtonLabel(wrapper, getOpenLabel(state.parsed));
+    }
+
+    return;
+  }
+
   if (state.parsed.kind === "ebook") {
     state.iframeUrl = null;
     state.externalOnly = !getBooleanSetting("enable_ebook_reader", true);
@@ -2613,6 +3350,11 @@ async function autoExpandWrapper(wrapper) {
 
   if (state.parsed.kind === "ebook") {
     await activateEbookReader(wrapper);
+    return;
+  }
+
+  if (isMarxistsInlineMedia(state.parsed)) {
+    renderMarxistsMediaPlayer(wrapper);
     return;
   }
 
@@ -2762,6 +3504,284 @@ function buildLoadedFooter(wrapper) {
   }
 
   return footer;
+}
+
+/* Shared expand-reader service.
+
+   Some sources refuse to be framed and refuse cross-origin reads, so a page the
+   forum links to cannot be shown by the browser alone. For those, the component
+   asks the BDFZ `expand-reader` Worker for an already-sanitized reading fragment
+   and renders it in place, expanded, with no click step. Reader output is still
+   treated as untrusted: it is re-sanitized here against the same allowlist
+   before it touches the DOM, and any failure falls back to the source card. */
+const READER_KEEP_TAGS = new Set([
+  "p", "br", "hr", "h1", "h2", "h3", "h4", "h5", "h6",
+  "strong", "b", "em", "i", "u", "s", "strike", "sub", "sup",
+  "blockquote", "q", "cite", "code", "pre", "kbd", "samp", "var",
+  "ul", "ol", "li", "dl", "dt", "dd",
+  "a", "img", "figure", "figcaption", "abbr", "time",
+  "table", "thead", "tbody", "tfoot", "tr", "td", "th", "caption",
+  "ruby", "rt", "rp",
+]);
+const READER_DROP_TAGS = new Set([
+  "script", "style", "noscript", "iframe", "object", "embed", "applet",
+  "frame", "frameset", "form", "input", "button", "select", "option",
+  "textarea", "svg", "math", "canvas", "audio", "video", "source", "track",
+  "map", "area", "link", "base", "template", "dialog", "meta", "title", "nav",
+]);
+const READER_ALLOWED_ATTRIBUTES = {
+  a: ["href", "title", "id", "name", "target", "rel"],
+  img: ["src", "alt", "title", "width", "height", "loading", "referrerpolicy"],
+  td: ["colspan", "rowspan"],
+  th: ["colspan", "rowspan", "scope"],
+  time: ["datetime"],
+  ol: ["start", "reversed"],
+  blockquote: ["cite"],
+  q: ["cite"],
+};
+const READER_TIMEOUT_MS = 15000;
+const DEFAULT_READER_ENDPOINT = "https://reader.bdfz.net/read";
+const DEFAULT_READER_PANE_HEIGHT = 560;
+const readerViewCache = new Map();
+
+function getExpandReaderEndpoint() {
+  const endpoint = getStringSetting("expand_reader_endpoint", DEFAULT_READER_ENDPOINT).trim();
+
+  if (!endpoint) {
+    return "";
+  }
+
+  try {
+    const url = new URL(endpoint);
+    const isLoopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+
+    /* HTTPS in production; a loopback endpoint is allowed so the component can be
+       developed against a local instance of the reader service. */
+    return url.protocol === "https:" || (url.protocol === "http:" && isLoopback) ? url.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
+function supportsExpandReader(parsed) {
+  return (
+    parsed?.kind === "marxists" &&
+    parsed.contentType === "document" &&
+    getBooleanSetting("enable_expand_reader", true) &&
+    Boolean(getExpandReaderEndpoint())
+  );
+}
+
+async function fetchReaderView(canonicalUrl) {
+  if (readerViewCache.has(canonicalUrl)) {
+    return readerViewCache.get(canonicalUrl);
+  }
+
+  const endpoint = getExpandReaderEndpoint();
+
+  if (!endpoint) {
+    return null;
+  }
+
+  const request = (async () => {
+    const requestUrl = new URL(endpoint);
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), READER_TIMEOUT_MS);
+
+    requestUrl.searchParams.set("url", canonicalUrl);
+
+    try {
+      const response = await fetch(requestUrl.toString(), {
+        method: "GET",
+        credentials: "omit",
+        referrerPolicy: "no-referrer",
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const payload = await response.json();
+
+      return payload?.ok && typeof payload.html === "string" ? payload : null;
+    } catch {
+      return null;
+    } finally {
+      window.clearTimeout(timer);
+    }
+  })();
+
+  readerViewCache.set(canonicalUrl, request);
+
+  return request;
+}
+
+function sanitizeReaderFragment(html) {
+  if (!globalThis.DOMParser) {
+    return null;
+  }
+
+  const parsed = new DOMParser().parseFromString(`<div>${html}</div>`, "text/html");
+  const root = parsed.body?.firstElementChild;
+
+  if (!root) {
+    return null;
+  }
+
+  for (const element of Array.from(root.querySelectorAll("*"))) {
+    const tag = element.tagName.toLowerCase();
+
+    if (READER_DROP_TAGS.has(tag)) {
+      element.remove();
+      continue;
+    }
+
+    if (!READER_KEEP_TAGS.has(tag)) {
+      element.replaceWith(...Array.from(element.childNodes));
+      continue;
+    }
+
+    const allowed = READER_ALLOWED_ATTRIBUTES[tag] || [];
+
+    for (const attribute of Array.from(element.attributes)) {
+      const name = attribute.name.toLowerCase();
+
+      if (!allowed.includes(name)) {
+        element.removeAttribute(attribute.name);
+        continue;
+      }
+
+      if (["href", "src"].includes(name) && !/^(?:https:|http:|#)/i.test(attribute.value.trim())) {
+        element.removeAttribute(attribute.name);
+      }
+    }
+
+    if (tag === "a" && element.getAttribute("href")?.startsWith("http")) {
+      element.setAttribute("target", "_blank");
+      element.setAttribute("rel", "noopener nofollow ugc");
+    }
+  }
+
+  return root;
+}
+
+function buildReaderPane(wrapper, view) {
+  const fragment = sanitizeReaderFragment(view.html);
+
+  if (!fragment || !normalizeTitleText(fragment.textContent || "")) {
+    return null;
+  }
+
+  const pane = createElement("div", "bilibili-inline-player__reader-pane");
+  const article = createElement("article", "bilibili-inline-player__reader-article");
+
+  article.lang = view.lang || "";
+  article.append(...Array.from(fragment.childNodes));
+  pane.appendChild(article);
+  pane.style.setProperty(
+    "--bili-reader-height",
+    `${getBoundedIntegerSetting("expand_reader_height", DEFAULT_READER_PANE_HEIGHT, 240, 1200)}px`
+  );
+
+  if (view.truncated) {
+    pane.appendChild(
+      createElement(
+        "div",
+        "bilibili-inline-player__reader-truncated",
+        "原文过长，此处只展开了前一部分，完整内容请用下方链接打开原站。"
+      )
+    );
+  }
+
+  return pane;
+}
+
+async function expandThroughReader(wrapper) {
+  const state = wrapperState.get(wrapper);
+
+  if (!state?.parsed || !supportsExpandReader(state.parsed) || wrapper.dataset.bilibiliReaderDone === "1") {
+    return;
+  }
+
+  wrapper.dataset.bilibiliReaderDone = "1";
+  wrapper.classList.add("bilibili-inline-player--reader-loading");
+
+  const status = wrapper.querySelector(".bilibili-inline-player__reading-status");
+
+  const view = await fetchReaderView(state.parsed.canonicalUrl);
+
+  wrapper.classList.remove("bilibili-inline-player--reader-loading");
+
+  if (!wrapper.isConnected) {
+    return;
+  }
+
+  const pane = view ? buildReaderPane(wrapper, view) : null;
+
+  if (!pane) {
+    status?.remove();
+    return;
+  }
+
+  if (view.title && !isGenericTitle(view.title)) {
+    const heading = wrapper.querySelector(".bilibili-inline-player__reading-title");
+
+    if (heading) {
+      heading.textContent = cleanProviderTitle(view.title, state.parsed) || heading.textContent;
+    }
+  }
+
+  status?.remove();
+  wrapper.classList.add("bilibili-inline-player--reader-open");
+  wrapper.querySelector(".bilibili-inline-player__reading-body")?.insertAdjacentElement("afterend", pane);
+}
+
+function renderMarxistsMediaPlayer(wrapper, { allowAutoplay = false } = {}) {
+  const state = wrapperState.get(wrapper);
+
+  if (!state?.parsed || !isMarxistsInlineMedia(state.parsed)) {
+    return;
+  }
+
+  const isVideo = state.parsed.contentType === "video";
+  const title = wrapper.dataset.bilibiliTitle || getFallbackTitle(state.parsed);
+
+  wrapper.dataset.bilibiliLoading = "0";
+  wrapper.dataset.bilibiliLoaded = "1";
+  wrapper.classList.remove("bilibili-inline-player--loading");
+
+  const shell = createElement(
+    "div",
+    `bilibili-inline-player__native-media bilibili-inline-player__native-media--${isVideo ? "video" : "audio"}`
+  );
+  const caption = createElement("div", "bilibili-inline-player__native-media-title", title);
+  const element = createElement(isVideo ? "video" : "audio", "bilibili-inline-player__native-media-element");
+  const status = createElement("div", "bilibili-inline-player__native-media-status", "");
+
+  element.src = state.parsed.canonicalUrl;
+  element.controls = true;
+  element.preload = "metadata";
+  element.playsInline = true;
+  element.title = title;
+
+  element.addEventListener(
+    "error",
+    () => {
+      status.textContent = "浏览器无法直接播放该文件，请用下方链接在马克思主义文库打开。";
+      status.classList.add("bilibili-inline-player__native-media-status--error");
+    },
+    { once: true }
+  );
+
+  shell.append(caption, element, status);
+  wrapper.classList.remove("bilibili-inline-player--compact-audio");
+  wrapper.replaceChildren(shell, buildLoadedFooter(wrapper));
+  updateFooterMeta(wrapper);
+
+  if (allowAutoplay) {
+    element.play?.()?.catch?.(() => {});
+  }
 }
 
 function renderLoadedPlayer(wrapper, iframeUrl, { allowAutoplay = false } = {}) {
@@ -3246,6 +4266,13 @@ async function activatePlayer(wrapper) {
 
   if (state?.parsed?.kind === "ebook") {
     await activateEbookReader(wrapper);
+    return;
+  }
+
+  if (isMarxistsInlineMedia(state?.parsed)) {
+    renderMarxistsMediaPlayer(wrapper, {
+      allowAutoplay: getBooleanSetting("autoplay_on_click", true),
+    });
     return;
   }
 
