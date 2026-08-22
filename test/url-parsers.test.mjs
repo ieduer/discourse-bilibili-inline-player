@@ -14,6 +14,7 @@ const executableSource = initializerSource
   .concat(`
 globalThis.__themeParserTestApi = {
   buildXiaohongshuPreviewText,
+  cleanProviderTitle,
   collectEbookAttachmentCandidates,
   collectEmbedTextCandidates,
   collectIframeCandidates,
@@ -52,6 +53,7 @@ globalThis.__themeParserTestApi = {
   READER_CACHE_TTL_MS,
   sanitizeReaderImageUrl,
   sanitizeEbookCss,
+  resolveReaderViewTitle,
   storeReaderRequest,
 };
 `);
@@ -72,6 +74,7 @@ vm.runInNewContext(executableSource, context, {
 
 const {
   buildXiaohongshuPreviewText,
+  cleanProviderTitle,
   collectEbookAttachmentCandidates,
   collectEmbedTextCandidates,
   collectIframeCandidates,
@@ -110,8 +113,26 @@ const {
   READER_CACHE_TTL_MS,
   sanitizeReaderImageUrl,
   sanitizeEbookCss,
+  resolveReaderViewTitle,
   storeReaderRequest,
 } = context.__themeParserTestApi;
+
+test("reader titles discard Discourse click telemetry and prefer source metadata", () => {
+  const parsed = parseBilibiliUrl(
+    "https://www.marxists.org/chinese/maozedong/marxist.org-chinese-mao-193708.htm"
+  );
+  const telemetryTitle =
+    "https://www.marxists.org/chinese/maozedong/marxist.org-chinese-mao-193708.htm link clicked 9 times";
+
+  assert.equal(
+    cleanProviderTitle(telemetryTitle, parsed),
+    "https://www.marxists.org/chinese/maozedong/marxist.org-chinese-mao-193708.htm"
+  );
+  assert.equal(
+    resolveReaderViewTitle({ title: "矛盾论（一九三七年八月）" }, parsed, telemetryTitle),
+    "矛盾论（一九三七年八月）"
+  );
+});
 
 function makeCookedParagraphFixture({
   after = "",
@@ -780,7 +801,7 @@ test("finds a bare marxists link inside cooked text", () => {
   );
 });
 
-test("recognizes topic 1330/2 standalone and topic 5970/77 onebox shapes", () => {
+test("recognizes topic 1330/2 standalone and a synthetic document onebox shape", () => {
   const url = "https://www.marxists.org/chinese/maozedong/marxist.org-chinese-mao-193708.htm";
   const standalone = makeCookedParagraphFixture({ url });
   const [standaloneCandidate] = collectStandaloneCandidates(standalone.cooked, []);

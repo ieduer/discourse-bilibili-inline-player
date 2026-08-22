@@ -2476,6 +2476,10 @@ function cleanProviderTitle(title, parsed) {
     return "";
   }
 
+  /* Discourse appends click telemetry to link aria-labels. It is not content
+     metadata and must never become a card title or accessible region label. */
+  cleaned = cleaned.replace(/\s+link clicked \d+ times?$/i, "");
+
   if (parsed?.provider === "netease") {
     cleaned = cleaned.replace(/\s*-\s*网易云音乐\s*$/i, "");
     cleaned = cleaned.replace(/\s*-\s*(?:单曲|专辑|歌单|播客节目|播客|电台)\s*$/i, "");
@@ -3857,7 +3861,7 @@ function sanitizeReaderFragment(html, sourceUrl, idPrefix) {
   return root;
 }
 
-function buildReaderPane(wrapper, view) {
+function buildReaderPane(wrapper, view, resolvedTitle = "") {
   const sourceUrl = wrapperState.get(wrapper)?.parsed?.canonicalUrl || "";
   const idPrefix = `bili-reader-${++readerFragmentSequence}-`;
   const fragment = sanitizeReaderFragment(view.html, sourceUrl, idPrefix);
@@ -3873,7 +3877,7 @@ function buildReaderPane(wrapper, view) {
   pane.setAttribute("role", "region");
   pane.setAttribute(
     "aria-label",
-    `${wrapper.dataset.bilibiliTitle || "马克思主义文库"}原文`
+    `${resolvedTitle || wrapper.dataset.bilibiliTitle || "马克思主义文库"}原文`
   );
   article.lang = view.lang || "";
   article.append(...Array.from(fragment.childNodes));
@@ -3894,6 +3898,16 @@ function buildReaderPane(wrapper, view) {
   }
 
   return pane;
+}
+
+function resolveReaderViewTitle(view, parsed, fallbackTitle = "") {
+  const title = cleanProviderTitle(view?.title || "", parsed);
+
+  if (title && !isGenericTitle(title)) {
+    return title;
+  }
+
+  return normalizeTitleText(fallbackTitle);
 }
 
 async function expandThroughReader(wrapper) {
@@ -3918,7 +3932,13 @@ async function expandThroughReader(wrapper) {
     return;
   }
 
-  const pane = view ? buildReaderPane(wrapper, view) : null;
+  const resolvedTitle = resolveReaderViewTitle(
+    view,
+    state.parsed,
+    wrapper.dataset.bilibiliTitle
+  );
+
+  const pane = view ? buildReaderPane(wrapper, view, resolvedTitle) : null;
 
   if (!pane) {
     if (status) {
@@ -3928,11 +3948,14 @@ async function expandThroughReader(wrapper) {
     return;
   }
 
-  if (view.title && !isGenericTitle(view.title)) {
+  if (resolvedTitle) {
+    wrapper.dataset.bilibiliTitle = resolvedTitle;
+    state.title = resolvedTitle;
+
     const heading = wrapper.querySelector(".bilibili-inline-player__reading-title");
 
     if (heading) {
-      heading.textContent = cleanProviderTitle(view.title, state.parsed) || heading.textContent;
+      heading.textContent = resolvedTitle;
     }
   }
 

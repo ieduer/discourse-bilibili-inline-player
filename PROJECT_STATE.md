@@ -24,7 +24,11 @@ Last reviewed: 2026-08-22 (America/Los_Angeles)
 - Recognize the real Discourse cooked shape used by topic/post `2327/1`: a short source note, a `<br>`, and one direct auto-linked Marxists URL whose displayed text is the URL. Preserve the note and add one reader card after it.
 - Keep scope deliberately narrow: the paragraph's only element children must be one `<br>` followed by one direct `a.onebox`; the displayed and target Marxists URLs must canonicalize identically, the URL must end the paragraph, surrounding text is capped at 48 characters, and list, blockquote, media, onebox-container, and component-owned content are rejected.
 - Explicitly leave pasted article navigation alone. Topic/post `9340/1` has six previous/contents/next links and `6813/1` has a three-link cluster; neither is a source-card candidate.
-- Preserve existing standalone and onebox behavior. Public acceptance controls are standalone `1330/2` and onebox `5970/77`.
+- Preserve existing standalone and onebox behavior. Public acceptance uses the
+  standalone document at `1330/2`; the only current Marxists onebox control,
+  `5970/77`, is a PDF and must remain an unclaimed PDF onebox. A synthetic
+  document-onebox fixture covers the positive parser path without pretending it
+  is that public post.
 - Replace the unbounded lifetime reader cache with a 24-entry, five-minute LRU; ignore source fragments in the fetch key, keep endpoint identity in the key, and immediately evict failed responses.
 - Re-sanitize reader images to same-source HTTPS only, force lazy loading and no-referrer, and scope anchor `id`, `name`, and fragment references uniquely per reader pane.
 - Reject reader endpoints containing credentials and discard endpoint fragments.
@@ -33,9 +37,11 @@ Last reviewed: 2026-08-22 (America/Los_Angeles)
 
 ## Verification evidence
 
-- Candidate parser, cooked-DOM, cache, endpoint, sanitizer-policy, and legacy-provider suite: `49/49` passing with the workspace authority Node `24.18.0` in the isolated build environment.
+- Candidate parser, cooked-DOM, cache, endpoint, sanitizer-policy, and legacy-provider suite: `50/50` passing with the workspace authority Node `24.18.0` in the isolated build environment.
 - JavaScript syntax check passed for the initializer and test file.
-- Regression fixtures encode the live shapes for `1330/2`, `2327/1`, `5970/77`, `6813/1`, and `9340/1` without storing post text.
+- Regression fixtures encode the live shapes for `1330/2`, `2327/1`, the PDF
+  non-takeover at `5970/77`, `6813/1`, and `9340/1` without storing post text;
+  a separately labelled synthetic fixture covers a document onebox.
 - Production browser baseline before candidate deployment: `1330/2` produced one loaded Marxists reader; `2327/1` and `9340/1` produced zero wrappers under `0.11.0`.
 - GitHub publication, exact-SHA hosted-CI readback (or the documented zero-step billing-gate exception), production theme refresh, and post-refresh browser acceptance remain outstanding for `0.11.1`.
 
@@ -44,6 +50,10 @@ Last reviewed: 2026-08-22 (America/Los_Angeles)
 - The test suite uses bounded DOM-shape fixtures rather than a full Discourse browser runtime. Real-post browser acceptance remains mandatory after theme refresh.
 - The reader response is fetched as JSON in one operation; the Worker currently caps sanitized output, but the client has no independent streaming byte cap.
 - GitHub Actions currently relies on the runner's Node installation and `actions/checkout@v4`; exact Node/action pinning remains a reproducibility-hardening follow-up.
-- Next action: push the independently reviewed exact SHA, read back its hosted-CI result, use the bounded local-CI exception only if GitHub creates a zero-step billing-gated run, refresh theme `119`, then verify `1330/2`, `2327/1`, `5970/77`, and the `9340/1` non-takeover control.
+- Next action: push the independently reviewed exact SHA, read back its hosted-CI
+  result, use the bounded local-CI exception only if GitHub creates a zero-step
+  billing-gated run, refresh theme `119`, then verify document readers at
+  `1330/2` and `2327/1` plus non-takeover controls `5970/77`, `6813/1`, and
+  `9340/1`.
 
 Exact test, release, readback, restore, and rollback commands are in `docs/OPERATIONS.md`.

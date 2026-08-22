@@ -118,7 +118,7 @@ For Marxists cooked DOM, the required fixture set is:
 
 - standalone control `1330/2`;
 - conservative short-note plus `<br>` source link `2327/1`;
-- onebox `5970/77`;
+- PDF onebox non-takeover control `5970/77`;
 - navigation non-takeover controls `6813/1` and `9340/1`.
 
 ## GitHub publication gate
@@ -240,7 +240,10 @@ reload as needed and verify:
 
 1. `1330/2`: exactly one Marxists wrapper and one loaded reader pane.
 2. `2327/1`: source paragraph remains, exactly one wrapper is inserted after it, and the reader loads.
-3. `5970/77`: onebox becomes one reader card without duplication.
+3. `5970/77`: its Marxists PDF remains the original PDF onebox and produces
+   zero reader wrappers; document-onebox conversion remains covered by the
+   executable parser/runtime fixture because no current public post provides a
+   non-PDF Marxists onebox.
 4. `9340/1`: six article-navigation links remain unchanged and produce zero wrappers.
 5. Reader failure control: source card/link remains and an accessible error status appears.
 6. Keyboard focus reaches the scroll region; reduced-motion removes loading animation.
