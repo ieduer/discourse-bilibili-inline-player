@@ -19,7 +19,7 @@ steps. Live Discourse and GitHub readback override this document when they disag
 - Reader dependency: `https://reader.bdfz.net/read`, owned by the `expand-reader` Worker.
 - Health: forum `/`, `/srv/status`; reader `/health`; then real cooked-post acceptance.
 - Deploy prohibition: never rebuild Discourse, edit `app.yml`, or mutate forum content for a theme release.
-- Release gate: clean exact source, tests, GitHub push, exact-SHA successful CI, guarded theme refresh, database readback, public health, and browser acceptance.
+- Release gate: clean exact source, tests, GitHub push, exact-SHA hosted-CI readback, guarded theme refresh, database readback, public health, and browser acceptance. A zero-step GitHub billing rejection may use only the bounded local-CI exception below; a real test failure may not.
 - Immediate rollback authority: the previous Git commit plus remote theme `119`; the reader kill switch is `enable_expand_reader=false`.
 
 Before any mutation, also read:
@@ -136,6 +136,14 @@ gh run list --repo ieduer/discourse-bilibili-inline-player --commit <EXACT_SHA> 
 gh run view <RUN_ID> --repo ieduer/discourse-bilibili-inline-player
 ```
 
+If GitHub creates a zero-step run whose own annotation says account billing or
+Actions budget prevented the job from starting, that is unavailable infrastructure,
+not a passing check. The user may authorize a bounded local-CI exception for the exact
+pushed SHA. The exception requires: a clean isolated clone at that SHA; Node `24.18.0`;
+every command in `Local verification`; an independent diff review with no blocker; the
+zero-step run id and annotation recorded; and no other release-gate waiver. A job that
+starts and fails, a missing workflow, or a source mismatch cannot use this exception.
+
 ## Theme 119 readback
 
 This read-only Rails method uses the managed SSH host and prints no cookie, private
@@ -181,7 +189,8 @@ import error is present, or if installed state cannot be tied to an exact Git SH
 The Discourse controller's established update path calls
 `RemoteTheme#update_remote_version` and then `#update_from_remote`. The following
 Rails command uses the same model API and adds an exact-SHA guard. Run it only after
-GitHub CI succeeds, replacing the placeholder with the full 40-character SHA:
+GitHub CI succeeds or the exact zero-step exception above is fully recorded, replacing
+the placeholder with the full 40-character SHA:
 
 ```bash
 ssh forum-backend "docker exec -i -u discourse app bash -lc 'cd /var/www/discourse && RAILS_ENV=production bundle exec rails runner -'" <<'RUBY'

@@ -33,17 +33,17 @@ Last reviewed: 2026-08-22 (America/Los_Angeles)
 
 ## Verification evidence
 
-- Candidate parser, cooked-DOM, cache, endpoint, sanitizer-policy, and legacy-provider suite: `49/49` passing with Node `26.7.0` in the isolated build environment.
+- Candidate parser, cooked-DOM, cache, endpoint, sanitizer-policy, and legacy-provider suite: `49/49` passing with the workspace authority Node `24.18.0` in the isolated build environment.
 - JavaScript syntax check passed for the initializer and test file.
 - Regression fixtures encode the live shapes for `1330/2`, `2327/1`, `5970/77`, `6813/1`, and `9340/1` without storing post text.
 - Production browser baseline before candidate deployment: `1330/2` produced one loaded Marxists reader; `2327/1` and `9340/1` produced zero wrappers under `0.11.0`.
-- GitHub publication, exact-SHA CI, production theme refresh, and post-refresh browser acceptance remain outstanding for `0.11.1`.
+- GitHub publication, exact-SHA hosted-CI readback (or the documented zero-step billing-gate exception), production theme refresh, and post-refresh browser acceptance remain outstanding for `0.11.1`.
 
 ## Residual risks and next action
 
 - The test suite uses bounded DOM-shape fixtures rather than a full Discourse browser runtime. Real-post browser acceptance remains mandatory after theme refresh.
 - The reader response is fetched as JSON in one operation; the Worker currently caps sanitized output, but the client has no independent streaming byte cap.
 - GitHub Actions currently relies on the runner's Node installation and `actions/checkout@v4`; exact Node/action pinning remains a reproducibility-hardening follow-up.
-- Next action: independent review, commit the isolated candidate, push exact SHA, require successful CI, refresh theme `119`, then verify `1330/2`, `2327/1`, `5970/77`, and the `9340/1` non-takeover control.
+- Next action: push the independently reviewed exact SHA, read back its hosted-CI result, use the bounded local-CI exception only if GitHub creates a zero-step billing-gated run, refresh theme `119`, then verify `1330/2`, `2327/1`, `5970/77`, and the `9340/1` non-takeover control.
 
 Exact test, release, readback, restore, and rollback commands are in `docs/OPERATIONS.md`.
