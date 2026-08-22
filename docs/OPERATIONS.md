@@ -20,7 +20,12 @@ steps. Live Discourse and GitHub readback override this document when they disag
 - Health: forum `/`, `/srv/status`; reader `/health`; then real cooked-post acceptance.
 - Deploy prohibition: never rebuild Discourse, edit `app.yml`, or mutate forum content for a theme release.
 - Release gate: clean exact source, tests, GitHub push, exact-SHA hosted-CI readback, guarded theme refresh, database readback, public health, and browser acceptance. A zero-step GitHub billing rejection may use only the bounded local-CI exception below; a real test failure may not.
-- Immediate rollback authority: the previous Git commit plus remote theme `119`; the reader kill switch is `enable_expand_reader=false`.
+- Accepted runtime release: `0.11.1`; implementation/JavaScript source SHA
+  `cd8063bdc2f49ee00ee86dfeef0dc1b3105a1738`.
+- Runtime-behavior rollback reference:
+  `7dd04ed3c2586bfe70ab3d6ff42efc8ed546f607` (`0.11.0`); restore its tree
+  through a reviewed revert commit on `main`. The reader kill switch is
+  `enable_expand_reader=false`.
 
 Before any mutation, also read:
 
@@ -48,6 +53,31 @@ There are no external local build inputs, database exports, generated releases, 
 secret files required by this repository. Discourse compiles the Git-backed fields.
 The component sends only a canonical public source URL to the reader endpoint with
 `credentials: "omit"` and `referrerPolicy: "no-referrer"`.
+
+## Accepted production release
+
+Release `0.11.1` was accepted in production on 2026-08-22 with these exact
+authorities and receipts:
+
+- implementation and JavaScript runtime source SHA:
+  `cd8063bdc2f49ee00ee86dfeef0dc1b3105a1738`;
+- GitHub Actions run `32582774357`: `success`;
+- local gate: `50/50` tests passing, plus initializer and test syntax checks;
+- theme `119` acceptance readback: `local_version` and `remote_version` both
+  `cd8063bdc2f49ee00ee86dfeef0dc1b3105a1738`, `commits_behind=0`,
+  `theme_version=0.11.1`, and no import error;
+- reader Worker version `b5d4ccac-b84a-4c5c-8716-4d20f4691689`, active through
+  deployment `d5d9d4f0-9a6d-4a6c-b301-c185dfea6bc0`;
+- runtime-behavior rollback reference SHA:
+  `7dd04ed3c2586bfe70ab3d6ff42efc8ed546f607` (`0.11.0`).
+
+The commit that records this accepted state is documentation-only. Once that
+follow-up commit is pushed and theme `119` is refreshed, Discourse will correctly
+show its SHA as `RemoteTheme.local_version` and `remote_version`. That later theme
+source-synchronization SHA is not a new JavaScript runtime: verify that its only
+changes from `cd8063bdc2f49ee00ee86dfeef0dc1b3105a1738` are
+`PROJECT_STATE.md` and `docs/OPERATIONS.md`; release `0.11.1` and the accepted runtime
+implementation remain anchored to `cd8063bdc2f49ee00ee86dfeef0dc1b3105a1738`.
 
 ## Contract and settings
 
@@ -238,16 +268,29 @@ curl -sS https://reader.bdfz.net/health
 Then use an already authorized browser session; do not paste or log cookies. Hard
 reload as needed and verify:
 
-1. `1330/2`: exactly one Marxists wrapper and one loaded reader pane.
-2. `2327/1`: source paragraph remains, exactly one wrapper is inserted after it, and the reader loads.
+1. `1330/2`: exactly one Marxists wrapper, one loaded reader pane, and one open
+   reader state.
+2. `2327/1`: source paragraph remains and exactly one wrapper, one loaded reader
+   pane, and one open reader state are present.
 3. `5970/77`: its Marxists PDF remains the original PDF onebox and produces
    zero reader wrappers; document-onebox conversion remains covered by the
    executable parser/runtime fixture because no current public post provides a
    non-PDF Marxists onebox.
-4. `9340/1`: six article-navigation links remain unchanged and produce zero wrappers.
-5. Reader failure control: source card/link remains and an accessible error status appears.
-6. Keyboard focus reaches the scroll region; reduced-motion removes loading animation.
-7. Representative bilibili, NetEase, QQ Music, Zhihu, Xiaohongshu, EPUB, and PDF controls remain unchanged.
+4. `9340/1`: non-standalone article links remain unchanged and produce zero
+   wrappers.
+5. `6813/1`: navigation links remain unchanged and produce zero wrappers.
+6. For both accepted reader posts, the displayed and accessible title is the
+   real source title with no `link clicked N times` telemetry; the reader pane
+   has `role=region`, `tabindex=0`, an accessible label, and accepts keyboard
+   focus.
+7. Reader failure control: source card/link remains and an accessible error status appears.
+8. Reduced-motion removes loading animation.
+9. Representative bilibili, NetEase, QQ Music, Zhihu, Xiaohongshu, EPUB, and PDF controls remain unchanged.
+
+Accepted browser readback for `0.11.1` met items 1–6: `1330/2` and `2327/1`
+each had one wrapper/pane/open state with a telemetry-free real title and a
+focusable labelled region; `2327/1` retained its source paragraph; and
+`5970/77`, `9340/1`, and `6813/1` each had zero takeover.
 
 The browser readback is mandatory. Parser tests, CI, theme SHA equality, compiled CSS,
 or screenshots alone do not prove cooked-post behavior.
@@ -269,9 +312,12 @@ local gate. No archive hydrate, external source download, or data restore is req
 
 Contain a reader regression by setting `enable_expand_reader=false` in theme `119` and
 verifying source cards/links remain; this does not roll back other provider code. A full
-rollback is a normal `git revert <BAD_RELEASE_SHA>`, push to `main`, successful CI, and
-the same guarded theme refresh/readback using the resulting rollback SHA. Never rewrite
-Git history. Re-run forum health and all affected browser controls after rollback.
+rollback from `0.11.1` uses
+`7dd04ed3c2586bfe70ab3d6ff42efc8ed546f607` (`0.11.0`) as the known-good tree
+reference, restores that runtime behavior through a reviewed Git revert commit,
+pushes the resulting commit to `main`, requires successful CI, and runs the same
+guarded theme refresh/readback with the new rollback commit. Never rewrite Git
+history. Re-run forum health and all affected browser controls after rollback.
 
 Worker or route failures are rolled back only through the `expand-reader` operations
 authority and shared-hub receipt. Do not compensate by adding another proxy here.
@@ -287,7 +333,10 @@ authority and shared-hub receipt. Do not compensate by adding another proxy here
   real-post results, Worker/route disposition, rollback anchor, dirty-tree state, and
   unresolved risks in the action log, project state, and required shared-hub receipt.
 
-Point-in-time 2026-08-22 baseline before `0.11.1`: theme `119` was healthy at
-`7dd04ed3c2586bfe70ab3d6ff42efc8ed546f607`, with matching local/remote versions,
-zero commits behind, no import error, and effective reader settings `true`,
-`https://reader.bdfz.net/read`, and `560`. Revalidate rather than copying this baseline.
+Point-in-time accepted production evidence on 2026-08-22: release `0.11.1` at
+implementation SHA `cd8063bdc2f49ee00ee86dfeef0dc1b3105a1738`; successful Actions
+run `32582774357`; theme `119` matching local/remote at that SHA, zero commits
+behind, no import error; `50/50` tests passing; accepted browser controls as recorded
+above; and reader Worker version `b5d4ccac-b84a-4c5c-8716-4d20f4691689` through
+deployment `d5d9d4f0-9a6d-4a6c-b301-c185dfea6bc0`. Revalidate live state rather than
+copying this receipt.

@@ -4,20 +4,38 @@ Last reviewed: 2026-08-22 (America/Los_Angeles)
 
 ## Accepted production state
 
-- Last live-verified release: `0.11.0`, commit `7dd04ed3c2586bfe70ab3d6ff42efc8ed546f607`.
+- Accepted runtime/theme release: `0.11.1`.
+- Accepted implementation and JavaScript runtime source SHA:
+  `cd8063bdc2f49ee00ee86dfeef0dc1b3105a1738`.
 - Production surface: Discourse remote theme component `119` on `forum.rdfzer.com`.
-- Point-in-time readback: `RemoteTheme.local_version` and `remote_version` both matched `7dd04ed`, `commits_behind=0`, `theme_version=0.11.0`, and `last_error_text=nil`.
+- Accepted release readback: theme `119` was refreshed exactly to `cd8063b`; its
+  `RemoteTheme.local_version` and `remote_version` both matched the full accepted
+  implementation SHA, `commits_behind=0`, `theme_version=0.11.1`, and
+  `last_error_text=nil`.
+- GitHub Actions run `32582774357` completed successfully for the accepted
+  implementation.
 - The component is enabled and attached to parent themes `[-2, -1, 1, 8, 14, 117, 118]`.
 - The effective production reader settings were `enable_expand_reader=true`, `expand_reader_endpoint=https://reader.bdfz.net/read`, and `expand_reader_height=560`. They were defaults, not database overrides.
-- The reader Worker, custom-domain routing, allowlist, monitoring, and Cloudflare rollback are owned by `/Users/ylsuen/CF/services/expand-reader`, not by this repository.
+- The accepted reader Worker version is
+  `b5d4ccac-b84a-4c5c-8716-4d20f4691689`, active through deployment
+  `d5d9d4f0-9a6d-4a6c-b301-c185dfea6bc0`. Its custom-domain routing,
+  allowlist, monitoring, and Cloudflare rollback are owned by
+  `/Users/ylsuen/CF/services/expand-reader`, not by this repository.
+- Runtime-behavior rollback reference:
+  `7dd04ed3c2586bfe70ab3d6ff42efc8ed546f607` (`0.11.0`). Restore that tree
+  through a reviewed revert commit on `main`; do not rewrite history or point
+  the remote theme at an unreviewed detached revision.
 - Live state is authoritative over this file. Use the readback procedure in `docs/OPERATIONS.md` before any mutation.
 
-## Current candidate
+### Runtime SHA versus docs-only theme SHA
 
-- Candidate release: `0.11.1`, validated in an isolated clone; not yet pushed to GitHub and not installed on theme `119` at this state snapshot.
-- Objective: publish only after independent diff review, exact-SHA CI, and a controlled theme `119` refresh.
-- Immediate candidate rollback anchor: production commit `7dd04ed3c2586bfe70ab3d6ff42efc8ed546f607` (`0.11.0`).
-- Earlier full pre-reader rollback anchor: `edec8fdfc8e52b3df1f1c677bf392a3bcad17077` (`0.9.0`).
+This accepted implementation was browser-verified while theme `119` pointed at
+`cd8063bdc2f49ee00ee86dfeef0dc1b3105a1738`. The follow-up commit that records this
+closeout changes only `PROJECT_STATE.md` and `docs/OPERATIONS.md`. After that docs-only
+commit is pushed and refreshed, `RemoteTheme.local_version` and `remote_version` will
+correctly report the docs-only commit SHA. That source-synchronization SHA must not be
+reported as a new runtime release: the installed JavaScript and accepted runtime
+authority remain release `0.11.1` at `cd8063bdc2f49ee00ee86dfeef0dc1b3105a1738`.
 
 ## 0.11.1 scope
 
@@ -37,23 +55,32 @@ Last reviewed: 2026-08-22 (America/Los_Angeles)
 
 ## Verification evidence
 
-- Candidate parser, cooked-DOM, cache, endpoint, sanitizer-policy, and legacy-provider suite: `50/50` passing with the workspace authority Node `24.18.0` in the isolated build environment.
+- Parser, cooked-DOM, cache, endpoint, sanitizer-policy, and legacy-provider suite:
+  `50/50` passing with the workspace authority Node `24.18.0`.
 - JavaScript syntax check passed for the initializer and test file.
 - Regression fixtures encode the live shapes for `1330/2`, `2327/1`, the PDF
   non-takeover at `5970/77`, `6813/1`, and `9340/1` without storing post text;
   a separately labelled synthetic fixture covers a document onebox.
-- Production browser baseline before candidate deployment: `1330/2` produced one loaded Marxists reader; `2327/1` and `9340/1` produced zero wrappers under `0.11.0`.
-- GitHub publication, exact-SHA hosted-CI readback (or the documented zero-step billing-gate exception), production theme refresh, and post-refresh browser acceptance remain outstanding for `0.11.1`.
+- Production browser acceptance at the implementation SHA:
+  - `1330/2` and `2327/1` each produced exactly one wrapper, one reader pane,
+    and one open reader state.
+  - Both readers used the real source title without Discourse `link clicked N
+    times` telemetry. Each pane exposed a labelled `region`, had `tabindex=0`,
+    and accepted keyboard focus.
+  - `2327/1` retained its original source paragraph beside the added reader.
+  - The PDF onebox at `5970/77`, the non-standalone article links at `9340/1`,
+    and the navigation links at `6813/1` each produced zero takeovers.
+- GitHub publication, successful hosted CI, exact theme refresh/readback, Worker
+  deployment readback, and real-browser acceptance are complete for `0.11.1`.
 
-## Residual risks and next action
+## Ongoing operational cautions
 
-- The test suite uses bounded DOM-shape fixtures rather than a full Discourse browser runtime. Real-post browser acceptance remains mandatory after theme refresh.
+- The test suite uses bounded DOM-shape fixtures rather than a full Discourse
+  browser runtime; every future runtime release still requires real-post browser
+  acceptance after theme refresh.
 - The reader response is fetched as JSON in one operation; the Worker currently caps sanitized output, but the client has no independent streaming byte cap.
 - GitHub Actions currently relies on the runner's Node installation and `actions/checkout@v4`; exact Node/action pinning remains a reproducibility-hardening follow-up.
-- Next action: push the independently reviewed exact SHA, read back its hosted-CI
-  result, use the bounded local-CI exception only if GitHub creates a zero-step
-  billing-gated run, refresh theme `119`, then verify document readers at
-  `1330/2` and `2327/1` plus non-takeover controls `5970/77`, `6813/1`, and
-  `9340/1`.
+- No release or browser-acceptance action remains outstanding for `0.11.1`.
+  Continue routine health, theme-import, Worker, and real-post monitoring.
 
 Exact test, release, readback, restore, and rollback commands are in `docs/OPERATIONS.md`.
