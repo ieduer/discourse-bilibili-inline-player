@@ -19,11 +19,10 @@ const XIAOHONGSHU_SHORT_HOSTS = new Set([
 ]);
 /* Marxists Internet Archive. www.marxists.org answers with X-Frame-Options:
    SAMEORIGIN, a frame-ancestors 'self' policy, and no CORS header, so a forum page
-   can neither frame nor read its documents; its listed mirrors repeat the same
-   policy or are unreachable. Documents therefore stay structured source cards built
-   from the canonical URL alone, while the archive's own audio and video files play
-   through native media elements, which need neither framing nor a cross-origin read.
-   PDF stays with the official discourse-pdf-previews component. */
+   can neither frame nor read its documents. Documents therefore stay structured
+   source cards, with text supplied only by the operator-run expand-reader service;
+   the archive's own audio and video files play through native media elements. PDF
+   stays with the official discourse-pdf-previews component. */
 const MARXISTS_HOSTS = new Set(["marxists.org", "www.marxists.org"]);
 const MARXISTS_AUDIO_EXTENSIONS = new Set(["mp3", "m4a", "oga", "ogg", "wav", "flac"]);
 const MARXISTS_VIDEO_EXTENSIONS = new Set(["mp4", "m4v", "webm", "ogv"]);
@@ -3037,9 +3036,16 @@ function buildMarxistsReadingCard(wrapper, metadata) {
   }
 
   if (supportsExpandReader(metadata.parsed)) {
-    body.appendChild(
-      createElement("div", "bilibili-inline-player__reading-status", "正在展开原文…")
+    const status = createElement(
+      "div",
+      "bilibili-inline-player__reading-status",
+      "正在展开原文…"
     );
+
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    status.setAttribute("aria-atomic", "true");
+    body.appendChild(status);
   }
 
   const footer = createElement("div", "bilibili-inline-player__footer");
@@ -3530,8 +3536,8 @@ const READER_DROP_TAGS = new Set([
   "map", "area", "link", "base", "template", "dialog", "meta", "title", "nav",
 ]);
 const READER_ALLOWED_ATTRIBUTES = {
-  a: ["href", "title", "id", "name", "target", "rel"],
-  img: ["src", "alt", "title", "width", "height", "loading", "referrerpolicy"],
+  a: ["href", "title", "id", "name"],
+  img: ["src", "alt", "title", "width", "height"],
   td: ["colspan", "rowspan"],
   th: ["colspan", "rowspan", "scope"],
   time: ["datetime"],
@@ -3540,9 +3546,13 @@ const READER_ALLOWED_ATTRIBUTES = {
   q: ["cite"],
 };
 const READER_TIMEOUT_MS = 15000;
+const READER_CACHE_MAX_ENTRIES = 24;
+const READER_CACHE_TTL_MS = 5 * 60 * 1000;
+const MARXISTS_SOURCE_NOTE_MAX_CHARS = 48;
 const DEFAULT_READER_ENDPOINT = "https://reader.bdfz.net/read";
 const DEFAULT_READER_PANE_HEIGHT = 560;
 const readerViewCache = new Map();
+let readerFragmentSequence = 0;
 
 function getExpandReaderEndpoint() {
   const endpoint = getStringSetting("expand_reader_endpoint", DEFAULT_READER_ENDPOINT).trim();
@@ -3557,7 +3567,16 @@ function getExpandReaderEndpoint() {
 
     /* HTTPS in production; a loopback endpoint is allowed so the component can be
        developed against a local instance of the reader service. */
-    return url.protocol === "https:" || (url.protocol === "http:" && isLoopback) ? url.toString() : "";
+    if (
+      (url.protocol !== "https:" && !(url.protocol === "http:" && isLoopback)) ||
+      url.username ||
+      url.password
+    ) {
+      return "";
+    }
+
+    url.hash = "";
+    return url.toString();
   } catch {
     return "";
   }
@@ -3572,15 +3591,68 @@ function supportsExpandReader(parsed) {
   );
 }
 
-async function fetchReaderView(canonicalUrl) {
-  if (readerViewCache.has(canonicalUrl)) {
-    return readerViewCache.get(canonicalUrl);
+function getReaderCacheKey(canonicalUrl, endpoint = getExpandReaderEndpoint()) {
+  try {
+    const source = new URL(canonicalUrl);
+
+    source.hash = "";
+    return `${endpoint}\n${source.toString()}`;
+  } catch {
+    return `${endpoint}\n${canonicalUrl}`;
+  }
+}
+
+function getCachedReaderRequest(cacheKey, now = Date.now()) {
+  const entry = readerViewCache.get(cacheKey);
+
+  if (!entry) {
+    return null;
   }
 
+  if (entry.expiresAt <= now) {
+    readerViewCache.delete(cacheKey);
+    return null;
+  }
+
+  /* Map insertion order is the LRU order. Refresh it without extending the TTL. */
+  readerViewCache.delete(cacheKey);
+  readerViewCache.set(cacheKey, entry);
+  return entry.promise;
+}
+
+function storeReaderRequest(cacheKey, promise, now = Date.now()) {
+  for (const [key, entry] of readerViewCache) {
+    if (entry.expiresAt <= now) {
+      readerViewCache.delete(key);
+    }
+  }
+
+  readerViewCache.delete(cacheKey);
+  const entry = {
+    expiresAt: now + READER_CACHE_TTL_MS,
+    promise,
+  };
+  readerViewCache.set(cacheKey, entry);
+
+  while (readerViewCache.size > READER_CACHE_MAX_ENTRIES) {
+    readerViewCache.delete(readerViewCache.keys().next().value);
+  }
+
+  return entry;
+}
+
+async function fetchReaderView(canonicalUrl) {
   const endpoint = getExpandReaderEndpoint();
 
   if (!endpoint) {
     return null;
+  }
+
+  const cacheKey = getReaderCacheKey(canonicalUrl, endpoint);
+  const cached = getCachedReaderRequest(cacheKey);
+
+  if (cached) {
+    return cached;
   }
 
   const request = (async () => {
@@ -3612,12 +3684,135 @@ async function fetchReaderView(canonicalUrl) {
     }
   })();
 
-  readerViewCache.set(canonicalUrl, request);
+  const entry = storeReaderRequest(cacheKey, request);
+  const result = await request;
 
-  return request;
+  /* A transient failure must not poison this URL until the SPA is hard-reloaded. */
+  if (!result && readerViewCache.get(cacheKey) === entry) {
+    readerViewCache.delete(cacheKey);
+  }
+
+  return result;
 }
 
-function sanitizeReaderFragment(html) {
+function getReaderFragmentToken(value) {
+  const raw = String(value || "").trim();
+
+  if (!raw) {
+    return "";
+  }
+
+  let decoded = raw;
+
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    /* Keep the literal token when the source contains malformed percent escapes. */
+  }
+
+  return encodeURIComponent(decoded)
+    .replace(/%/g, "_")
+    .replace(/[^a-z0-9_.:-]/gi, "_")
+    .slice(0, 180);
+}
+
+function getScopedReaderFragment(value, idPrefix) {
+  const token = getReaderFragmentToken(String(value || "").replace(/^#/, ""));
+
+  return token ? `${idPrefix}${token}` : "";
+}
+
+function sanitizeReaderExternalUrl(value) {
+  try {
+    const url = new URL(String(value || "").trim());
+
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) {
+      return "";
+    }
+
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
+function sanitizeReaderImageUrl(value, sourceUrl) {
+  try {
+    const imageUrl = new URL(String(value || "").trim());
+    const source = new URL(sourceUrl);
+    const sourceHost = source.hostname.toLowerCase();
+    const allowedHosts = MARXISTS_HOSTS.has(sourceHost) ? MARXISTS_HOSTS : new Set([sourceHost]);
+
+    if (
+      !["http:", "https:"].includes(imageUrl.protocol) ||
+      imageUrl.username ||
+      imageUrl.password ||
+      !allowedHosts.has(imageUrl.hostname.toLowerCase())
+    ) {
+      return "";
+    }
+
+    imageUrl.protocol = "https:";
+    imageUrl.port = "";
+    imageUrl.hash = "";
+    return imageUrl.toString();
+  } catch {
+    return "";
+  }
+}
+
+function hardenReaderAnchor(element, idPrefix) {
+  const href = String(element.getAttribute("href") || "").trim();
+
+  element.removeAttribute("target");
+  element.removeAttribute("rel");
+
+  if (href.startsWith("#")) {
+    const scopedFragment = getScopedReaderFragment(href, idPrefix);
+
+    if (scopedFragment) {
+      element.setAttribute("href", `#${scopedFragment}`);
+    } else {
+      element.removeAttribute("href");
+    }
+  } else {
+    const externalUrl = sanitizeReaderExternalUrl(href);
+
+    if (externalUrl) {
+      element.setAttribute("href", externalUrl);
+      element.setAttribute("target", "_blank");
+      element.setAttribute("rel", "noopener nofollow ugc");
+    } else {
+      element.removeAttribute("href");
+    }
+  }
+
+  for (const attribute of ["id", "name"]) {
+    const scopedIdentifier = getScopedReaderFragment(element.getAttribute(attribute), idPrefix);
+
+    if (scopedIdentifier) {
+      element.setAttribute(attribute, scopedIdentifier);
+    } else {
+      element.removeAttribute(attribute);
+    }
+  }
+}
+
+function hardenReaderImage(element, sourceUrl) {
+  const safeSource = sanitizeReaderImageUrl(element.getAttribute("src"), sourceUrl);
+
+  if (!safeSource) {
+    element.remove();
+    return false;
+  }
+
+  element.setAttribute("src", safeSource);
+  element.setAttribute("loading", "lazy");
+  element.setAttribute("referrerpolicy", "no-referrer");
+  return true;
+}
+
+function sanitizeReaderFragment(html, sourceUrl, idPrefix) {
   if (!globalThis.DOMParser) {
     return null;
   }
@@ -3649,17 +3844,13 @@ function sanitizeReaderFragment(html) {
 
       if (!allowed.includes(name)) {
         element.removeAttribute(attribute.name);
-        continue;
-      }
-
-      if (["href", "src"].includes(name) && !/^(?:https:|http:|#)/i.test(attribute.value.trim())) {
-        element.removeAttribute(attribute.name);
       }
     }
 
-    if (tag === "a" && element.getAttribute("href")?.startsWith("http")) {
-      element.setAttribute("target", "_blank");
-      element.setAttribute("rel", "noopener nofollow ugc");
+    if (tag === "a") {
+      hardenReaderAnchor(element, idPrefix);
+    } else if (tag === "img" && !hardenReaderImage(element, sourceUrl)) {
+      continue;
     }
   }
 
@@ -3667,7 +3858,9 @@ function sanitizeReaderFragment(html) {
 }
 
 function buildReaderPane(wrapper, view) {
-  const fragment = sanitizeReaderFragment(view.html);
+  const sourceUrl = wrapperState.get(wrapper)?.parsed?.canonicalUrl || "";
+  const idPrefix = `bili-reader-${++readerFragmentSequence}-`;
+  const fragment = sanitizeReaderFragment(view.html, sourceUrl, idPrefix);
 
   if (!fragment || !normalizeTitleText(fragment.textContent || "")) {
     return null;
@@ -3676,6 +3869,12 @@ function buildReaderPane(wrapper, view) {
   const pane = createElement("div", "bilibili-inline-player__reader-pane");
   const article = createElement("article", "bilibili-inline-player__reader-article");
 
+  pane.tabIndex = 0;
+  pane.setAttribute("role", "region");
+  pane.setAttribute(
+    "aria-label",
+    `${wrapper.dataset.bilibiliTitle || "马克思主义文库"}原文`
+  );
   article.lang = view.lang || "";
   article.append(...Array.from(fragment.childNodes));
   pane.appendChild(article);
@@ -3706,12 +3905,14 @@ async function expandThroughReader(wrapper) {
 
   wrapper.dataset.bilibiliReaderDone = "1";
   wrapper.classList.add("bilibili-inline-player--reader-loading");
+  wrapper.setAttribute("aria-busy", "true");
 
   const status = wrapper.querySelector(".bilibili-inline-player__reading-status");
 
   const view = await fetchReaderView(state.parsed.canonicalUrl);
 
   wrapper.classList.remove("bilibili-inline-player--reader-loading");
+  wrapper.setAttribute("aria-busy", "false");
 
   if (!wrapper.isConnected) {
     return;
@@ -3720,7 +3921,10 @@ async function expandThroughReader(wrapper) {
   const pane = view ? buildReaderPane(wrapper, view) : null;
 
   if (!pane) {
-    status?.remove();
+    if (status) {
+      status.textContent = "原文暂时无法展开，请使用下方链接打开原站。";
+      status.classList.add("bilibili-inline-player__reading-status--error");
+    }
     return;
   }
 
@@ -4424,6 +4628,83 @@ function collectXiaohongshuInlineCandidates(element, existingTargets) {
   return results;
 }
 
+function isMarxistsInlineSourceLink(anchor, paragraph, parsed) {
+  const elementChildren = Array.from(paragraph.children || []);
+  const hasExactBreakAndLinkShape =
+    elementChildren.length === 2 &&
+    elementChildren[0].tagName === "BR" &&
+    elementChildren[1] === anchor;
+
+  if (
+    parsed?.provider !== "marxists" ||
+    !anchor.matches?.("a.onebox") ||
+    anchor.parentElement !== paragraph ||
+    !hasExactBreakAndLinkShape ||
+    anchor.closest("li, blockquote") ||
+    paragraph.querySelector("img, audio, video, iframe")
+  ) {
+    return false;
+  }
+
+  const links = Array.from(paragraph.querySelectorAll("a[href]"));
+
+  if (links.length !== 1 || links[0] !== anchor) {
+    return false;
+  }
+
+  const displayedUrl = parseBilibiliUrl(normalizeTitleText(anchor.textContent || ""));
+
+  if (
+    displayedUrl?.provider !== "marxists" ||
+    displayedUrl.canonicalUrl !== parsed.canonicalUrl
+  ) {
+    return false;
+  }
+
+  const paragraphText = normalizeTitleText(paragraph.textContent || "");
+  const anchorText = normalizeTitleText(anchor.textContent || "");
+  const isAtParagraphBoundary = paragraphText.endsWith(anchorText);
+  const surroundingTextLength = Math.max(0, paragraphText.length - anchorText.length);
+
+  /* A single auto-linked URL after a BR and short source note is deliberate. This excludes
+     article headings and the multi-link previous/contents/next clusters found in
+     pasted Marxists pages, which must not spawn duplicate readers. */
+  return isAtParagraphBoundary && surroundingTextLength <= MARXISTS_SOURCE_NOTE_MAX_CHARS;
+}
+
+function collectMarxistsSourceLinkCandidates(element, existingTargets) {
+  const limit = Math.max(1, getIntegerSetting("max_embeds_per_post", 4));
+  const results = [];
+  const seen = new Set(existingTargets);
+
+  for (const anchor of element.querySelectorAll("p a[href]")) {
+    if (results.length + existingTargets.length >= limit) {
+      break;
+    }
+
+    if (anchor.closest("aside.onebox, article.onebox, .bilibili-inline-player")) {
+      continue;
+    }
+
+    const target = anchor.closest("p");
+
+    if (!target || seen.has(target) || target.dataset?.bilibiliInlinePlayer) {
+      continue;
+    }
+
+    const parsed = parseBilibiliUrl(anchor.href);
+
+    if (!isMarxistsInlineSourceLink(anchor, target, parsed)) {
+      continue;
+    }
+
+    seen.add(target);
+    results.push({ target, anchor, parsed, preserveSource: true });
+  }
+
+  return results;
+}
+
 function collectEbookAttachmentCandidates(element, existingTargets) {
   const limit = Math.max(1, getIntegerSetting("max_embeds_per_post", 4));
   const results = [];
@@ -4562,11 +4843,20 @@ export default apiInitializer((api) => {
       element,
       [...oneboxCandidates, ...standaloneCandidates].map((candidate) => candidate.target)
     );
-    const ebookAttachmentCandidates = collectEbookAttachmentCandidates(
+    const marxistsSourceLinkCandidates = collectMarxistsSourceLinkCandidates(
       element,
       [...oneboxCandidates, ...standaloneCandidates, ...xiaohongshuInlineCandidates].map(
         (candidate) => candidate.target
       )
+    );
+    const ebookAttachmentCandidates = collectEbookAttachmentCandidates(
+      element,
+      [
+        ...oneboxCandidates,
+        ...standaloneCandidates,
+        ...xiaohongshuInlineCandidates,
+        ...marxistsSourceLinkCandidates,
+      ].map((candidate) => candidate.target)
     );
     const iframeCandidates = collectIframeCandidates(
       element,
@@ -4574,6 +4864,7 @@ export default apiInitializer((api) => {
         ...oneboxCandidates,
         ...standaloneCandidates,
         ...xiaohongshuInlineCandidates,
+        ...marxistsSourceLinkCandidates,
         ...ebookAttachmentCandidates,
       ].map((candidate) => candidate.target)
     );
@@ -4583,6 +4874,7 @@ export default apiInitializer((api) => {
         ...oneboxCandidates,
         ...standaloneCandidates,
         ...xiaohongshuInlineCandidates,
+        ...marxistsSourceLinkCandidates,
         ...ebookAttachmentCandidates,
         ...iframeCandidates,
       ].map((candidate) => candidate.target)
@@ -4592,6 +4884,7 @@ export default apiInitializer((api) => {
       ...oneboxCandidates,
       ...standaloneCandidates,
       ...xiaohongshuInlineCandidates,
+      ...marxistsSourceLinkCandidates,
       ...ebookAttachmentCandidates,
       ...iframeCandidates,
       ...embedTextCandidates,

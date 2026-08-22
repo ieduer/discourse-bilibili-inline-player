@@ -9,8 +9,10 @@ This repository is a Git-backed Discourse remote theme component. It is not a se
 - Production Discourse component: theme `119` on `forum.rdfzer.com`
 - Runtime: client-side cooked-post enhancement through `decorateCookedElement`
 - Data class: `none`; the component has no database, account, cookie, or student-data path
-- Cloudflare capability receipt: `no-new-capability`; this change does not use or modify Cloudflare resources
+- Cloudflare dependency: the component consumes the operator-owned `expand-reader` Worker at `reader.bdfz.net`; that service owns its capability receipt, allowlist, deployment, and route
 - Official-support boundary: never take over a format already handled by Discourse core or an official component. PDF remains owned by `discourse-pdf-previews`.
+
+Before work, read `PROJECT_STATE.md` for the accepted version and `docs/OPERATIONS.md` for the exact test, release, readback, restore, and rollback procedure.
 
 Keep the component fail-open: unsupported or failed URLs must leave the original cooked content or original source link available. Preserve `max_embeds_per_post`, bound attachment size, and do not add unbounded client fetches.
 
@@ -26,7 +28,7 @@ Safe inline players and readers are visible by default through `auto_expand_embe
 - Treat Discourse Onebox as a separate server-side fetch path. The preview must remain complete from copied share text when those domains are blocked.
 - Keep existing bilibili, NetEase, QQ Music, Zhihu, and Marxists Internet Archive behavior unless a regression test proves a change is needed.
 - `marxists.org` sends `X-Frame-Options: SAMEORIGIN`, `frame-ancestors 'self'`, and no CORS header, and its reachable mirrors repeat that policy. It can never be framed or fetched by the browser. Its audio and video still play through native media elements, which need neither framing nor a cross-origin read.
-- Content that cannot be expanded directly goes through the operator's `expand-reader` service and nowhere else. Decided 2026-08-22. Do not add a second proxy, a third-party resolver, a mirror rewrite, or a per-provider fetch path. Adding a new source means allowlisting its host in that service, which is an operator decision about the site's terms — not a component change.
+- Content that cannot be expanded directly goes through the operator's `expand-reader` service and nowhere else. Decided 2026-08-22. Do not add a second proxy, a third-party resolver, a mirror rewrite, or a per-provider fetch path. Adding a host to the service allowlist is a separate operator decision about that site's terms; any later component support must reuse this single service contract.
 - Treat every reader fragment as untrusted even though the service sanitizes it. Keep the local allowlist re-sanitization, keep the reader failure path falling back to the source card, and never loosen the forum CSP for it.
 - Keep `expand_reader_endpoint` HTTPS-only apart from the loopback development affordance.
 - Do not let `marxists.org` claim `.pdf`; that format stays with `discourse-pdf-previews`.

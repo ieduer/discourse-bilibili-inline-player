@@ -17,12 +17,18 @@ globalThis.__themeParserTestApi = {
   collectEbookAttachmentCandidates,
   collectEmbedTextCandidates,
   collectIframeCandidates,
+  collectMarxistsSourceLinkCandidates,
+  collectOneboxCandidates,
   collectXiaohongshuInlineCandidates,
   collectStandaloneCandidates,
   extractUrlsFromText,
+  fetchReaderView,
+  getCachedReaderRequest,
   getFallbackTitle,
   getFooterMeta,
   getInitialButtonLabel,
+  getReaderCacheKey,
+  getScopedReaderFragment,
   supportsExpandReader,
   getLoadedFrameHeight,
   getMarxistsDescription,
@@ -39,15 +45,25 @@ globalThis.__themeParserTestApi = {
   parseBilibiliUrl,
   parseEbookAttachmentUrl,
   placeCandidateReplacement,
+  hardenReaderAnchor,
+  hardenReaderImage,
+  readerViewCache,
+  READER_CACHE_MAX_ENTRIES,
+  READER_CACHE_TTL_MS,
+  sanitizeReaderImageUrl,
   sanitizeEbookCss,
+  storeReaderRequest,
 };
 `);
 const context = {
+  AbortController,
   apiInitializer: (callback) => callback,
   console,
+  fetch: globalThis.fetch,
   settings: {},
   URL,
   URLSearchParams,
+  window: { clearTimeout, setTimeout },
 };
 
 vm.runInNewContext(executableSource, context, {
@@ -59,12 +75,18 @@ const {
   collectEbookAttachmentCandidates,
   collectEmbedTextCandidates,
   collectIframeCandidates,
+  collectMarxistsSourceLinkCandidates,
+  collectOneboxCandidates,
   collectXiaohongshuInlineCandidates,
   collectStandaloneCandidates,
   extractUrlsFromText,
+  fetchReaderView,
+  getCachedReaderRequest,
   getFallbackTitle,
   getFooterMeta,
   getInitialButtonLabel,
+  getReaderCacheKey,
+  getScopedReaderFragment,
   supportsExpandReader,
   getLoadedFrameHeight,
   getMarxistsDescription,
@@ -81,8 +103,122 @@ const {
   parseBilibiliUrl,
   parseEbookAttachmentUrl,
   placeCandidateReplacement,
+  hardenReaderAnchor,
+  hardenReaderImage,
+  readerViewCache,
+  READER_CACHE_MAX_ENTRIES,
+  READER_CACHE_TTL_MS,
+  sanitizeReaderImageUrl,
   sanitizeEbookCss,
+  storeReaderRequest,
 } = context.__themeParserTestApi;
+
+function makeCookedParagraphFixture({
+  after = "",
+  anchorClass = "",
+  anchorText,
+  before = "",
+  extraLinks = [],
+  hasMedia = false,
+  inBlockquote = false,
+  inList = false,
+  lineBreakBeforeAnchor = false,
+  url,
+}) {
+  const paragraph = {
+    dataset: {},
+    querySelector(selector) {
+      return selector === "img, audio, video, iframe" && hasMedia ? {} : null;
+    },
+    querySelectorAll(selector) {
+      return selector === "a[href]" ? anchors : [];
+    },
+  };
+  const makeAnchor = (href, text) => ({
+    href,
+    className: anchorClass,
+    matches: (selector) =>
+      selector === "a.onebox" && anchorClass.split(/\s+/u).includes("onebox"),
+    parentElement: paragraph,
+    previousSibling: lineBreakBeforeAnchor ? { nodeName: "BR" } : null,
+    textContent: text,
+    closest(selector) {
+      if (selector === "p") {
+        return paragraph;
+      }
+
+      if (selector === "li, blockquote") {
+        return inList || inBlockquote ? {} : null;
+      }
+
+      return null;
+    },
+  });
+  const anchor = makeAnchor(url, anchorText ?? url);
+  const anchors = [anchor, ...extraLinks.map(({ href, text }) => makeAnchor(href, text))];
+  const lineBreak = lineBreakBeforeAnchor ? { tagName: "BR" } : null;
+
+  paragraph.textContent = `${before}${anchor.textContent}${after}${extraLinks
+    .map(({ text }) => text)
+    .join("")}`;
+  paragraph.children = lineBreak ? [lineBreak, ...anchors] : anchors;
+
+  const cooked = {
+    querySelectorAll(selector) {
+      if (selector === "p a[href]") {
+        return anchors;
+      }
+
+      if (selector === "p > a[href]:only-child") {
+        return !before && !after && anchors.length === 1 ? [anchor] : [];
+      }
+
+      return [];
+    },
+  };
+
+  return { anchor, anchors, cooked, paragraph };
+}
+
+function makeCookedOneboxFixture(url) {
+  const block = {
+    dataset: { oneboxSrc: url },
+    textContent: url,
+    querySelector: (selector) => (selector === "a[href]" ? anchor : null),
+    querySelectorAll(selector) {
+      return selector === "a[href]" ? [anchor] : [];
+    },
+  };
+  const anchor = {
+    href: url,
+    textContent: url,
+    closest: () => block,
+  };
+  const cooked = {
+    querySelectorAll(selector) {
+      return selector === "aside.onebox[data-onebox-src], article.onebox[data-onebox-src]"
+        ? [block]
+        : [];
+    },
+  };
+
+  return { block, cooked };
+}
+
+function makeAttributeElement(initial = {}) {
+  const attributes = new Map(Object.entries(initial));
+
+  return {
+    attributes,
+    removed: false,
+    getAttribute: (name) => attributes.get(name) ?? null,
+    remove() {
+      this.removed = true;
+    },
+    removeAttribute: (name) => attributes.delete(name),
+    setAttribute: (name, value) => attributes.set(name, String(value)),
+  };
+}
 
 test("parses only EPUB, MOBI, and AZW3 attachment URLs", () => {
   for (const [extension, format] of [
@@ -644,6 +780,150 @@ test("finds a bare marxists link inside cooked text", () => {
   );
 });
 
+test("recognizes topic 1330/2 standalone and topic 5970/77 onebox shapes", () => {
+  const url = "https://www.marxists.org/chinese/maozedong/marxist.org-chinese-mao-193708.htm";
+  const standalone = makeCookedParagraphFixture({ url });
+  const [standaloneCandidate] = collectStandaloneCandidates(standalone.cooked, []);
+
+  assert.equal(standaloneCandidate.target, standalone.paragraph);
+  assert.equal(standaloneCandidate.parsed.provider, "marxists");
+  assert.equal(standaloneCandidate.preserveSource, false);
+
+  const onebox = makeCookedOneboxFixture(url);
+  const [oneboxCandidate] = collectOneboxCandidates(onebox.cooked);
+
+  assert.equal(oneboxCandidate.target, onebox.block);
+  assert.equal(oneboxCandidate.parsed.provider, "marxists");
+});
+
+test("recognizes topic 2327/1 short note, BR, and auto-linked Marxists source", () => {
+  const url = "https://www.marxists.org/archive/marx/works/1848/communist-manifesto/ch01.htm";
+  const fixture = makeCookedParagraphFixture({
+    anchorClass: "onebox",
+    before: "延伸阅读与原始文献请见：",
+    lineBreakBeforeAnchor: true,
+    url,
+  });
+  const [candidate] = collectMarxistsSourceLinkCandidates(fixture.cooked, []);
+
+  assert.equal(fixture.anchor.className, "onebox");
+  assert.equal(fixture.anchor.previousSibling.nodeName, "BR");
+  assert.equal(candidate.target, fixture.paragraph);
+  assert.equal(candidate.parsed.provider, "marxists");
+  assert.equal(candidate.preserveSource, true);
+
+  const replacement = {};
+  let placement = null;
+  fixture.paragraph.insertAdjacentElement = (position, element) => {
+    placement = { element, position };
+  };
+  placeCandidateReplacement(candidate, replacement);
+  assert.deepEqual(placement, { element: replacement, position: "afterend" });
+  assert.equal(fixture.paragraph.dataset.bilibiliInlinePlayer, "done");
+});
+
+test("rejects topic 9340's six pasted-article navigation links", () => {
+  const previous = "https://www.marxists.org/chinese/example/previous.htm";
+  const fixture = makeCookedParagraphFixture({
+    after: "　",
+    anchorClass: "onebox",
+    anchorText: "上一篇",
+    before: "文章正文后的导航：",
+    extraLinks: [
+      { href: "https://www.marxists.org/chinese/example/index.htm", text: "目录" },
+      { href: "https://www.marxists.org/chinese/example/next.htm", text: "下一篇" },
+    ],
+    lineBreakBeforeAnchor: true,
+    url: previous,
+  });
+  const headingLinks = ["previous", "index", "next"].map((slug) => ({
+    href: `https://www.marxists.org/chinese/example/${slug}.htm`,
+    textContent: slug,
+  }));
+  const cooked = {
+    querySelectorAll(selector) {
+      if (selector === "a[href]") {
+        return [...headingLinks, ...fixture.anchors];
+      }
+
+      return fixture.cooked.querySelectorAll(selector);
+    },
+  };
+
+  assert.equal(cooked.querySelectorAll("a[href]").length, 6);
+  assert.equal(collectMarxistsSourceLinkCandidates(cooked, []).length, 0);
+});
+
+test("rejects topic 6813's three non-URL navigation anchors", () => {
+  const fixture = makeCookedParagraphFixture({
+    after: "　",
+    anchorClass: "onebox",
+    anchorText: "上一篇",
+    before: "文章正文后的导航：",
+    extraLinks: [
+      { href: "https://www.marxists.org/chinese/example/index.htm", text: "目录" },
+      { href: "https://www.marxists.org/chinese/example/next.htm", text: "下一篇" },
+    ],
+    url: "https://www.marxists.org/chinese/example/previous.htm",
+  });
+
+  assert.equal(collectMarxistsSourceLinkCandidates(fixture.cooked, []).length, 0);
+
+  const titledNavigation = makeCookedParagraphFixture({
+    anchorClass: "onebox",
+    before: "导航：",
+    anchorText: "目录",
+    url: "https://www.marxists.org/chinese/example/index.htm",
+  });
+  assert.equal(collectMarxistsSourceLinkCandidates(titledNavigation.cooked, []).length, 0);
+});
+
+test("does not broaden sentence-inline takeover to other providers", () => {
+  for (const url of [
+    "https://www.bilibili.com/video/BV1xx411c7mD",
+    "https://music.163.com/song?id=123456",
+    "https://www.zhihu.com/question/123456",
+  ]) {
+    const fixture = makeCookedParagraphFixture({ before: "来源：", url });
+
+    assert.equal(collectMarxistsSourceLinkCandidates(fixture.cooked, []).length, 0, url);
+  }
+});
+
+test("rejects ambiguous Marxists inline links with long context or active media", () => {
+  const url = "https://www.marxists.org/archive/marx/works/1848/communist-manifesto/ch01.htm";
+  const longContext = makeCookedParagraphFixture({
+    anchorClass: "onebox",
+    before: "这是一段正文说明".repeat(8),
+    lineBreakBeforeAnchor: true,
+    url,
+  });
+  const mediaContext = makeCookedParagraphFixture({
+    anchorClass: "onebox",
+    before: "来源：",
+    hasMedia: true,
+    lineBreakBeforeAnchor: true,
+    url,
+  });
+  const listContext = makeCookedParagraphFixture({
+    anchorClass: "onebox",
+    before: "来源：",
+    inList: true,
+    lineBreakBeforeAnchor: true,
+    url,
+  });
+  const noBreak = makeCookedParagraphFixture({
+    anchorClass: "onebox",
+    before: "来源：",
+    url,
+  });
+
+  assert.equal(collectMarxistsSourceLinkCandidates(longContext.cooked, []).length, 0);
+  assert.equal(collectMarxistsSourceLinkCandidates(mediaContext.cooked, []).length, 0);
+  assert.equal(collectMarxistsSourceLinkCandidates(listContext.cooked, []).length, 0);
+  assert.equal(collectMarxistsSourceLinkCandidates(noBreak.cooked, []).length, 0);
+});
+
 test("documents route through the shared expand-reader service, media does not", () => {
   const document = parseBilibiliUrl("https://www.marxists.org/archive/trotsky/1930/hrr/index.htm");
   const audio = parseBilibiliUrl("https://www.marxists.org/archive/kollonta/audio/to-the-workers.mp3");
@@ -669,7 +949,149 @@ test("the reader is skipped when disabled or pointed at a non-HTTPS endpoint", (
   assert.equal(supportsExpandReader(document), true, "a loopback endpoint is a development affordance");
   themeSettings.expand_reader_endpoint = "not a url";
   assert.equal(supportsExpandReader(document), false);
+  themeSettings.expand_reader_endpoint = "https://user:pass@reader.example/read";
+  assert.equal(supportsExpandReader(document), false, "endpoint credentials are refused");
   delete themeSettings.expand_reader_endpoint;
 
   assert.equal(supportsExpandReader(document), true);
+});
+
+test("reader cache keys ignore source fragments but remain endpoint-specific", () => {
+  const source = "https://www.marxists.org/archive/marx/works/1848/manifesto/index.htm";
+  const endpoint = "https://reader.bdfz.net/read";
+
+  assert.equal(
+    getReaderCacheKey(`${source}#section-one`, endpoint),
+    getReaderCacheKey(`${source}#section-two`, endpoint)
+  );
+  assert.notEqual(
+    getReaderCacheKey(source, endpoint),
+    getReaderCacheKey(source, "https://reader-backup.bdfz.net/read")
+  );
+});
+
+test("reader cache is TTL-bound and uses a small LRU", async () => {
+  readerViewCache.clear();
+  const now = 1000;
+
+  for (let index = 0; index < READER_CACHE_MAX_ENTRIES; index += 1) {
+    storeReaderRequest(`key-${index}`, Promise.resolve(index), now);
+  }
+
+  assert.equal(readerViewCache.size, READER_CACHE_MAX_ENTRIES);
+  assert.equal(await getCachedReaderRequest("key-0", now + 1), 0, "cache hit refreshes LRU order");
+  storeReaderRequest("new-key", Promise.resolve("new"), now + 1);
+  assert.equal(readerViewCache.size, READER_CACHE_MAX_ENTRIES);
+  assert.equal(readerViewCache.has("key-0"), true);
+  assert.equal(readerViewCache.has("key-1"), false, "oldest untouched entry is evicted");
+
+  assert.equal(
+    getCachedReaderRequest("key-0", now + READER_CACHE_TTL_MS),
+    null,
+    "entries expire without extending their original TTL"
+  );
+  readerViewCache.clear();
+});
+
+test("a failed reader fetch is evicted and retried", async () => {
+  const source = "https://www.marxists.org/archive/trotsky/1930/hrr/index.htm";
+  let calls = 0;
+
+  readerViewCache.clear();
+  context.fetch = async () => {
+    calls += 1;
+
+    if (calls === 1) {
+      return { ok: false };
+    }
+
+    return {
+      json: async () => ({ html: "<p>recovered</p>", ok: true }),
+      ok: true,
+    };
+  };
+
+  assert.equal(await fetchReaderView(source), null);
+  assert.equal((await fetchReaderView(source)).html, "<p>recovered</p>");
+  assert.equal(calls, 2);
+  readerViewCache.clear();
+  context.fetch = globalThis.fetch;
+});
+
+test("successful reader fetches share cache across source fragments", async () => {
+  const source = "https://www.marxists.org/archive/trotsky/1930/hrr/index.htm";
+  let calls = 0;
+
+  readerViewCache.clear();
+  context.fetch = async () => {
+    calls += 1;
+    return {
+      json: async () => ({ html: "<p>cached</p>", ok: true }),
+      ok: true,
+    };
+  };
+
+  await fetchReaderView(`${source}#one`);
+  await fetchReaderView(`${source}#two`);
+  assert.equal(calls, 1);
+  readerViewCache.clear();
+  context.fetch = globalThis.fetch;
+});
+
+test("reader anchors receive pane-scoped fragment IDs and safe outbound attributes", () => {
+  const internal = makeAttributeElement({
+    href: "#xr-note-1",
+    id: "xr-note-1",
+    name: "xr-note-1",
+    rel: "opener",
+    target: "_top",
+  });
+
+  hardenReaderAnchor(internal, "bili-reader-7-");
+  assert.equal(internal.attributes.get("href"), "#bili-reader-7-xr-note-1");
+  assert.equal(internal.attributes.get("id"), "bili-reader-7-xr-note-1");
+  assert.equal(internal.attributes.get("name"), "bili-reader-7-xr-note-1");
+  assert.equal(internal.attributes.has("target"), false);
+  assert.equal(internal.attributes.has("rel"), false);
+  assert.equal(getScopedReaderFragment("#xr-note-1", "bili-reader-8-"), "bili-reader-8-xr-note-1");
+  assert.equal(
+    getScopedReaderFragment("#xr-note%201", "bili-reader-8-"),
+    getScopedReaderFragment("xr-note 1", "bili-reader-8-"),
+    "encoded fragment references and decoded IDs stay aligned"
+  );
+
+  const external = makeAttributeElement({ href: "https://example.org/reference", target: "_top" });
+  hardenReaderAnchor(external, "bili-reader-7-");
+  assert.equal(external.attributes.get("target"), "_blank");
+  assert.equal(external.attributes.get("rel"), "noopener nofollow ugc");
+
+  const active = makeAttributeElement({ href: "javascript:alert(1)" });
+  hardenReaderAnchor(active, "bili-reader-7-");
+  assert.equal(active.attributes.has("href"), false);
+});
+
+test("reader images are same-source HTTPS, lazy, and referrer-free", () => {
+  const source = "https://www.marxists.org/archive/marx/index.htm";
+  const image = makeAttributeElement({
+    loading: "eager",
+    referrerpolicy: "unsafe-url",
+    src: "http://marxists.org/images/portrait.jpg#tracking",
+  });
+
+  assert.equal(hardenReaderImage(image, source), true);
+  assert.equal(image.attributes.get("src"), "https://marxists.org/images/portrait.jpg");
+  assert.equal(image.attributes.get("loading"), "lazy");
+  assert.equal(image.attributes.get("referrerpolicy"), "no-referrer");
+
+  for (const unsafeSource of [
+    "https://tracker.example/pixel.gif",
+    "https://marxists.org.evil.example/pixel.gif",
+    "data:image/png;base64,fixture",
+  ]) {
+    assert.equal(sanitizeReaderImageUrl(unsafeSource, source), "", unsafeSource);
+  }
+
+  const tracker = makeAttributeElement({ src: "https://tracker.example/pixel.gif" });
+  assert.equal(hardenReaderImage(tracker, source), false);
+  assert.equal(tracker.removed, true);
 });

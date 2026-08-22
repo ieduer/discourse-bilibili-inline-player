@@ -321,6 +321,10 @@
   line-height: 1.5;
 }
 
+.bilibili-inline-player__reading-status--error {
+  color: var(--danger, #b42318);
+}
+
 .bilibili-inline-player--reader-loading .bilibili-inline-player__reading-status::after {
   content: "";
   display: inline-block;
@@ -333,6 +337,13 @@
   25% { content: "."; }
   50% { content: ".."; }
   75% { content: "..."; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bilibili-inline-player--reader-loading .bilibili-inline-player__reading-status::after {
+    content: "…";
+    animation: none;
+  }
 }
 
 .bilibili-inline-player__reader-pane {

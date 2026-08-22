@@ -36,7 +36,7 @@ Marxists Internet Archive (`marxists.org`):
 - audio and video files hosted by the archive (`.mp3`, `.m4a`, `.oga`, `.ogg`, `.wav`, `.flac`, `.mp4`, `.m4v`, `.webm`, `.ogv`)
 - `.epub`, `.mobi`, and `.azw3` archive files, as download cards only
 
-Archive audio and video play inline in a native media element, expanded on load and never autoplaying. Archive documents render as an always-open reading card with no cover button and no click-to-open step, and their full text is expanded in place through the shared expand-reader service. The section, the resolved author name, the work title, the chapter, and the date the archive encodes in its URLs are all visible immediately. `.pdf` under `marxists.org` is deliberately not claimed, because the official PDF Previews component owns that format.
+Archive audio and video play inline in a native media element, expanded on load and never autoplaying. Archive documents render as an always-open reading card with no cover button and no click-to-open step, and their full text is expanded in place through the shared expand-reader service. Standalone URLs and Discourse oneboxes are supported. One cooked source-note form is additionally supported: short text followed by the paragraph's only `<br>` and one direct auto-linked `a.onebox` whose displayed and target Marxists URLs match and whose URL ends the paragraph. The original source note remains in place. Multi-link article navigation and ordinary linked prose are deliberately left untouched. The section, the resolved author name, the work title, the chapter, and the date the archive encodes in its URLs are all visible immediately. `.pdf` under `marxists.org` is deliberately not claimed, because the official PDF Previews component owns that format.
 
 ### The expand-reader service
 
@@ -121,7 +121,7 @@ For ordinary bilibili video and bangumi embeds, the component now also exposes a
 
 For NetEase Cloud Music, the component uses the official outchain player paths. Desktop-like environments use `https://music.163.com/outchain/player`, while mobile-like environments use `https://music.163.com/m/outchain/player` directly to avoid NetEase's current mobile 302 downgrade to an insecure `http://` URL. Official NetEase source code shows the outchain player types map to playlist, album, song, DJ program, and DJ radio.
 
-For the Marxists Internet Archive, `www.marxists.org` answers with `X-Frame-Options: SAMEORIGIN`, a `frame-ancestors 'self'` content security policy, and no `Access-Control-Allow-Origin` header. Every reachable mirror listed on the archive's own mirror page repeats the same framing policy, and the one mirror that sends CORS headers restricts them to its own hosts. A client-side theme component therefore cannot frame an archive page and cannot read one, so the full article body cannot be shown inline without a server-side fetch, which is outside this repository's architecture. Document cards are built entirely from the canonical URL instead. The archive's own media files are unaffected, because `<audio>` and `<video>` playback is subject to neither framing policy nor CORS, so those play inline for real.
+For the Marxists Internet Archive, `www.marxists.org` answers with `X-Frame-Options: SAMEORIGIN`, a `frame-ancestors 'self'` content security policy, and no `Access-Control-Allow-Origin` header. Every reachable mirror reviewed for this integration repeats the same effective restriction or is unavailable. The client component therefore never frames or fetches an archive document directly. The operator-owned `expand-reader` service performs the allowlisted server-side fetch and returns a sanitized fragment; this component independently re-sanitizes it, scopes fragment IDs, restricts images to the source host, and retains the canonical source link on every failure. Archive media files remain native `<audio>`/`<video>` sources.
 
 For Zhihu, current public pages and API paths do not expose a reliable public iframe or oEmbed interface. The component therefore renders supported Zhihu URLs as styled source cards using the cooked post metadata already available in Discourse, then opens the canonical Zhihu page on click.
 
@@ -130,7 +130,7 @@ For Xiaohongshu and RedNote, the official platform documentation reviewed on 202
 Still not supported:
 
 - opaque non-Xiaohongshu short-link tokens that cannot be resolved client-side before Discourse oneboxes them
-- non-Xiaohongshu inline links inside a sentence
+- sentence-inline links other than Xiaohongshu copied-share text and the narrowly defined single Marxists source-link pattern above
 - favorites, collections, channels, playlists, watch-later, and other multi-item containers
 - DRM-encrypted EPUB/MOBI/AZW3 files
 - PDF, because the official Discourse PDF Previews component owns that format
@@ -221,6 +221,8 @@ No rebuild is required.
 - If QQ Music embeds are enabled by CSP, allow `https://i.y.qq.com` in `frame-src`.
 - Zhihu cards do not load Zhihu iframe or script resources; they only link to the canonical source page.
 - Xiaohongshu and RedNote cards default to an expanded lazy-loaded iframe for the official user-supplied note URL. A strict custom `frame-src` policy must allow both the root and wildcard forms of `xiaohongshu.com`, `xhslink.com`, `xhslink.cn`, and `rednote.com` (for example, `https://xiaohongshu.com https://*.xiaohongshu.com`).
+- Marxists documents call the configured `expand_reader_endpoint` with credentials omitted and a no-referrer policy. If a custom CSP adds `connect-src`, it must allow the exact reader endpoint origin. Returned images are upgraded to HTTPS, restricted to the source archive host, lazy-loaded, and forced to `referrerpolicy="no-referrer"`.
+- Reader results use a 24-entry, five-minute in-memory LRU. Source fragments share a fetch; failed responses are evicted immediately so a transient outage does not persist for the SPA lifetime.
 - Discourse Onebox is a separate server-side stage. The component does not require Onebox metadata; copied share text supplies the preview content, and `blocked_onebox_domains` can prevent redundant server fetches.
 - If a supported media link cannot be parsed, the original cooked content is left untouched.
 - Ebook parsing only applies to cooked Discourse attachment links ending in `.epub`, `.mobi`, or `.azw3`; arbitrary inline URLs and PDF attachments are not taken over.
@@ -234,7 +236,7 @@ No rebuild is required.
 2. Health probe: `https://forum.rdfzer.com/`, `/srv/status`, and `/session/csrf` must continue returning success.
 3. Contract checks: run `npm test`, validate `about.json` and `settings.yml`, verify the vendored Foliate bundle hash/license, confirm the intended `blocked_onebox_domains` policy, then confirm Discourse remote theme `119` reports the intended Git commit without `last_error_text`.
 4. Deploy command: push a tested commit to GitHub, then update remote theme `119` through Discourse theme administration. Never add this component to `app.yml` or rebuild the container.
-5. Dependency regression: verify one real cooked post for bilibili, NetEase, QQ Music, Zhihu, a full Xiaohongshu note URL, and an `xhslink.cn` short share; also open, page, and navigate the TOC of real EPUB, MOBI, and KF8/AZW3 attachments. Confirm a PDF attachment is still owned by the official PDF component.
+5. Dependency regression: verify one real cooked post for bilibili, NetEase, QQ Music, Zhihu, a full Xiaohongshu note URL, and an `xhslink.cn` short share; verify Marxists standalone topic/post `1330/2`, onebox `5970/77`, and the conservative short-note source-link shape `2327/1`, while confirming pasted navigation topic `9340/1` remains untouched. Also open, page, and navigate the TOC of real EPUB, MOBI, and KF8/AZW3 attachments. Confirm a PDF attachment is still owned by the official PDF component.
 6. Backup and restore: the previous Git commit is the immutable backup; a fresh clone of the repository is the restore path.
 7. Rollback: revert the release commit on GitHub and refresh remote theme `119`, then repeat health and provider regression checks.
 8. Last verified release evidence is recorded in `PROJECT_STATE.md` and the forum operations report; live Discourse readback is authoritative.

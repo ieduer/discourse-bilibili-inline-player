@@ -79,7 +79,7 @@ expand_reader_height:
 enable_marxists_inline_media:
   default: true
   type: bool
-  description: Play audio and video files hosted on marxists.org inline with the browser's own media element. Marxists.org documents always stay source cards because the archive forbids being framed.
+  description: Play audio and video files hosted on marxists.org inline with the browser's own media element. Document text is handled separately by the expand-reader settings.
 
 auto_open_on_high_risk_env:
   default: true
