@@ -25,11 +25,14 @@ Last reviewed: 2026-08-24 (America/Los_Angeles)
 - Current local verification: `52/52` parser, cooked-DOM, reader-contract,
   sanitizer, cache, PDF, code, and legacy-provider tests pass; initializer and
   test syntax, JSON, YAML, vendored Foliate hash, and diff checks pass.
-- Release gate: `expand-reader` 0.3.0 first needs the required interactive
-  `ZHIHU_ACCESS_SECRET`, immutable 0% candidate acceptance, and controlled
-  promotion. Only then may this tested theme commit be refreshed into theme
-  `119` and verified in a real forum page. No secret value belongs in this
-  repository or its release procedure.
+- Release gate: `expand-reader` 0.3.0 received its required secret through the
+  interactive undeployed-version flow, and candidate
+  `3edbcd17-da5e-4dc2-9de1-314609717bb7` is attached at 0%. The accepted Worker
+  remains at 100% because exact-ID readback currently receives official Zhihu
+  API rate-limit code `30001`. Only after an exact type+ID+URL summary succeeds
+  and the Worker completes controlled promotion may this tested theme commit be
+  refreshed into theme `119` and verified in a real forum page. No secret value
+  belongs in this repository or its release procedure.
 - Candidate source rollback anchor is the pre-change clean commit
   `b7a8ea0ed15a1bb8f4d45d10430d31e4b25b80ff`. Production behavior rollback
   remains the accepted `0.11.1` authority below until a 0.12.0 release is

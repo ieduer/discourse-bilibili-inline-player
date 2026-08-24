@@ -45,12 +45,15 @@ commit that changes only project documentation does not change this runtime
 implementation authority and must itself pass the publication gate before a
 theme refresh.
 
-The theme is not releasable ahead of the Worker. `expand-reader` 0.3.0 first
-requires an authorized operator to enter `ZHIHU_ACCESS_SECRET` interactively,
-then complete immutable 0% acceptance and controlled promotion. Never place the
-secret value in this repository, a command argument, file, log, report, Git
-object, or chat. Do not refresh theme `119` until the Worker candidate is active
-and healthy. The pre-change candidate rollback anchor is
+The theme is not releasable ahead of the Worker. `expand-reader` 0.3.0 received
+its required secret through the interactive undeployed-version flow, and
+candidate `3edbcd17-da5e-4dc2-9de1-314609717bb7` is attached at 0% beside the
+accepted Worker at 100%. Exact-ID candidate readback currently receives official
+Zhihu API rate-limit code `30001`, so no 10/50/100 promotion is authorized.
+Never place the secret value in this repository, a command argument, file, log,
+report, Git object, or chat. Do not refresh theme `119` until a replacement
+Worker candidate passes exact type+ID+URL acceptance and is active and healthy.
+The pre-change candidate rollback anchor is
 `b7a8ea0ed15a1bb8f4d45d10430d31e4b25b80ff`.
 
 Before any mutation, also read:
