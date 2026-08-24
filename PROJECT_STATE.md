@@ -4,8 +4,11 @@ Last reviewed: 2026-08-24 (America/Los_Angeles)
 
 ## 0.12.0 candidate: blocked before coordinated release
 
-- Local source is modified and fully tested; production theme `119` remains on
-  the accepted `0.11.1` state below.
+- Candidate implementation is committed and pushed at
+  `d329dc06f006330c970882db8edd94ae04a2bafa`; production theme `119` remains
+  on the accepted `0.11.1` state below. GitHub Actions run `32727691071`
+  completed successfully for that implementation. A later documentation-only
+  closeout commit does not change this runtime implementation authority.
 - Zhihu question, answer, and article URLs now default to an expanded,
   summary-only reader card. The consumer requires `provider=zhihu`,
   `summaryOnly=true`, an exact content type and numeric ID, and the exact

@@ -38,6 +38,13 @@ same supported URL; it preserves the source paragraph and rejects code,
 navigation/multiple anchors, non-URL labels, lists, blockquotes, media, existing
 oneboxes, PDF, and component-owned markup.
 
+The candidate implementation is committed and pushed at
+`d329dc06f006330c970882db8edd94ae04a2bafa`; GitHub Actions run
+`32727691071` completed successfully for that exact SHA. Any later closeout
+commit that changes only project documentation does not change this runtime
+implementation authority and must itself pass the publication gate before a
+theme refresh.
+
 The theme is not releasable ahead of the Worker. `expand-reader` 0.3.0 first
 requires an authorized operator to enter `ZHIHU_ACCESS_SECRET` interactively,
 then complete immutable 0% acceptance and controlled promotion. Never place the
