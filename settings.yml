@@ -64,6 +64,11 @@ enable_expand_reader:
   type: bool
   description: Expand the full text of sources that refuse to be framed or read by the browser, using the shared BDFZ expand-reader service. Disable to fall back to link-only source cards.
 
+enable_zhihu_summary:
+  default: true
+  type: bool
+  description: Read an exact question, answer, or article match from Zhihu's official search API through expand-reader and show only its bounded summary. Disable to keep link-only source cards.
+
 expand_reader_endpoint:
   default: "https://reader.bdfz.net/read"
   type: string

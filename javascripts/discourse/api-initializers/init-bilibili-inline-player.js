@@ -1056,7 +1056,13 @@ function parseQQMusicPageUrl(url) {
 function parseZhihuPageUrl(url) {
   const hostname = url.hostname.toLowerCase();
 
-  if (!ZHIHU_HOSTS.has(hostname)) {
+  if (
+    !ZHIHU_HOSTS.has(hostname) ||
+    url.protocol !== "https:" ||
+    url.username ||
+    url.password ||
+    url.port
+  ) {
     return null;
   }
 
@@ -1408,6 +1414,10 @@ function isMarxistsInlineMedia(parsed) {
 
 function isMarxistsReadingCard(parsed) {
   return parsed?.kind === "marxists" && !isMarxistsMedia(parsed);
+}
+
+function isReaderCard(parsed) {
+  return isMarxistsReadingCard(parsed) || parsed?.kind === "zhihu";
 }
 
 function getMarxistsMetaLine(parsed) {
@@ -2148,7 +2158,9 @@ function getFooterMeta(parsed) {
     case "qqmusic":
       return getQQMusicFooterMeta(parsed);
     case "zhihu":
-      return "知乎原文卡片";
+      return supportsExpandReader(parsed)
+        ? "知乎官方摘要经 BDFZ 阅读服务展开 · 完整内容请打开原文"
+        : "知乎原文卡片";
     case "xiaohongshu":
       if (parsed.brand === "rednote") {
         return "RedNote 原文卡片";
@@ -2993,9 +3005,9 @@ function buildWrapper(metadata) {
   wrapper.classList.add(`bilibili-inline-player--${metadata.parsed.provider || "bilibili"}`);
   wrapperState.set(wrapper, metadata);
 
-  if (isMarxistsReadingCard(metadata.parsed)) {
+  if (isReaderCard(metadata.parsed)) {
     wrapper.classList.add("bilibili-inline-player--reading");
-    buildMarxistsReadingCard(wrapper, metadata);
+    buildReadingCard(wrapper, metadata);
   } else if (compact) {
     wrapper.classList.add("bilibili-inline-player--compact-audio");
     buildCompactAudioCard(wrapper, metadata);
@@ -3020,7 +3032,7 @@ function buildWrapper(metadata) {
   return wrapper;
 }
 
-function buildMarxistsReadingCard(wrapper, metadata) {
+function buildReadingCard(wrapper, metadata) {
   const body = createElement("div", "bilibili-inline-player__reading-body");
   const badge = createElement("span", "bilibili-inline-player__reading-badge", metadata.metaLine);
   const title = createElement("h3", "bilibili-inline-player__reading-title", metadata.title);
@@ -3043,7 +3055,7 @@ function buildMarxistsReadingCard(wrapper, metadata) {
     const status = createElement(
       "div",
       "bilibili-inline-player__reading-status",
-      "正在展开原文…"
+      metadata.parsed.provider === "zhihu" ? "正在读取知乎摘要…" : "正在展开原文…"
     );
 
     status.setAttribute("role", "status");
@@ -3552,7 +3564,6 @@ const READER_ALLOWED_ATTRIBUTES = {
 const READER_TIMEOUT_MS = 15000;
 const READER_CACHE_MAX_ENTRIES = 24;
 const READER_CACHE_TTL_MS = 5 * 60 * 1000;
-const MARXISTS_SOURCE_NOTE_MAX_CHARS = 48;
 const DEFAULT_READER_ENDPOINT = "https://reader.bdfz.net/read";
 const DEFAULT_READER_PANE_HEIGHT = 560;
 const readerViewCache = new Map();
@@ -3587,11 +3598,14 @@ function getExpandReaderEndpoint() {
 }
 
 function supportsExpandReader(parsed) {
-  return (
-    parsed?.kind === "marxists" &&
-    parsed.contentType === "document" &&
-    getBooleanSetting("enable_expand_reader", true) &&
-    Boolean(getExpandReaderEndpoint())
+  const supportedSource =
+    (parsed?.kind === "marxists" && parsed.contentType === "document") ||
+    (parsed?.kind === "zhihu" && getBooleanSetting("enable_zhihu_summary", true));
+
+  return Boolean(
+    supportedSource &&
+      getBooleanSetting("enable_expand_reader", true) &&
+      getExpandReaderEndpoint()
   );
 }
 
@@ -3745,6 +3759,11 @@ function sanitizeReaderImageUrl(value, sourceUrl) {
     const imageUrl = new URL(String(value || "").trim());
     const source = new URL(sourceUrl);
     const sourceHost = source.hostname.toLowerCase();
+
+    if (ZHIHU_HOSTS.has(sourceHost)) {
+      return "";
+    }
+
     const allowedHosts = MARXISTS_HOSTS.has(sourceHost) ? MARXISTS_HOSTS : new Set([sourceHost]);
 
     if (
@@ -3862,7 +3881,9 @@ function sanitizeReaderFragment(html, sourceUrl, idPrefix) {
 }
 
 function buildReaderPane(wrapper, view, resolvedTitle = "") {
-  const sourceUrl = wrapperState.get(wrapper)?.parsed?.canonicalUrl || "";
+  const state = wrapperState.get(wrapper);
+  const sourceUrl = state?.parsed?.canonicalUrl || "";
+  const isZhihuSummary = state?.parsed?.provider === "zhihu";
   const idPrefix = `bili-reader-${++readerFragmentSequence}-`;
   const fragment = sanitizeReaderFragment(view.html, sourceUrl, idPrefix);
 
@@ -3877,7 +3898,9 @@ function buildReaderPane(wrapper, view, resolvedTitle = "") {
   pane.setAttribute("role", "region");
   pane.setAttribute(
     "aria-label",
-    `${resolvedTitle || wrapper.dataset.bilibiliTitle || "马克思主义文库"}原文`
+    `${resolvedTitle || wrapper.dataset.bilibiliTitle || (isZhihuSummary ? "知乎" : "马克思主义文库")}${
+      isZhihuSummary ? "摘要" : "原文"
+    }`
   );
   article.lang = view.lang || "";
   article.append(...Array.from(fragment.childNodes));
@@ -3892,12 +3915,34 @@ function buildReaderPane(wrapper, view, resolvedTitle = "") {
       createElement(
         "div",
         "bilibili-inline-player__reader-truncated",
-        "原文过长，此处只展开了前一部分，完整内容请用下方链接打开原站。"
+        isZhihuSummary
+          ? "摘要过长，此处只显示前一部分，完整内容请用下方链接打开知乎。"
+          : "原文过长，此处只展开了前一部分，完整内容请用下方链接打开原站。"
       )
     );
   }
 
   return pane;
+}
+
+function isMatchingReaderView(view, parsed) {
+  if (!view?.ok || typeof view.html !== "string" || !parsed?.canonicalUrl) {
+    return false;
+  }
+
+  if (parsed.provider !== "zhihu") {
+    return true;
+  }
+
+  const expectedId = String(parsed.answerId || parsed.articleId || parsed.questionId || "");
+
+  return (
+    view.provider === "zhihu" &&
+    view.summaryOnly === true &&
+    view.contentType === parsed.contentType &&
+    String(view.contentId || "") === expectedId &&
+    normalizeUrlLikeString(view.url) === parsed.canonicalUrl
+  );
 }
 
 function resolveReaderViewTitle(view, parsed, fallbackTitle = "") {
@@ -3923,7 +3968,8 @@ async function expandThroughReader(wrapper) {
 
   const status = wrapper.querySelector(".bilibili-inline-player__reading-status");
 
-  const view = await fetchReaderView(state.parsed.canonicalUrl);
+  const fetchedView = await fetchReaderView(state.parsed.canonicalUrl);
+  const view = isMatchingReaderView(fetchedView, state.parsed) ? fetchedView : null;
 
   wrapper.classList.remove("bilibili-inline-player--reader-loading");
   wrapper.setAttribute("aria-busy", "false");
@@ -3942,7 +3988,9 @@ async function expandThroughReader(wrapper) {
 
   if (!pane) {
     if (status) {
-      status.textContent = "原文暂时无法展开，请使用下方链接打开原站。";
+      status.textContent = state.parsed.provider === "zhihu"
+        ? "知乎摘要暂时无法读取，请使用下方链接打开原文。"
+        : "原文暂时无法展开，请使用下方链接打开原站。";
       status.classList.add("bilibili-inline-player__reading-status--error");
     }
     return;
@@ -4618,84 +4666,59 @@ function collectStandaloneCandidates(element, existingTargets) {
   return results;
 }
 
-function collectXiaohongshuInlineCandidates(element, existingTargets) {
-  const limit = Math.max(1, getIntegerSetting("max_embeds_per_post", 4));
-  const results = [];
-  const seen = new Set(existingTargets);
-
-  for (const anchor of element.querySelectorAll("p a[href]")) {
-    if (results.length + existingTargets.length >= limit) {
-      break;
-    }
-
-    if (anchor.closest("aside.onebox, article.onebox, .bilibili-inline-player")) {
-      continue;
-    }
-
-    const target = anchor.closest("p");
-
-    if (!target || seen.has(target) || target.dataset?.bilibiliInlinePlayer) {
-      continue;
-    }
-
-    const parsed = parseBilibiliUrl(anchor.href);
-
-    if (parsed?.provider !== "xiaohongshu") {
-      continue;
-    }
-
-    seen.add(target);
-    results.push({ target, anchor, parsed, preserveSource: true });
+/* Paragraph-inline takeover is intentionally limited to one anchor whose
+   displayed text is the same supported URL as its href. This catches a URL on
+   any visual line while leaving titled prose links, navigation clusters,
+   code, block quotes, lists, media, PDFs, and every unsupported URL untouched. */
+function getVisibleUrlAnchorTarget(anchor) {
+  if (
+    !anchor?.href ||
+    anchor.closest("pre, code, li, blockquote, nav, aside.onebox, article.onebox, .bilibili-inline-player")
+  ) {
+    return null;
   }
 
-  return results;
-}
-
-function isMarxistsInlineSourceLink(anchor, paragraph, parsed) {
-  const elementChildren = Array.from(paragraph.children || []);
-  const hasExactBreakAndLinkShape =
-    elementChildren.length === 2 &&
-    elementChildren[0].tagName === "BR" &&
-    elementChildren[1] === anchor;
+  const paragraph = anchor.closest("p");
 
   if (
-    parsed?.provider !== "marxists" ||
-    !anchor.matches?.("a.onebox") ||
-    anchor.parentElement !== paragraph ||
-    !hasExactBreakAndLinkShape ||
-    anchor.closest("li, blockquote") ||
-    paragraph.querySelector("img, audio, video, iframe")
+    !paragraph ||
+    paragraph.dataset?.bilibiliInlinePlayer ||
+    paragraph.querySelector("img, audio, video, iframe, pre, code")
   ) {
-    return false;
+    return null;
   }
 
   const links = Array.from(paragraph.querySelectorAll("a[href]"));
 
   if (links.length !== 1 || links[0] !== anchor) {
-    return false;
+    return null;
   }
 
-  const displayedUrl = parseBilibiliUrl(normalizeTitleText(anchor.textContent || ""));
+  const visibleText = normalizeTitleText(anchor.textContent || "")
+    .replace(/\s+link clicked \d+ times?$/i, "");
+  const visibleUrls = extractUrlsFromText(visibleText);
+
+  if (visibleUrls.length !== 1) {
+    return null;
+  }
+
+  const parsedHref = parseBilibiliUrl(anchor.href);
+  const parsedVisible = parseBilibiliUrl(visibleUrls[0]);
 
   if (
-    displayedUrl?.provider !== "marxists" ||
-    displayedUrl.canonicalUrl !== parsed.canonicalUrl
+    !parsedHref ||
+    !parsedVisible ||
+    parsedHref.canonicalUrl !== parsedVisible.canonicalUrl
   ) {
-    return false;
+    return null;
   }
 
-  const paragraphText = normalizeTitleText(paragraph.textContent || "");
-  const anchorText = normalizeTitleText(anchor.textContent || "");
-  const isAtParagraphBoundary = paragraphText.endsWith(anchorText);
-  const surroundingTextLength = Math.max(0, paragraphText.length - anchorText.length);
-
-  /* A single auto-linked URL after a BR and short source note is deliberate. This excludes
-     article headings and the multi-link previous/contents/next clusters found in
-     pasted Marxists pages, which must not spawn duplicate readers. */
-  return isAtParagraphBoundary && surroundingTextLength <= MARXISTS_SOURCE_NOTE_MAX_CHARS;
+  return normalizeTitleText(visibleText.replace(visibleUrls[0], ""))
+    ? null
+    : { paragraph, parsed: parsedHref };
 }
 
-function collectMarxistsSourceLinkCandidates(element, existingTargets) {
+function collectVisibleUrlCandidates(element, existingTargets) {
   const limit = Math.max(1, getIntegerSetting("max_embeds_per_post", 4));
   const results = [];
   const seen = new Set(existingTargets);
@@ -4705,24 +4728,19 @@ function collectMarxistsSourceLinkCandidates(element, existingTargets) {
       break;
     }
 
-    if (anchor.closest("aside.onebox, article.onebox, .bilibili-inline-player")) {
+    const matched = getVisibleUrlAnchorTarget(anchor);
+
+    if (!matched || seen.has(matched.paragraph)) {
       continue;
     }
 
-    const target = anchor.closest("p");
-
-    if (!target || seen.has(target) || target.dataset?.bilibiliInlinePlayer) {
-      continue;
-    }
-
-    const parsed = parseBilibiliUrl(anchor.href);
-
-    if (!isMarxistsInlineSourceLink(anchor, target, parsed)) {
-      continue;
-    }
-
-    seen.add(target);
-    results.push({ target, anchor, parsed, preserveSource: true });
+    seen.add(matched.paragraph);
+    results.push({
+      target: matched.paragraph,
+      anchor,
+      parsed: matched.parsed,
+      preserveSource: true,
+    });
   }
 
   return results;
@@ -4801,7 +4819,7 @@ function collectEmbedTextCandidates(element, existingTargets) {
   const results = [];
   const seen = new Set(existingTargets);
 
-  for (const block of element.querySelectorAll("pre, p")) {
+  for (const block of element.querySelectorAll("p")) {
     if (results.length + existingTargets.length >= limit) {
       break;
     }
@@ -4810,7 +4828,7 @@ function collectEmbedTextCandidates(element, existingTargets) {
       continue;
     }
 
-    if (block.querySelector("a[href], iframe[src], aside.onebox, article.onebox")) {
+    if (block.querySelector("a[href], iframe[src], aside.onebox, article.onebox, pre, code")) {
       continue;
     }
 
@@ -4825,7 +4843,7 @@ function collectEmbedTextCandidates(element, existingTargets) {
       target: block,
       anchor: null,
       parsed,
-      preserveSource: parsed.provider === "xiaohongshu",
+      preserveSource: true,
     });
   }
 
@@ -4862,23 +4880,16 @@ export default apiInitializer((api) => {
       element,
       oneboxCandidates.map((candidate) => candidate.target)
     );
-    const xiaohongshuInlineCandidates = collectXiaohongshuInlineCandidates(
+    const visibleUrlCandidates = collectVisibleUrlCandidates(
       element,
       [...oneboxCandidates, ...standaloneCandidates].map((candidate) => candidate.target)
-    );
-    const marxistsSourceLinkCandidates = collectMarxistsSourceLinkCandidates(
-      element,
-      [...oneboxCandidates, ...standaloneCandidates, ...xiaohongshuInlineCandidates].map(
-        (candidate) => candidate.target
-      )
     );
     const ebookAttachmentCandidates = collectEbookAttachmentCandidates(
       element,
       [
         ...oneboxCandidates,
         ...standaloneCandidates,
-        ...xiaohongshuInlineCandidates,
-        ...marxistsSourceLinkCandidates,
+        ...visibleUrlCandidates,
       ].map((candidate) => candidate.target)
     );
     const iframeCandidates = collectIframeCandidates(
@@ -4886,8 +4897,7 @@ export default apiInitializer((api) => {
       [
         ...oneboxCandidates,
         ...standaloneCandidates,
-        ...xiaohongshuInlineCandidates,
-        ...marxistsSourceLinkCandidates,
+        ...visibleUrlCandidates,
         ...ebookAttachmentCandidates,
       ].map((candidate) => candidate.target)
     );
@@ -4896,8 +4906,7 @@ export default apiInitializer((api) => {
       [
         ...oneboxCandidates,
         ...standaloneCandidates,
-        ...xiaohongshuInlineCandidates,
-        ...marxistsSourceLinkCandidates,
+        ...visibleUrlCandidates,
         ...ebookAttachmentCandidates,
         ...iframeCandidates,
       ].map((candidate) => candidate.target)
@@ -4906,8 +4915,7 @@ export default apiInitializer((api) => {
     for (const candidate of [
       ...oneboxCandidates,
       ...standaloneCandidates,
-      ...xiaohongshuInlineCandidates,
-      ...marxistsSourceLinkCandidates,
+      ...visibleUrlCandidates,
       ...ebookAttachmentCandidates,
       ...iframeCandidates,
       ...embedTextCandidates,

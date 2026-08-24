@@ -18,9 +18,8 @@ globalThis.__themeParserTestApi = {
   collectEbookAttachmentCandidates,
   collectEmbedTextCandidates,
   collectIframeCandidates,
-  collectMarxistsSourceLinkCandidates,
   collectOneboxCandidates,
-  collectXiaohongshuInlineCandidates,
+  collectVisibleUrlCandidates,
   collectStandaloneCandidates,
   extractUrlsFromText,
   fetchReaderView,
@@ -37,6 +36,7 @@ globalThis.__themeParserTestApi = {
   getOpenLabel,
   getPreviewAspectRatio,
   isKnownInlineKind,
+  isMatchingReaderView,
   isMarxistsInlineMedia,
   shouldAutoExpandXiaohongshu,
   shouldAutoExpandEmbed,
@@ -78,9 +78,8 @@ const {
   collectEbookAttachmentCandidates,
   collectEmbedTextCandidates,
   collectIframeCandidates,
-  collectMarxistsSourceLinkCandidates,
   collectOneboxCandidates,
-  collectXiaohongshuInlineCandidates,
+  collectVisibleUrlCandidates,
   collectStandaloneCandidates,
   extractUrlsFromText,
   fetchReaderView,
@@ -97,6 +96,7 @@ const {
   getOpenLabel,
   getPreviewAspectRatio,
   isKnownInlineKind,
+  isMatchingReaderView,
   isMarxistsInlineMedia,
   shouldAutoExpandXiaohongshu,
   shouldAutoExpandEmbed,
@@ -149,7 +149,7 @@ function makeCookedParagraphFixture({
   const paragraph = {
     dataset: {},
     querySelector(selector) {
-      return selector === "img, audio, video, iframe" && hasMedia ? {} : null;
+      return selector.includes("img") && hasMedia ? {} : null;
     },
     querySelectorAll(selector) {
       return selector === "a[href]" ? anchors : [];
@@ -168,7 +168,7 @@ function makeCookedParagraphFixture({
         return paragraph;
       }
 
-      if (selector === "li, blockquote") {
+      if (selector.includes("li") || selector.includes("blockquote")) {
         return inList || inBlockquote ? {} : null;
       }
 
@@ -522,6 +522,8 @@ test("collects an auto-linkified Xiaohongshu URL inside copied share text", () =
     dataset: {},
     textContent:
       "赤潮，启动！今天有没有在北京少年集遇见这只零宝呢 https://xhslink.cn/o/Fixture123 打开【小红书】，这篇笔记值得一看~",
+    querySelector: () => null,
+    querySelectorAll: (selector) => (selector === "a[href]" ? [anchor] : []),
   };
   const anchor = {
     href: "https://xhslink.cn/o/Fixture123",
@@ -535,7 +537,7 @@ test("collects an auto-linkified Xiaohongshu URL inside copied share text", () =
       ["p > a[href]:only-child", "p a[href]"].includes(selector) ? [anchor] : [],
   };
   const standalone = collectStandaloneCandidates(cooked, []);
-  const [candidate] = collectXiaohongshuInlineCandidates(
+  const [candidate] = collectVisibleUrlCandidates(
     cooked,
     standalone.map((item) => item.target)
   );
@@ -583,7 +585,7 @@ test("keeps surrounding pasted share text when adding a source card", () => {
     },
   };
   const cooked = {
-    querySelectorAll: (selector) => (selector === "pre, p" ? [block] : []),
+    querySelectorAll: (selector) => (selector === "p" ? [block] : []),
   };
   const [candidate] = collectEmbedTextCandidates(cooked, []);
   const replacement = {};
@@ -607,6 +609,12 @@ test("rejects lookalike hosts, unsupported paths, credentials, and custom ports"
     "ftp://www.xiaohongshu.com/explore/64f000000000000000000001",
     "https://user@example.com@www.xiaohongshu.com/explore/64f000000000000000000001",
     "https://www.xiaohongshu.com:444/explore/64f000000000000000000001",
+    "http://www.zhihu.com/question/123456",
+    "https://www.zhihu.com.evil.example/question/123456",
+    "https://user:pass@www.zhihu.com/question/123456",
+    "https://www.zhihu.com:444/question/123456",
+    "https://www.zhihu.com/question/not-numeric",
+    "https://www.zhihu.com/collection/123456",
   ];
 
   for (const source of rejected) {
@@ -825,7 +833,7 @@ test("recognizes topic 2327/1 short note, BR, and auto-linked Marxists source", 
     lineBreakBeforeAnchor: true,
     url,
   });
-  const [candidate] = collectMarxistsSourceLinkCandidates(fixture.cooked, []);
+  const [candidate] = collectVisibleUrlCandidates(fixture.cooked, []);
 
   assert.equal(fixture.anchor.className, "onebox");
   assert.equal(fixture.anchor.previousSibling.nodeName, "BR");
@@ -872,7 +880,7 @@ test("rejects topic 9340's six pasted-article navigation links", () => {
   };
 
   assert.equal(cooked.querySelectorAll("a[href]").length, 6);
-  assert.equal(collectMarxistsSourceLinkCandidates(cooked, []).length, 0);
+  assert.equal(collectVisibleUrlCandidates(cooked, []).length, 0);
 });
 
 test("rejects topic 6813's three non-URL navigation anchors", () => {
@@ -888,7 +896,7 @@ test("rejects topic 6813's three non-URL navigation anchors", () => {
     url: "https://www.marxists.org/chinese/example/previous.htm",
   });
 
-  assert.equal(collectMarxistsSourceLinkCandidates(fixture.cooked, []).length, 0);
+  assert.equal(collectVisibleUrlCandidates(fixture.cooked, []).length, 0);
 
   const titledNavigation = makeCookedParagraphFixture({
     anchorClass: "onebox",
@@ -896,29 +904,79 @@ test("rejects topic 6813's three non-URL navigation anchors", () => {
     anchorText: "目录",
     url: "https://www.marxists.org/chinese/example/index.htm",
   });
-  assert.equal(collectMarxistsSourceLinkCandidates(titledNavigation.cooked, []).length, 0);
+  assert.equal(collectVisibleUrlCandidates(titledNavigation.cooked, []).length, 0);
 });
 
-test("does not broaden sentence-inline takeover to other providers", () => {
+test("recognizes one visible supported URL at any position in a paragraph", () => {
   for (const url of [
     "https://www.bilibili.com/video/BV1xx411c7mD",
     "https://music.163.com/song?id=123456",
+    "https://y.qq.com/n/ryqq/songDetail/004Z8Ihr0JIu5s",
+    "https://xhslink.cn/o/Fixture123",
+    "https://www.marxists.org/archive/marx/works/1848/communist-manifesto/ch01.htm",
     "https://www.zhihu.com/question/123456",
   ]) {
-    const fixture = makeCookedParagraphFixture({ before: "来源：", url });
+    const fixture = makeCookedParagraphFixture({ before: "来源：\n第二行：", url });
+    const [candidate] = collectVisibleUrlCandidates(fixture.cooked, []);
 
-    assert.equal(collectMarxistsSourceLinkCandidates(fixture.cooked, []).length, 0, url);
+    assert.equal(candidate.target, fixture.paragraph, url);
+    assert.equal(candidate.parsed.canonicalUrl, parseBilibiliUrl(url).canonicalUrl, url);
+    assert.equal(candidate.preserveSource, true, url);
   }
 });
 
-test("rejects ambiguous Marxists inline links with long context or active media", () => {
-  const url = "https://www.marxists.org/archive/marx/works/1848/communist-manifesto/ch01.htm";
-  const longContext = makeCookedParagraphFixture({
-    anchorClass: "onebox",
-    before: "这是一段正文说明".repeat(8),
-    lineBreakBeforeAnchor: true,
-    url,
+test("visible URL matching preserves code, navigation anchors, PDFs, and mismatches", () => {
+  const navigation = makeCookedParagraphFixture({
+    before: "导航：",
+    extraLinks: [
+      { href: "https://www.bilibili.com/video/BV1xx411c7mE", text: "下一项" },
+    ],
+    url: "https://www.bilibili.com/video/BV1xx411c7mD",
   });
+  assert.equal(collectVisibleUrlCandidates(navigation.cooked, []).length, 0);
+
+  const titled = makeCookedParagraphFixture({
+    anchorText: "推荐视频",
+    before: "来源：",
+    url: "https://www.bilibili.com/video/BV1xx411c7mD",
+  });
+  assert.equal(collectVisibleUrlCandidates(titled.cooked, []).length, 0);
+
+  const mismatch = makeCookedParagraphFixture({
+    anchorText: "https://www.bilibili.com/video/BV1xx411c7mE",
+    before: "来源：",
+    url: "https://www.bilibili.com/video/BV1xx411c7mD",
+  });
+  assert.equal(collectVisibleUrlCandidates(mismatch.cooked, []).length, 0);
+
+  const pdf = makeCookedParagraphFixture({
+    before: "附件：",
+    url: "https://www.marxists.org/chinese/example/document.pdf",
+  });
+  assert.equal(collectVisibleUrlCandidates(pdf.cooked, []).length, 0);
+
+  const code = makeCookedParagraphFixture({
+    before: "示例：",
+    url: "https://www.bilibili.com/video/BV1xx411c7mD",
+  });
+  const originalClosest = code.anchor.closest;
+  code.anchor.closest = (selector) =>
+    selector.startsWith("pre, code") ? {} : originalClosest(selector);
+  assert.equal(collectVisibleUrlCandidates(code.cooked, []).length, 0);
+
+  const plainCodeBlock = {
+    dataset: {},
+    textContent: "const source = 'https://www.bilibili.com/video/BV1xx411c7mD';",
+    querySelector: (selector) => (selector.includes("code") ? {} : null),
+  };
+  const cookedCode = {
+    querySelectorAll: (selector) => (selector === "p" ? [plainCodeBlock] : []),
+  };
+  assert.equal(collectEmbedTextCandidates(cookedCode, []).length, 0);
+});
+
+test("keeps Marxists visible URLs out of active media, lists, blockquotes, and code", () => {
+  const url = "https://www.marxists.org/archive/marx/works/1848/communist-manifesto/ch01.htm";
   const mediaContext = makeCookedParagraphFixture({
     anchorClass: "onebox",
     before: "来源：",
@@ -933,16 +991,21 @@ test("rejects ambiguous Marxists inline links with long context or active media"
     lineBreakBeforeAnchor: true,
     url,
   });
-  const noBreak = makeCookedParagraphFixture({
+  const blockquoteContext = makeCookedParagraphFixture({
     anchorClass: "onebox",
     before: "来源：",
+    inBlockquote: true,
     url,
   });
+  const codeContext = makeCookedParagraphFixture({ before: "示例：", url });
+  const originalClosest = codeContext.anchor.closest;
+  codeContext.anchor.closest = (selector) =>
+    selector.startsWith("pre, code") ? {} : originalClosest(selector);
 
-  assert.equal(collectMarxistsSourceLinkCandidates(longContext.cooked, []).length, 0);
-  assert.equal(collectMarxistsSourceLinkCandidates(mediaContext.cooked, []).length, 0);
-  assert.equal(collectMarxistsSourceLinkCandidates(listContext.cooked, []).length, 0);
-  assert.equal(collectMarxistsSourceLinkCandidates(noBreak.cooked, []).length, 0);
+  assert.equal(collectVisibleUrlCandidates(mediaContext.cooked, []).length, 0);
+  assert.equal(collectVisibleUrlCandidates(listContext.cooked, []).length, 0);
+  assert.equal(collectVisibleUrlCandidates(blockquoteContext.cooked, []).length, 0);
+  assert.equal(collectVisibleUrlCandidates(codeContext.cooked, []).length, 0);
 });
 
 test("documents route through the shared expand-reader service, media does not", () => {
@@ -953,7 +1016,40 @@ test("documents route through the shared expand-reader service, media does not",
   assert.equal(supportsExpandReader(document), true);
   assert.equal(supportsExpandReader(audio), false, "audio already plays natively");
   assert.equal(supportsExpandReader(download), false, "a download has no reading view");
-  assert.equal(supportsExpandReader(parseBilibiliUrl("https://www.zhihu.com/question/123")), false);
+  const zhihu = parseBilibiliUrl("https://www.zhihu.com/question/123");
+
+  assert.equal(supportsExpandReader(zhihu), true, "Zhihu uses summary-only reader output");
+  assert.equal(getFooterMeta(zhihu), "知乎官方摘要经 BDFZ 阅读服务展开 · 完整内容请打开原文");
+
+  themeSettings.enable_zhihu_summary = false;
+  assert.equal(supportsExpandReader(zhihu), false);
+  assert.equal(getFooterMeta(zhihu), "知乎原文卡片");
+  delete themeSettings.enable_zhihu_summary;
+});
+
+test("Zhihu reader output must remain summary-only and match exact type and ID", () => {
+  const parsed = parseBilibiliUrl(
+    "https://www.zhihu.com/question/123456/answer/789012"
+  );
+  const exact = {
+    ok: true,
+    html: "<p>摘要</p>",
+    provider: "zhihu",
+    summaryOnly: true,
+    contentType: "answer",
+    contentId: "789012",
+    url: parsed.canonicalUrl,
+  };
+
+  assert.equal(isMatchingReaderView(exact, parsed), true);
+  assert.equal(isMatchingReaderView({ ...exact, summaryOnly: false }, parsed), false);
+  assert.equal(isMatchingReaderView({ ...exact, contentType: "question" }, parsed), false);
+  assert.equal(isMatchingReaderView({ ...exact, contentId: "789013" }, parsed), false);
+  assert.equal(
+    isMatchingReaderView({ ...exact, url: "https://www.zhihu.com/answer/789012" }, parsed),
+    false,
+    "the Worker must echo the exact canonical source URL"
+  );
 });
 
 test("the reader is skipped when disabled or pointed at a non-HTTPS endpoint", () => {
@@ -1108,6 +1204,7 @@ test("reader images are same-source HTTPS, lazy, and referrer-free", () => {
     "https://tracker.example/pixel.gif",
     "https://marxists.org.evil.example/pixel.gif",
     "data:image/png;base64,fixture",
+    "https://www.zhihu.com/pixel.gif",
   ]) {
     assert.equal(sanitizeReaderImageUrl(unsafeSource, source), "", unsafeSource);
   }

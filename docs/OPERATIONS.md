@@ -1,6 +1,6 @@
 # Operations authority
 
-Last reviewed: 2026-08-22 (America/Los_Angeles)
+Last reviewed: 2026-08-24 (America/Los_Angeles)
 
 This is the canonical operational procedure for the Extended Preview & Embed Suite.
 `AGENTS.md` owns constraints, `PROJECT_STATE.md` owns the accepted version and next
@@ -26,6 +26,25 @@ steps. Live Discourse and GitHub readback override this document when they disag
   `7dd04ed3c2586bfe70ab3d6ff42efc8ed546f607` (`0.11.0`); restore its tree
   through a reviewed revert commit on `main`. The reader kill switch is
   `enable_expand_reader=false`.
+
+## Pending 0.12.0 transaction
+
+Production remains on the accepted 0.11.1 state below. The tested 0.12.0
+source adds default, summary-only Zhihu cards backed by the operator-owned
+`expand-reader` Worker and replaces provider-specific sentence handling with
+one conservative visible-URL paragraph detector for all non-Zhihu providers.
+The detector requires exactly one anchor whose visible label and target are the
+same supported URL; it preserves the source paragraph and rejects code,
+navigation/multiple anchors, non-URL labels, lists, blockquotes, media, existing
+oneboxes, PDF, and component-owned markup.
+
+The theme is not releasable ahead of the Worker. `expand-reader` 0.3.0 first
+requires an authorized operator to enter `ZHIHU_ACCESS_SECRET` interactively,
+then complete immutable 0% acceptance and controlled promotion. Never place the
+secret value in this repository, a command argument, file, log, report, Git
+object, or chat. Do not refresh theme `119` until the Worker candidate is active
+and healthy. The pre-change candidate rollback anchor is
+`b7a8ea0ed15a1bb8f4d45d10430d31e4b25b80ff`.
 
 Before any mutation, also read:
 
@@ -88,6 +107,8 @@ PDF remains owned by the official `discourse-pdf-previews` component.
 Reader settings:
 
 - `enable_expand_reader`: immediate containment switch; default `true`.
+- `enable_zhihu_summary`: Zhihu summary-only switch; default `true`. It has no
+  effect when the main reader switch or endpoint is unavailable.
 - `expand_reader_endpoint`: operator-controlled HTTPS endpoint; default
   `https://reader.bdfz.net/read`; HTTP is accepted only for exact loopback development.
 - `expand_reader_height`: bounded `240`–`1200`, default `560` pixels.
@@ -96,7 +117,9 @@ Reader settings:
 The endpoint receives `GET /read?url=<CANONICAL_URL>` and must return JSON with
 `ok=true` and an HTML string. The client treats every fragment as untrusted, performs
 its own allowlist sanitization, and keeps the source card on malformed, empty, timed
-out, or non-2xx responses. The service owns target allowlisting and upstream SSRF
+out, or non-2xx responses. For Zhihu it additionally requires `provider=zhihu`,
+`summaryOnly=true`, the exact parsed content type and numeric ID, and the exact
+canonical echoed URL; images are rejected. The service owns target policy and SSRF
 controls. This component must not add a second proxy or forward credentials.
 
 ## Preflight and ownership
@@ -143,7 +166,10 @@ The Foliate SHA-256 must be:
 ```
 
 Review the complete diff and verify every changed line is task-scoped. Confirm parser
-negative controls for lookalike hosts, credentials, ports, PDF, and other providers.
+negative controls for lookalike hosts, credentials, ports, PDF, code, navigation,
+multiple anchors, non-URL anchor labels, and other providers. Confirm every existing
+non-Zhihu provider has a positive fixture whose visible URL is not at the paragraph
+start, and confirm Zhihu requires an exact summary-only response contract.
 For Marxists cooked DOM, the required fixture set is:
 
 - standalone control `1330/2`;
@@ -203,6 +229,7 @@ puts JSON.pretty_generate(
   theme_field_error_count: ThemeField.where(theme_id: theme.id).where.not(error: [nil, ""]).count,
   reader_settings: values.slice(
     "enable_expand_reader",
+    "enable_zhihu_summary",
     "expand_reader_endpoint",
     "expand_reader_height",
     "enable_marxists_inline_media"
@@ -285,7 +312,13 @@ reload as needed and verify:
    focus.
 7. Reader failure control: source card/link remains and an accessible error status appears.
 8. Reduced-motion removes loading animation.
-9. Representative bilibili, NetEase, QQ Music, Zhihu, Xiaohongshu, EPUB, and PDF controls remain unchanged.
+9. An exact-ID Zhihu question/answer/article renders a clearly labelled summary
+   with a permanent original link; missing-secret, auth, rate, timeout, malformed,
+   and no-match failures retain the original source card.
+10. Representative bilibili, NetEase, QQ Music, Xiaohongshu, and Marxists links
+    embedded after explanatory paragraph text render exactly one card while the
+    original paragraph remains. Code, navigation/multiple anchors, non-URL labels,
+    PDF, EPUB/MOBI/AZW3, and existing onebox controls remain unchanged.
 
 Accepted browser readback for `0.11.1` met items 1–6: `1330/2` and `2327/1`
 each had one wrapper/pane/open state with a telemetry-free real title and a
@@ -310,8 +343,9 @@ git -C "$component_restore_dir" status --short
 Verify the restored SHA against GitHub and the intended release, then run the complete
 local gate. No archive hydrate, external source download, or data restore is required.
 
-Contain a reader regression by setting `enable_expand_reader=false` in theme `119` and
-verifying source cards/links remain; this does not roll back other provider code. A full
+Contain only Zhihu summary rendering by setting `enable_zhihu_summary=false`, or
+contain every reader-backed provider by setting `enable_expand_reader=false`, then
+verify source cards/links remain; neither switch rolls back other provider code. A full
 rollback from `0.11.1` uses
 `7dd04ed3c2586bfe70ab3d6ff42efc8ed546f607` (`0.11.0`) as the known-good tree
 reference, restores that runtime behavior through a reviewed Git revert commit,

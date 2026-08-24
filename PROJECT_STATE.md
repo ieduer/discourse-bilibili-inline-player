@@ -1,6 +1,39 @@
 # Project state
 
-Last reviewed: 2026-08-22 (America/Los_Angeles)
+Last reviewed: 2026-08-24 (America/Los_Angeles)
+
+## 0.12.0 candidate: blocked before coordinated release
+
+- Local source is modified and fully tested; production theme `119` remains on
+  the accepted `0.11.1` state below.
+- Zhihu question, answer, and article URLs now default to an expanded,
+  summary-only reader card. The consumer requires `provider=zhihu`,
+  `summaryOnly=true`, an exact content type and numeric ID, and the exact
+  canonical returned URL before rendering. It rejects returned images,
+  re-sanitizes all HTML, explicitly labels the result as an official-search
+  summary, and always keeps the original source link. Every failure remains
+  fail-open to the source card.
+- A common visible-URL paragraph detector now recognizes every existing
+  non-Zhihu provider when its only anchor visibly spells the supported URL,
+  even after explanatory text or a line break. The paragraph is preserved and
+  the card is inserted after it. Code, navigation/multiple anchors, non-URL
+  anchor labels, lists, blockquotes, media, existing oneboxes, PDF, and
+  component-owned markup remain negative controls.
+- Current local verification: `52/52` parser, cooked-DOM, reader-contract,
+  sanitizer, cache, PDF, code, and legacy-provider tests pass; initializer and
+  test syntax, JSON, YAML, vendored Foliate hash, and diff checks pass.
+- Release gate: `expand-reader` 0.3.0 first needs the required interactive
+  `ZHIHU_ACCESS_SECRET`, immutable 0% candidate acceptance, and controlled
+  promotion. Only then may this tested theme commit be refreshed into theme
+  `119` and verified in a real forum page. No secret value belongs in this
+  repository or its release procedure.
+- Candidate source rollback anchor is the pre-change clean commit
+  `b7a8ea0ed15a1bb8f4d45d10430d31e4b25b80ff`. Production behavior rollback
+  remains the accepted `0.11.1` authority below until a 0.12.0 release is
+  actually accepted.
+- Archive disposition: `not_applicable`; the task creates no local source
+  archive, backup payload, export, or historical snapshot. Git and the existing
+  installed remote-theme revision are the rollback authorities.
 
 ## Accepted production state
 

@@ -16,19 +16,19 @@ Before work, read `PROJECT_STATE.md` for the accepted version and `docs/OPERATIO
 
 Keep the component fail-open: unsupported or failed URLs must leave the original cooked content or original source link available. Preserve `max_embeds_per_post`, bound attachment size, and do not add unbounded client fetches.
 
-Safe inline players and readers are visible by default through `auto_expand_embeds`. Automatic expansion must never force media autoplay; click activation may continue to follow `autoplay_on_click`. Source-only content without a safe renderer remains a card.
+Safe inline players and readers are visible by default through `auto_expand_embeds`. Automatic expansion must never force media autoplay; click activation may continue to follow `autoplay_on_click`. Zhihu uses only the bounded official-search summary contract when `enable_zhihu_summary` is enabled; source-only or failed content remains a card.
 
 ## Change boundaries
 
 - Do not add this repository to `/var/discourse/containers/app.yml`.
 - Do not rebuild or restart Discourse for a theme update.
 - Do not modify nginx, the forum front proxy, uploads, R2, Redis, CSP, or Discourse core for ordinary component work.
-- Do not add private APIs, login cookies, custom request signatures, downloaded media, or third-party resolver services. Lazy-loading the user-supplied official note page in the default expanded state is the supported inline path for this component.
+- Do not add private APIs, login cookies, custom request signatures, downloaded media, or third-party resolver services. Xiaohongshu may lazy-load the user-supplied official note page; Zhihu must never be framed or scraped and may use only the exact-ID, summary-only `expand-reader` contract.
 - Preserve Xiaohongshu/RedNote path, query, and fragment while normalizing recognized links to HTTPS; never log full share URLs that may contain temporary capability parameters.
 - Treat Discourse Onebox as a separate server-side fetch path. The preview must remain complete from copied share text when those domains are blocked.
-- Keep existing bilibili, NetEase, QQ Music, Zhihu, and Marxists Internet Archive behavior unless a regression test proves a change is needed.
+- Keep existing bilibili, NetEase, QQ Music, Xiaohongshu/RedNote, Zhihu, and Marxists Internet Archive behavior unless a regression test proves a change is needed. The common visible-URL paragraph detector must support every non-Zhihu provider at arbitrary paragraph position while rejecting code, navigation/multiple anchors, non-URL anchor labels, PDF, lists, blockquotes, media, and existing oneboxes.
 - `marxists.org` sends `X-Frame-Options: SAMEORIGIN`, `frame-ancestors 'self'`, and no CORS header, and its reachable mirrors repeat that policy. It can never be framed or fetched by the browser. Its audio and video still play through native media elements, which need neither framing nor a cross-origin read.
-- Content that cannot be expanded directly goes through the operator's `expand-reader` service and nowhere else. Decided 2026-08-22. Do not add a second proxy, a third-party resolver, a mirror rewrite, or a per-provider fetch path. Adding a host to the service allowlist is a separate operator decision about that site's terms; any later component support must reuse this single service contract.
+- Content that cannot be expanded directly goes through the operator's `expand-reader` service and nowhere else. Decided 2026-08-22. Do not add a second proxy, a third-party resolver, or a mirror rewrite. Marxists direct reads remain on their exact fetch allowlist. Zhihu is a separate fixed-endpoint provider contract: exact numeric identifiers only, official-search summary only, exact type/ID/returned-URL match, and permanent original-source fallback. Never add Zhihu to the direct-fetch allowlist or describe the summary as arbitrary full text.
 - Treat every reader fragment as untrusted even though the service sanitizes it. Keep the local allowlist re-sanitization, keep the reader failure path falling back to the source card, and never loosen the forum CSP for it.
 - Keep `expand_reader_endpoint` HTTPS-only apart from the loopback development affordance.
 - Do not let `marxists.org` claim `.pdf`; that format stays with `discourse-pdf-previews`.
@@ -49,7 +49,7 @@ git diff --check
 sha256sum assets/vendor/foliate-reader.min.js
 ```
 
-After GitHub push, verify the remote branch commit. After updating theme `119`, read back `RemoteTheme.local_version`, `remote_version`, `theme_version`, and `last_error_text`, then smoke-test the public forum, representative provider posts, real EPUB/MOBI/AZW3 attachments, and a PDF non-takeover control. The exact live commit, verification evidence, and rollback anchor belong in the forum operations report and agent action log.
+After GitHub push, verify the remote branch commit. Do not refresh theme `119` to a Zhihu-capable release until the required Worker secret and a tested Worker candidate are active. After updating theme `119`, read back `RemoteTheme.local_version`, `remote_version`, `theme_version`, and `last_error_text`, then smoke-test the public forum, representative provider posts, exact-ID Zhihu summary/failure fallback, visible-URL paragraph positives, code/navigation/PDF negatives, real EPUB/MOBI/AZW3 attachments, and a PDF non-takeover control. The exact live commit, verification evidence, and rollback anchor belong in the forum operations report and agent action log.
 
 ## Resource location and restore
 
