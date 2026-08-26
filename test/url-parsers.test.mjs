@@ -23,13 +23,18 @@ globalThis.__themeParserTestApi = {
   collectStandaloneCandidates,
   extractUrlsFromText,
   fetchReaderView,
+  fetchWeChatArchive,
   getCachedReaderRequest,
+  getCachedWeChatArchive,
   getFallbackTitle,
   getFooterMeta,
   getInitialButtonLabel,
   getReaderCacheKey,
+  getWeChatArchiveCacheKey,
+  getWeChatIngestEndpoint,
   getScopedReaderFragment,
   supportsExpandReader,
+  supportsWeChatArchive,
   getLoadedFrameHeight,
   getMarxistsDescription,
   getMetaLine,
@@ -49,12 +54,17 @@ globalThis.__themeParserTestApi = {
   hardenReaderAnchor,
   hardenReaderImage,
   readerViewCache,
+  wechatArchiveCache,
   READER_CACHE_MAX_ENTRIES,
   READER_CACHE_TTL_MS,
+  WECHAT_ARCHIVE_CACHE_MAX_ENTRIES,
+  WECHAT_ARCHIVE_CACHE_TTL_MS,
+  normalizeWeChatArchivePayload,
   sanitizeReaderImageUrl,
   sanitizeEbookCss,
   resolveReaderViewTitle,
   storeReaderRequest,
+  storeWeChatArchive,
 };
 `);
 const context = {
@@ -83,13 +93,18 @@ const {
   collectStandaloneCandidates,
   extractUrlsFromText,
   fetchReaderView,
+  fetchWeChatArchive,
   getCachedReaderRequest,
+  getCachedWeChatArchive,
   getFallbackTitle,
   getFooterMeta,
   getInitialButtonLabel,
   getReaderCacheKey,
+  getWeChatArchiveCacheKey,
+  getWeChatIngestEndpoint,
   getScopedReaderFragment,
   supportsExpandReader,
+  supportsWeChatArchive,
   getLoadedFrameHeight,
   getMarxistsDescription,
   getMetaLine,
@@ -109,12 +124,17 @@ const {
   hardenReaderAnchor,
   hardenReaderImage,
   readerViewCache,
+  wechatArchiveCache,
   READER_CACHE_MAX_ENTRIES,
   READER_CACHE_TTL_MS,
+  WECHAT_ARCHIVE_CACHE_MAX_ENTRIES,
+  WECHAT_ARCHIVE_CACHE_TTL_MS,
+  normalizeWeChatArchivePayload,
   sanitizeReaderImageUrl,
   sanitizeEbookCss,
   resolveReaderViewTitle,
   storeReaderRequest,
+  storeWeChatArchive,
 } = context.__themeParserTestApi;
 
 test("reader titles discard Discourse click telemetry and prefer source metadata", () => {
@@ -615,6 +635,13 @@ test("rejects lookalike hosts, unsupported paths, credentials, and custom ports"
     "https://www.zhihu.com:444/question/123456",
     "https://www.zhihu.com/question/not-numeric",
     "https://www.zhihu.com/collection/123456",
+    "https://mp.weixin.qq.com.evil.example/s/Fixture123",
+    "https://user:pass@mp.weixin.qq.com/s/Fixture123",
+    "https://mp.weixin.qq.com:444/s/Fixture123",
+    "ftp://mp.weixin.qq.com/s/Fixture123",
+    "https://mp.weixin.qq.com/mp/wappoc_appmsgcaptcha?poc_token=fixture",
+    "https://mp.weixin.qq.com/profile?src=fixture",
+    "https://mp.weixin.qq.com/s?sn=missing-identity",
   ];
 
   for (const source of rejected) {
@@ -636,6 +663,37 @@ test("keeps representative existing providers working", () => {
     parseBilibiliUrl("https://www.zhihu.com/question/123456/answer/789012").provider,
     "zhihu"
   );
+  assert.equal(
+    parseBilibiliUrl("https://mp.weixin.qq.com/s/Fixture123").provider,
+    "wechat"
+  );
+});
+
+test("parses only exact WeChat public-article URLs and preserves their source identity", () => {
+  const parsed = parseBilibiliUrl(
+    "http://mp.weixin.qq.com/s?__biz=MzDemo%3D%3D&mid=123&idx=1&sn=abc#wechat_redirect"
+  );
+
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(parsed)),
+    {
+      provider: "wechat",
+      kind: "wechat",
+      contentType: "article",
+      page: 1,
+      rawId: "/s",
+      sourceIdentity: "wechat:article:MzDemo==:123:1",
+      canonicalUrl:
+        "https://mp.weixin.qq.com/s?__biz=MzDemo%3D%3D&mid=123&idx=1&sn=abc",
+    }
+  );
+  assert.equal(
+    parseBilibiliUrl("https://mp.weixin.qq.com/s/Fixture_123-abc").canonicalUrl,
+    "https://mp.weixin.qq.com/s/Fixture_123-abc"
+  );
+  assert.equal(getMetaLine(parsed), "微信公号全文");
+  assert.equal(getFallbackTitle(parsed), "微信公号文章");
+  assert.equal(getOpenLabel(parsed), "在微信打开原文");
 });
 
 test("always keeps a direct source link for Xiaohongshu", () => {
@@ -647,6 +705,14 @@ test("always keeps a direct source link for Xiaohongshu", () => {
     false
   );
 
+  delete context.settings.show_open_link;
+});
+
+test("always keeps the original WeChat source link", () => {
+  context.settings.show_open_link = false;
+  const parsed = parseBilibiliUrl("https://mp.weixin.qq.com/s/Fixture123");
+
+  assert.equal(shouldShowDirectSourceLink(parsed), true);
   delete context.settings.show_open_link;
 });
 
@@ -1025,6 +1091,158 @@ test("documents route through the shared expand-reader service, media does not",
   assert.equal(supportsExpandReader(zhihu), false);
   assert.equal(getFooterMeta(zhihu), "知乎原文卡片");
   delete themeSettings.enable_zhihu_summary;
+});
+
+test("WeChat uses only the exact operator archive endpoint and defaults to full-text mode", () => {
+  const parsed = parseBilibiliUrl("https://mp.weixin.qq.com/s/Fixture123");
+
+  assert.equal(supportsWeChatArchive(parsed), true);
+  assert.equal(getWeChatIngestEndpoint(), "https://wx.bdfz.net/api/ingest");
+  assert.equal(
+    getFooterMeta(parsed),
+    "经 wx.bdfz.net 转换并默认展开全文 · 保留微信原文"
+  );
+
+  themeSettings.enable_wechat_inline = false;
+  assert.equal(supportsWeChatArchive(parsed), false);
+  assert.equal(getFooterMeta(parsed), "微信原文卡片");
+  delete themeSettings.enable_wechat_inline;
+
+  for (const endpoint of [
+    "http://wx.bdfz.net/api/ingest",
+    "https://wx.bdfz.net.evil.example/api/ingest",
+    "https://user:pass@wx.bdfz.net/api/ingest",
+    "https://wx.bdfz.net:444/api/ingest",
+    "https://wx.bdfz.net/api/other",
+    "https://wx.bdfz.net/api/ingest?refresh=1",
+  ]) {
+    themeSettings.wechat_ingest_endpoint = endpoint;
+    assert.equal(getWeChatIngestEndpoint(), "", endpoint);
+    assert.equal(supportsWeChatArchive(parsed), false, endpoint);
+  }
+  delete themeSettings.wechat_ingest_endpoint;
+});
+
+test("WeChat archive responses require an exact source echo and wx.bdfz.net slug", () => {
+  const parsed = parseBilibiliUrl("https://mp.weixin.qq.com/s/Fixture123");
+  const exact = {
+    ok: true,
+    url: "https://wx.bdfz.net/fixture-article",
+    slug: "fixture-article",
+    title: "测试微信文章",
+    orig: parsed.canonicalUrl,
+  };
+
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(normalizeWeChatArchivePayload(exact, parsed))),
+    {
+      archiveUrl: "https://wx.bdfz.net/fixture-article",
+      slug: "fixture-article",
+      title: "测试微信文章",
+    }
+  );
+  assert.equal(normalizeWeChatArchivePayload({ ...exact, ok: false }, parsed), null);
+  assert.equal(normalizeWeChatArchivePayload({ ...exact, orig: "" }, parsed), null);
+  assert.equal(
+    normalizeWeChatArchivePayload(
+      { ...exact, orig: "https://mp.weixin.qq.com/s/OtherArticle" },
+      parsed
+    ),
+    null
+  );
+  assert.equal(
+    normalizeWeChatArchivePayload(
+      { ...exact, url: "https://wx.bdfz.net.evil.example/fixture-article" },
+      parsed
+    ),
+    null
+  );
+  assert.equal(
+    normalizeWeChatArchivePayload({ ...exact, slug: "other-article" }, parsed),
+    null
+  );
+});
+
+test("WeChat conversion is cached, bounded, and sends no credentials or referrer", async () => {
+  const parsed = parseBilibiliUrl("https://mp.weixin.qq.com/s/Fixture123");
+  let calls = 0;
+  let requestOptions;
+
+  wechatArchiveCache.clear();
+  context.fetch = async (url, options) => {
+    calls += 1;
+    requestOptions = { url, ...options };
+    return {
+      ok: true,
+      json: async () => ({
+        ok: true,
+        url: "https://wx.bdfz.net/fixture-article",
+        slug: "fixture-article",
+        title: "测试微信文章",
+        orig: parsed.canonicalUrl,
+      }),
+    };
+  };
+
+  const first = await fetchWeChatArchive(parsed);
+  const second = await fetchWeChatArchive(parsed);
+  assert.equal(calls, 1);
+  assert.equal(first.archiveUrl, "https://wx.bdfz.net/fixture-article");
+  assert.equal(second.archiveUrl, first.archiveUrl);
+  assert.equal(requestOptions.url, "https://wx.bdfz.net/api/ingest");
+  assert.equal(requestOptions.method, "POST");
+  assert.equal(requestOptions.credentials, "omit");
+  assert.equal(requestOptions.referrerPolicy, "no-referrer");
+  assert.equal(requestOptions.headers["Content-Type"], "application/json");
+  assert.deepEqual(JSON.parse(requestOptions.body), { url: parsed.canonicalUrl });
+
+  const now = 1000;
+  wechatArchiveCache.clear();
+  for (let index = 0; index < WECHAT_ARCHIVE_CACHE_MAX_ENTRIES; index += 1) {
+    storeWeChatArchive(`key-${index}`, Promise.resolve(index), now);
+  }
+  assert.equal(wechatArchiveCache.size, WECHAT_ARCHIVE_CACHE_MAX_ENTRIES);
+  assert.equal(await getCachedWeChatArchive("key-0", now + 1), 0);
+  storeWeChatArchive("new-key", Promise.resolve("new"), now + 1);
+  assert.equal(wechatArchiveCache.has("key-0"), true);
+  assert.equal(wechatArchiveCache.has("key-1"), false);
+  assert.equal(
+    getCachedWeChatArchive("key-0", now + WECHAT_ARCHIVE_CACHE_TTL_MS),
+    null
+  );
+
+  wechatArchiveCache.clear();
+  context.fetch = globalThis.fetch;
+});
+
+test("failed WeChat conversion is evicted so a later render can retry", async () => {
+  const parsed = parseBilibiliUrl("https://mp.weixin.qq.com/s/Fixture123");
+  let calls = 0;
+
+  wechatArchiveCache.clear();
+  context.fetch = async () => {
+    calls += 1;
+    if (calls === 1) {
+      return { ok: false };
+    }
+    return {
+      ok: true,
+      json: async () => ({
+        ok: true,
+        url: "https://wx.bdfz.net/fixture-article",
+        slug: "fixture-article",
+        title: "测试微信文章",
+        orig: parsed.canonicalUrl,
+      }),
+    };
+  };
+
+  assert.equal(await fetchWeChatArchive(parsed), null);
+  assert.equal((await fetchWeChatArchive(parsed)).slug, "fixture-article");
+  assert.equal(calls, 2);
+
+  wechatArchiveCache.clear();
+  context.fetch = globalThis.fetch;
 });
 
 test("Zhihu reader output must remain summary-only and match exact type and ID", () => {

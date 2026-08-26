@@ -1,6 +1,44 @@
 # Project state
 
-Last reviewed: 2026-08-24 (America/Los_Angeles)
+Last reviewed: 2026-08-26 (America/Los_Angeles)
+
+## 0.13.0 WeChat full-text candidate: Worker accepted, theme release pending
+
+- The candidate recognizes only exact `mp.weixin.qq.com/s/<token>` and
+  identity-bearing `/s?__biz=...&mid=...&idx=...` article URLs. It sends the
+  public URL with credentials omitted and `no-referrer` to the exact
+  `https://wx.bdfz.net/api/ingest` endpoint, requires a matching semantic
+  source identity plus an exact `https://wx.bdfz.net/<slug>` response, and
+  shares successful conversions through a 24-entry, five-minute LRU.
+- Successful conversions render the script-free archived article in a
+  sandboxed, lazy iframe by default. The original cooked paragraph and WeChat
+  source link remain available, and the accepted archive URL is added as a
+  separate link. Network, validation, environment-verification, or conversion
+  failures remain fail-open source cards and are evicted from the cache so a
+  later render can retry.
+- The paired `wx-ingest` candidate adds CORS only for
+  `https://forum.rdfzer.com` on `/api/ingest` and permits that same exact forum
+  origin as the only external `frame-ancestor` of stored article pages. No
+  route, binding, R2 schema, existing archive, forum core, or post data changes
+  are part of the candidate.
+- Local validation: theme tests `58/58` pass; initializer syntax passes. The
+  paired Worker tests `33/33` and Worker syntax pass. Worker source
+  `36c24fdd58919e37be921d02edfb43387aa36457` was promoted through 0%, 10%, and
+  100%; immutable version `ded62088-877e-4d92-b0c8-5164efc69387` is now at
+  100% in deployment `b526fa0a-af16-42ba-af71-86c955e7b011` after exact-origin
+  CORS, denied-origin, stored-article CSP, cached-ingest, and health checks.
+  Production theme `119` remains at
+  `d8c43282ba19e7a0f4191e457f3b8573f00f60d9` until clean theme publication,
+  GitHub CI, guarded refresh, and real forum DOM verification complete.
+- Source rollback anchor is the clean pre-change theme commit
+  `d8c43282ba19e7a0f4191e457f3b8573f00f60d9`. Worker rollback is immutable
+  version `72803e25-6f81-4965-aeea-aaf11cd7770e` at 100%.
+- Capability fit: `no-new-capability`. This reuses the existing Worker, R2
+  archive, remote-theme runtime, and exact production domains; it adds no new
+  Cloudflare product, binding, route, storage class, identity path, or cost
+  model.
+- Archive disposition: `not_applicable`; no source archive, export, backup
+  payload, or historical snapshot is created.
 
 ## 0.12.0 candidate: blocked before coordinated release
 

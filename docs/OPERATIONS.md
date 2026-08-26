@@ -1,6 +1,6 @@
 # Operations authority
 
-Last reviewed: 2026-08-24 (America/Los_Angeles)
+Last reviewed: 2026-08-26 (America/Los_Angeles)
 
 This is the canonical operational procedure for the Extended Preview & Embed Suite.
 `AGENTS.md` owns constraints, `PROJECT_STATE.md` owns the accepted version and next
@@ -16,45 +16,38 @@ steps. Live Discourse and GitHub readback override this document when they disag
 - Canonical checkout: `/Users/ylsuen/Discourse/discourse-bilibili-inline-player`.
 - Repository: `https://github.com/ieduer/discourse-bilibili-inline-player.git`, branch `main`.
 - Runtime target: `forum.rdfzer.com`, Discourse remote theme component `119`.
-- Reader dependency: `https://reader.bdfz.net/read`, owned by the `expand-reader` Worker.
-- Health: forum `/`, `/srv/status`; reader `/health`; then real cooked-post acceptance.
+- Reader dependencies: `https://reader.bdfz.net/read`, owned by `expand-reader`, and `https://wx.bdfz.net/api/ingest`, owned by `wx-ingest`.
+- Health: forum `/`, `/srv/status`; reader `/health`; `wx.bdfz.net/health`; then real cooked-post acceptance.
 - Deploy prohibition: never rebuild Discourse, edit `app.yml`, or mutate forum content for a theme release.
 - Release gate: clean exact source, tests, GitHub push, exact-SHA hosted-CI readback, guarded theme refresh, database readback, public health, and browser acceptance. A zero-step GitHub billing rejection may use only the bounded local-CI exception below; a real test failure may not.
-- Accepted runtime release: `0.11.1`; implementation/JavaScript source SHA
-  `cd8063bdc2f49ee00ee86dfeef0dc1b3105a1738`.
-- Runtime-behavior rollback reference:
-  `7dd04ed3c2586bfe70ab3d6ff42efc8ed546f607` (`0.11.0`); restore its tree
-  through a reviewed revert commit on `main`. The reader kill switch is
-  `enable_expand_reader=false`.
+- Installed runtime at the 2026-08-26 preflight: `0.12.0`, exact SHA
+  `d8c43282ba19e7a0f4191e457f3b8573f00f60d9`, with no import or field error.
+- Runtime rollback reference for the WeChat candidate is that exact installed SHA.
+  Immediate containment is `enable_wechat_inline=false`; the existing reader
+  kill switch remains `enable_expand_reader=false`.
 
-## Pending 0.12.0 transaction
+## 0.13.0 WeChat transaction: Worker accepted, theme pending
 
-Production remains on the accepted 0.11.1 state below. The tested 0.12.0
-source adds default, summary-only Zhihu cards backed by the operator-owned
-`expand-reader` Worker and replaces provider-specific sentence handling with
-one conservative visible-URL paragraph detector for all non-Zhihu providers.
-The detector requires exactly one anchor whose visible label and target are the
-same supported URL; it preserves the source paragraph and rejects code,
-navigation/multiple anchors, non-URL labels, lists, blockquotes, media, existing
-oneboxes, PDF, and component-owned markup.
+Fresh database readback shows theme `119` already installed at the clean GitHub
+head `d8c4328` / `0.12.0`, despite the earlier 2026-08-24 closeout recording it as
+unreleased. Live database state is authoritative; preserve this drift receipt.
 
-The candidate implementation is committed and pushed at
-`d329dc06f006330c970882db8edd94ae04a2bafa`; GitHub Actions run
-`32727691071` completed successfully for that exact SHA. Any later closeout
-commit that changes only project documentation does not change this runtime
-implementation authority and must itself pass the publication gate before a
-theme refresh.
+The 0.13.0 candidate adds exact WeChat public-article parsing, conversion through
+the operator-owned `wx-ingest` Worker, a bounded five-minute client cache, strict
+source/archive response matching, and an always-open sandboxed full-text archive.
+The original cooked paragraph and source link remain present on success and every
+failure. The paired Worker candidate allows browser ingestion and article framing
+only for the exact production forum origin.
 
-The theme is not releasable ahead of the Worker. `expand-reader` 0.3.0 received
-its required secret through the interactive undeployed-version flow, and
-candidate `3edbcd17-da5e-4dc2-9de1-314609717bb7` is attached at 0% beside the
-accepted Worker at 100%. Exact-ID candidate readback currently receives official
-Zhihu API rate-limit code `30001`, so no 10/50/100 promotion is authorized.
-Never place the secret value in this repository, a command argument, file, log,
-report, Git object, or chat. Do not refresh theme `119` until a replacement
-Worker candidate passes exact type+ID+URL acceptance and is active and healthy.
-The pre-change candidate rollback anchor is
-`b7a8ea0ed15a1bb8f4d45d10430d31e4b25b80ff`.
+The Worker release gate is complete. Clean source
+`36c24fdd58919e37be921d02edfb43387aa36457` produced immutable version
+`ded62088-877e-4d92-b0c8-5164efc69387`, promoted through 0%, 10%, and 100% to
+deployment `b526fa0a-af16-42ba-af71-86c955e7b011`. Exact allowed and denied CORS,
+stored-article CSP, cached ingest without a duplicate recent row, health, and
+ordinary archive probes passed. The remaining gate is exact theme SHA hosted CI,
+guarded refresh, database readback, and real cooked-post DOM acceptance.
+Pre-change rollback is theme SHA `d8c4328` and Worker version
+`72803e25-6f81-4965-aeea-aaf11cd7770e`.
 
 Before any mutation, also read:
 
@@ -76,6 +69,8 @@ Before any mutation, also read:
 | Foliate bundle | `assets/vendor/foliate-reader.min.js` | pinned source asset | Git; SHA-256 verification below |
 | Reader Worker | `/Users/ylsuen/CF/services/expand-reader` and its GitHub repository | external shared service | that project's operations authority |
 | `reader.bdfz.net` | Worker custom domain and exact routing | external runtime | Cloudflare/shared-hub change procedure |
+| WeChat archive Worker | `/Users/ylsuen/CF/sites/tools/wx-ingest` and `ieduer/wx-ingest` | external leaf service | that project's operations authority |
+| `wx.bdfz.net` | existing Worker route, archive API, and script-free article pages | external runtime | immutable Worker version rollback; preserve R2 objects |
 | Tests | `test/url-parsers.test.mjs` | source | Git |
 
 There are no external local build inputs, database exports, generated releases, or
@@ -123,6 +118,18 @@ Reader settings:
   `https://reader.bdfz.net/read`; HTTP is accepted only for exact loopback development.
 - `expand_reader_height`: bounded `240`–`1200`, default `560` pixels.
 - `enable_marxists_inline_media`: native archive audio/video switch; independent of document text.
+
+WeChat settings:
+
+- `enable_wechat_inline`: immediate WeChat containment switch; default `true`.
+- `wechat_ingest_endpoint`: must be exactly `https://wx.bdfz.net/api/ingest`.
+- `wechat_embed_height`: bounded `360`–`1400`, default `720` pixels.
+
+The WeChat client sends `POST /api/ingest` with only the canonical public article
+URL, `credentials: "omit"`, and `referrerPolicy: "no-referrer"`. It accepts only
+an exact semantic source identity and exact `https://wx.bdfz.net/<slug>` response.
+Stored articles remain script-free and sandboxed. CORS and article framing are
+limited to `https://forum.rdfzer.com`; every failure retains the original source.
 
 The endpoint receives `GET /read?url=<CANONICAL_URL>` and must return JSON with
 `ok=true` and an HTML string. The client treats every fragment as untrusted, performs

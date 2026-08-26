@@ -69,6 +69,23 @@ enable_zhihu_summary:
   type: bool
   description: Read an exact question, answer, or article match from Zhihu's official search API through expand-reader and show only its bounded summary. Disable to keep link-only source cards.
 
+enable_wechat_inline:
+  default: true
+  type: bool
+  description: Convert supported mp.weixin.qq.com article links through wx.bdfz.net and show the archived full text inline by default. The original WeChat link remains available on every success or failure.
+
+wechat_ingest_endpoint:
+  default: "https://wx.bdfz.net/api/ingest"
+  type: string
+  description: Exact HTTPS ingestion endpoint for the operator-owned WeChat archive. For safety this component accepts only https://wx.bdfz.net/api/ingest.
+
+wechat_embed_height:
+  default: 720
+  type: integer
+  min: 360
+  max: 1400
+  description: Height in pixels of the inline wx.bdfz.net full-text archive before the embedded article scrolls internally.
+
 expand_reader_endpoint:
   default: "https://reader.bdfz.net/read"
   type: string

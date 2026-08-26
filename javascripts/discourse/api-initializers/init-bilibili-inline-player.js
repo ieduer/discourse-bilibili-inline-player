@@ -9,6 +9,7 @@ const PLAYER_HOSTS = new Set(["player.bilibili.com"]);
 const NETEASE_HOSTS = new Set(["music.163.com", "y.music.163.com"]);
 const QQMUSIC_HOSTS = new Set(["y.qq.com", "i.y.qq.com"]);
 const ZHIHU_HOSTS = new Set(["zhihu.com", "www.zhihu.com", "zhuanlan.zhihu.com"]);
+const WECHAT_HOSTS = new Set(["mp.weixin.qq.com"]);
 const XIAOHONGSHU_HOSTS = new Set(["xiaohongshu.com", "www.xiaohongshu.com"]);
 const REDNOTE_HOSTS = new Set(["rednote.com", "www.rednote.com"]);
 const XIAOHONGSHU_SHORT_HOSTS = new Set([
@@ -346,6 +347,7 @@ const ZHIHU_QUESTION_PATH_RE = /^\/question\/(\d+)\/?$/;
 const ZHIHU_ANSWER_PATH_RE = /^\/question\/(\d+)\/answer\/(\d+)\/?$/;
 const ZHIHU_DIRECT_ANSWER_PATH_RE = /^\/answer\/(\d+)\/?$/;
 const ZHIHU_ARTICLE_PATH_RE = /^\/p\/(\d+)\/?$/;
+const WECHAT_SHORT_ARTICLE_PATH_RE = /^\/s\/([A-Za-z0-9_-]{6,128})\/?$/;
 const XIAOHONGSHU_NOTE_PATH_RE = /^\/(?:explore|discovery\/item)\/([0-9a-f]{24})\/?$/i;
 const REDNOTE_NOTE_PATH_RE = /^\/explore\/([0-9a-f]{24})\/?$/i;
 const XIAOHONGSHU_SHORT_PATH_RE = /^\/(?:a|m|o)\/([A-Za-z0-9_-]{4,})\/?$/i;
@@ -361,7 +363,7 @@ const XIAOHONGSHU_UNUSABLE_TITLE_RE =
 const TRAILING_URL_PUNCTUATION_RE = /[)\],.;!?，。；！？、）】》」』]+$/u;
 const IFRAME_SRC_RE = /<iframe\b[^>]*\bsrc=(["'])([^"']+)\1/gi;
 const URL_LIKE_RE =
-  /((?:https?:)?\/\/(?:player\.bilibili\.com\/player\.html|www\.bilibili\.com\/blackboard\/(?:live\/live-mobile-playerV3|live\/live-activity-player|webplayer\/mbplayer)\.html|(?:www\.|m\.)?bilibili\.com\/(?:s\/)?video\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/bangumi\/play\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/audio\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/read\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/opus\/[^\s"'<>]+|t\.bilibili\.com\/[^\s"'<>]+|live\.bilibili\.com\/[^\s"'<>]+|(?:www\.)?(?:b23\.tv|bili2233\.cn)\/[^\s"'<>]+|(?:y\.)?music\.163\.com\/[^\s"'<>]+|(?:i\.)?y\.qq\.com\/[^\s"'<>]+|(?:www\.)?zhihu\.com\/[^\s"'<>]+|zhuanlan\.zhihu\.com\/[^\s"'<>]+|(?:www\.)?marxists\.org\/[^\s"'<>]+))/gi;
+  /((?:https?:)?\/\/(?:player\.bilibili\.com\/player\.html|www\.bilibili\.com\/blackboard\/(?:live\/live-mobile-playerV3|live\/live-activity-player|webplayer\/mbplayer)\.html|(?:www\.|m\.)?bilibili\.com\/(?:s\/)?video\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/bangumi\/play\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/audio\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/read\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/opus\/[^\s"'<>]+|t\.bilibili\.com\/[^\s"'<>]+|live\.bilibili\.com\/[^\s"'<>]+|(?:www\.)?(?:b23\.tv|bili2233\.cn)\/[^\s"'<>]+|(?:y\.)?music\.163\.com\/[^\s"'<>]+|(?:i\.)?y\.qq\.com\/[^\s"'<>]+|(?:www\.)?zhihu\.com\/[^\s"'<>]+|zhuanlan\.zhihu\.com\/[^\s"'<>]+|mp\.weixin\.qq\.com\/[^\s"'<>]+|(?:www\.)?marxists\.org\/[^\s"'<>]+))/gi;
 const XIAOHONGSHU_URL_LIKE_RE =
   /(?:^|[\s(（\[【{《「『])((?:https?:\/\/)?(?:www\.)?(?:xiaohongshu\.com|rednote\.com|xhslink\.(?:com|cn))\/[^\s"'<>，。；！？、（）【】《》「」『』]+)/gi;
 const DEFAULT_ASPECT_RATIO = "16 / 9";
@@ -1096,6 +1098,55 @@ function parseZhihuPageUrl(url) {
   return null;
 }
 
+function parseWeChatPageUrl(url) {
+  const hostname = url.hostname.toLowerCase();
+
+  if (
+    !WECHAT_HOSTS.has(hostname) ||
+    !["http:", "https:"].includes(url.protocol) ||
+    url.username ||
+    url.password ||
+    (url.port && url.port !== "80" && url.port !== "443")
+  ) {
+    return null;
+  }
+
+  const shortMatch = url.pathname.match(WECHAT_SHORT_ARTICLE_PATH_RE);
+  let sourceIdentity = "";
+
+  if (shortMatch) {
+    sourceIdentity = `wechat:short:${shortMatch[1]}`;
+  } else if (url.pathname.replace(/\/+$/, "") === "/s") {
+    const biz = (url.searchParams.get("__biz") || "").trim();
+    const mid = (url.searchParams.get("mid") || "").trim();
+    const idx = (url.searchParams.get("idx") || "1").trim();
+
+    if (!biz || !/^\d+$/.test(mid) || !/^\d+$/.test(idx)) {
+      return null;
+    }
+
+    sourceIdentity = `wechat:article:${biz}:${mid}:${idx}`;
+  } else {
+    return null;
+  }
+
+  const canonical = new URL(url.toString());
+  canonical.protocol = "https:";
+  canonical.hostname = "mp.weixin.qq.com";
+  canonical.port = "";
+  canonical.hash = "";
+
+  return {
+    provider: "wechat",
+    kind: "wechat",
+    contentType: "article",
+    page: 1,
+    rawId: canonical.pathname,
+    sourceIdentity,
+    canonicalUrl: canonical.toString(),
+  };
+}
+
 function isSafeXiaohongshuSourceUrl(url) {
   return (
     url.protocol === "https:" &&
@@ -1417,7 +1468,7 @@ function isMarxistsReadingCard(parsed) {
 }
 
 function isReaderCard(parsed) {
-  return isMarxistsReadingCard(parsed) || parsed?.kind === "zhihu";
+  return isMarxistsReadingCard(parsed) || ["zhihu", "wechat"].includes(parsed?.kind);
 }
 
 function getMarxistsMetaLine(parsed) {
@@ -1564,6 +1615,7 @@ function parseBilibiliUrl(href) {
     parseNetEasePageUrl(url) ||
     parseQQMusicPageUrl(url) ||
     parseZhihuPageUrl(url) ||
+    parseWeChatPageUrl(url) ||
     parseXiaohongshuPageUrl(url) ||
     parseXiaohongshuShortUrl(url) ||
     parseMarxistsUrl(url)
@@ -1818,6 +1870,8 @@ function getMetaLine(parsed) {
       return getQQMusicMetaLine(parsed);
     case "zhihu":
       return getZhihuMetaLine(parsed);
+    case "wechat":
+      return "微信公号全文";
     case "xiaohongshu":
       return getXiaohongshuMetaLine(parsed);
     case "marxists":
@@ -1926,6 +1980,7 @@ function getPreviewStatText(parsed, viewCount = null) {
     case "netease":
     case "qqmusic":
     case "zhihu":
+    case "wechat":
     case "xiaohongshu":
     case "marxists":
       return getMetaLine(parsed);
@@ -2011,6 +2066,8 @@ function getFallbackTitle(parsed) {
       return getQQMusicFallbackTitle(parsed);
     case "zhihu":
       return getZhihuFallbackTitle(parsed);
+    case "wechat":
+      return "微信公号文章";
     case "xiaohongshu":
       return getXiaohongshuMetaLine(parsed);
     case "marxists":
@@ -2125,6 +2182,7 @@ function getInitialButtonLabel(parsed) {
 function shouldShowDirectSourceLink(parsed) {
   return (
     parsed?.provider === "xiaohongshu" ||
+    parsed?.provider === "wechat" ||
     parsed?.provider === "ebook" ||
     parsed?.provider === "marxists" ||
     getBooleanSetting("show_open_link", true)
@@ -2161,6 +2219,10 @@ function getFooterMeta(parsed) {
       return supportsExpandReader(parsed)
         ? "知乎官方摘要经 BDFZ 阅读服务展开 · 完整内容请打开原文"
         : "知乎原文卡片";
+    case "wechat":
+      return supportsWeChatArchive(parsed)
+        ? "经 wx.bdfz.net 转换并默认展开全文 · 保留微信原文"
+        : "微信原文卡片";
     case "xiaohongshu":
       if (parsed.brand === "rednote") {
         return "RedNote 原文卡片";
@@ -2216,6 +2278,10 @@ function getOpenLabel(parsed) {
     return "在知乎打开";
   }
 
+  if (parsed.provider === "wechat") {
+    return "在微信打开原文";
+  }
+
   if (parsed.provider === "marxists") {
     return parsed.contentType === "download" ? "下载原文件" : "在马克思主义文库打开";
   }
@@ -2238,6 +2304,10 @@ function getEmbedTitle(parsed) {
 
   if (parsed.provider === "zhihu") {
     return "Zhihu page";
+  }
+
+  if (parsed.provider === "wechat") {
+    return "WeChat article archive";
   }
 
   if (parsed.provider === "marxists") {
@@ -2431,6 +2501,10 @@ function getPlaceholderLabel(parsedOrProvider) {
     return "Zhihu";
   }
 
+  if (provider === "wechat") {
+    return "微信公号";
+  }
+
   if (provider === "marxists") {
     return "马克思主义文库";
   }
@@ -2505,6 +2579,10 @@ function cleanProviderTitle(title, parsed) {
   if (parsed?.provider === "zhihu") {
     cleaned = cleaned.replace(/\s*(?:[-|/]\s*)?(?:知乎|zhihu)\s*$/iu, "");
     cleaned = cleaned.replace(/\s*-\s*知乎专栏\s*$/iu, "");
+  }
+
+  if (parsed?.provider === "wechat") {
+    cleaned = cleaned.replace(/\s*(?:[-|/]\s*)?(?:微信公众平台|微信公号|微信公众号)\s*$/iu, "");
   }
 
   if (parsed?.provider === "marxists") {
@@ -3051,11 +3129,15 @@ function buildReadingCard(wrapper, metadata) {
     );
   }
 
-  if (supportsExpandReader(metadata.parsed)) {
+  if (supportsExpandReader(metadata.parsed) || supportsWeChatArchive(metadata.parsed)) {
     const status = createElement(
       "div",
       "bilibili-inline-player__reading-status",
-      metadata.parsed.provider === "zhihu" ? "正在读取知乎摘要…" : "正在展开原文…"
+      metadata.parsed.provider === "zhihu"
+        ? "正在读取知乎摘要…"
+        : metadata.parsed.provider === "wechat"
+          ? "正在转换并展开微信全文…"
+          : "正在展开原文…"
     );
 
     status.setAttribute("role", "status");
@@ -3087,6 +3169,8 @@ function buildReadingCard(wrapper, metadata) {
 
   if (supportsExpandReader(metadata.parsed)) {
     Promise.resolve().then(() => expandThroughReader(wrapper));
+  } else if (supportsWeChatArchive(metadata.parsed)) {
+    Promise.resolve().then(() => expandWeChatArchive(wrapper));
   }
 }
 
@@ -3564,10 +3648,193 @@ const READER_ALLOWED_ATTRIBUTES = {
 const READER_TIMEOUT_MS = 15000;
 const READER_CACHE_MAX_ENTRIES = 24;
 const READER_CACHE_TTL_MS = 5 * 60 * 1000;
+const WECHAT_ARCHIVE_TIMEOUT_MS = 20000;
+const WECHAT_ARCHIVE_CACHE_MAX_ENTRIES = 24;
+const WECHAT_ARCHIVE_CACHE_TTL_MS = 5 * 60 * 1000;
+const DEFAULT_WECHAT_INGEST_ENDPOINT = "https://wx.bdfz.net/api/ingest";
 const DEFAULT_READER_ENDPOINT = "https://reader.bdfz.net/read";
 const DEFAULT_READER_PANE_HEIGHT = 560;
 const readerViewCache = new Map();
+const wechatArchiveCache = new Map();
 let readerFragmentSequence = 0;
+
+function getWeChatIngestEndpoint() {
+  const endpoint = getStringSetting(
+    "wechat_ingest_endpoint",
+    DEFAULT_WECHAT_INGEST_ENDPOINT
+  ).trim();
+
+  try {
+    const url = new URL(endpoint);
+
+    if (
+      url.protocol !== "https:" ||
+      url.hostname !== "wx.bdfz.net" ||
+      url.port ||
+      url.username ||
+      url.password ||
+      url.pathname !== "/api/ingest" ||
+      url.search ||
+      url.hash
+    ) {
+      return "";
+    }
+
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
+function supportsWeChatArchive(parsed) {
+  return Boolean(
+    parsed?.provider === "wechat" &&
+      parsed.kind === "wechat" &&
+      getBooleanSetting("enable_wechat_inline", true) &&
+      getWeChatIngestEndpoint()
+  );
+}
+
+function getWeChatArchiveCacheKey(canonicalUrl, endpoint = getWeChatIngestEndpoint()) {
+  return `${endpoint}\n${canonicalUrl}`;
+}
+
+function getCachedWeChatArchive(cacheKey, now = Date.now()) {
+  const entry = wechatArchiveCache.get(cacheKey);
+
+  if (!entry) {
+    return null;
+  }
+
+  if (entry.expiresAt <= now) {
+    wechatArchiveCache.delete(cacheKey);
+    return null;
+  }
+
+  wechatArchiveCache.delete(cacheKey);
+  wechatArchiveCache.set(cacheKey, entry);
+  return entry.promise;
+}
+
+function storeWeChatArchive(cacheKey, promise, now = Date.now()) {
+  for (const [key, entry] of wechatArchiveCache) {
+    if (entry.expiresAt <= now) {
+      wechatArchiveCache.delete(key);
+    }
+  }
+
+  wechatArchiveCache.delete(cacheKey);
+  const entry = {
+    expiresAt: now + WECHAT_ARCHIVE_CACHE_TTL_MS,
+    promise,
+  };
+  wechatArchiveCache.set(cacheKey, entry);
+
+  while (wechatArchiveCache.size > WECHAT_ARCHIVE_CACHE_MAX_ENTRIES) {
+    wechatArchiveCache.delete(wechatArchiveCache.keys().next().value);
+  }
+
+  return entry;
+}
+
+function normalizeWeChatArchivePayload(payload, parsed) {
+  if (
+    !payload?.ok ||
+    !parsed?.canonicalUrl ||
+    typeof payload.orig !== "string" ||
+    !payload.orig.trim()
+  ) {
+    return null;
+  }
+
+  let archiveUrl;
+
+  try {
+    archiveUrl = new URL(String(payload.url || ""));
+  } catch {
+    return null;
+  }
+
+  const slug = archiveUrl.pathname.slice(1);
+  let echoedSource;
+
+  try {
+    echoedSource = parseWeChatPageUrl(new URL(payload.orig));
+  } catch {
+    return null;
+  }
+
+  if (
+    archiveUrl.protocol !== "https:" ||
+    archiveUrl.hostname !== "wx.bdfz.net" ||
+    archiveUrl.port ||
+    archiveUrl.username ||
+    archiveUrl.password ||
+    archiveUrl.search ||
+    archiveUrl.hash ||
+    !/^[a-z0-9-]{6,128}$/i.test(slug) ||
+    String(payload.slug || "") !== slug ||
+    echoedSource?.sourceIdentity !== parsed.sourceIdentity
+  ) {
+    return null;
+  }
+
+  return {
+    archiveUrl: archiveUrl.toString(),
+    slug,
+    title: normalizeTitleText(String(payload.title || "")).slice(0, 160),
+  };
+}
+
+async function fetchWeChatArchive(parsed) {
+  const endpoint = getWeChatIngestEndpoint();
+
+  if (!endpoint || !supportsWeChatArchive(parsed)) {
+    return null;
+  }
+
+  const cacheKey = getWeChatArchiveCacheKey(parsed.canonicalUrl, endpoint);
+  const cached = getCachedWeChatArchive(cacheKey);
+
+  if (cached) {
+    return cached;
+  }
+
+  const request = (async () => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), WECHAT_ARCHIVE_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: parsed.canonicalUrl }),
+        credentials: "omit",
+        referrerPolicy: "no-referrer",
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      return normalizeWeChatArchivePayload(await response.json(), parsed);
+    } catch {
+      return null;
+    } finally {
+      window.clearTimeout(timer);
+    }
+  })();
+
+  const entry = storeWeChatArchive(cacheKey, request);
+  const result = await request;
+
+  if (!result && wechatArchiveCache.get(cacheKey) === entry) {
+    wechatArchiveCache.delete(cacheKey);
+  }
+
+  return result;
+}
 
 function getExpandReaderEndpoint() {
   const endpoint = getStringSetting("expand_reader_endpoint", DEFAULT_READER_ENDPOINT).trim();
@@ -3923,6 +4190,98 @@ function buildReaderPane(wrapper, view, resolvedTitle = "") {
   }
 
   return pane;
+}
+
+function buildWeChatArchivePane(wrapper, archive) {
+  const pane = createElement(
+    "div",
+    "bilibili-inline-player__reader-pane bilibili-inline-player__wechat-pane"
+  );
+  const iframe = createElement("iframe", "bilibili-inline-player__wechat-frame");
+  const title = archive.title || wrapper.dataset.bilibiliTitle || "微信公号文章";
+
+  pane.tabIndex = 0;
+  pane.setAttribute("role", "region");
+  pane.setAttribute("aria-label", `${title}全文`);
+  pane.style.setProperty(
+    "--bili-wechat-height",
+    `${getBoundedIntegerSetting("wechat_embed_height", 720, 360, 1400)}px`
+  );
+
+  iframe.src = archive.archiveUrl;
+  iframe.loading = "lazy";
+  iframe.referrerPolicy = "no-referrer";
+  iframe.sandbox = "allow-popups allow-popups-to-escape-sandbox";
+  iframe.title = `${title} — wx.bdfz.net 全文`;
+  pane.appendChild(iframe);
+  return pane;
+}
+
+async function expandWeChatArchive(wrapper) {
+  const state = wrapperState.get(wrapper);
+
+  if (
+    !state?.parsed ||
+    !supportsWeChatArchive(state.parsed) ||
+    wrapper.dataset.bilibiliWechatDone === "1"
+  ) {
+    return;
+  }
+
+  wrapper.dataset.bilibiliWechatDone = "1";
+  wrapper.classList.add("bilibili-inline-player--reader-loading");
+  wrapper.setAttribute("aria-busy", "true");
+
+  const status = wrapper.querySelector(".bilibili-inline-player__reading-status");
+  const archive = await fetchWeChatArchive(state.parsed);
+
+  wrapper.classList.remove("bilibili-inline-player--reader-loading");
+  wrapper.setAttribute("aria-busy", "false");
+
+  if (!wrapper.isConnected) {
+    return;
+  }
+
+  if (!archive) {
+    if (status) {
+      status.textContent = "微信全文暂时无法转换，请使用下方链接打开原文。";
+      status.classList.add("bilibili-inline-player__reading-status--error");
+    }
+    return;
+  }
+
+  if (archive.title) {
+    wrapper.dataset.bilibiliTitle = archive.title;
+    state.title = archive.title;
+    const heading = wrapper.querySelector(".bilibili-inline-player__reading-title");
+
+    if (heading) {
+      heading.textContent = archive.title;
+    }
+  }
+
+  const pane = buildWeChatArchivePane(wrapper, archive);
+  status?.remove();
+  wrapper.classList.add("bilibili-inline-player--reader-open");
+  wrapper.querySelector(".bilibili-inline-player__reading-body")?.insertAdjacentElement(
+    "afterend",
+    pane
+  );
+
+  const footerActions = wrapper.querySelector(".bilibili-inline-player__footer-actions");
+
+  if (footerActions && !footerActions.querySelector("[data-wechat-archive-link]")) {
+    const archiveLink = createElement(
+      "a",
+      "bilibili-inline-player__footer-link",
+      "在 wx.bdfz.net 打开全文"
+    );
+    archiveLink.href = archive.archiveUrl;
+    archiveLink.target = "_blank";
+    archiveLink.rel = "noopener nofollow ugc";
+    archiveLink.dataset.wechatArchiveLink = "1";
+    footerActions.prepend(archiveLink);
+  }
 }
 
 function isMatchingReaderView(view, parsed) {
@@ -4659,7 +5018,7 @@ function collectStandaloneCandidates(element, existingTargets) {
       target,
       anchor,
       parsed,
-      preserveSource: parsed.provider === "xiaohongshu",
+      preserveSource: ["xiaohongshu", "wechat"].includes(parsed.provider),
     });
   }
 

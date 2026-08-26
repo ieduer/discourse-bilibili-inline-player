@@ -354,6 +354,31 @@
   border-top: 1px solid var(--bili-card-border);
 }
 
+.bilibili-inline-player--wechat {
+  border-left-color: #1aad19;
+}
+
+.bilibili-inline-player--wechat .bilibili-inline-player__reading-badge {
+  background: color-mix(in srgb, #1aad19 12%, transparent);
+  color: #147d15;
+}
+
+.bilibili-inline-player__wechat-pane {
+  height: min(82vh, var(--bili-wechat-height, 720px));
+  max-height: none;
+  padding: 0;
+  overflow: hidden;
+  background: #fbfaf5;
+}
+
+.bilibili-inline-player__wechat-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #fbfaf5;
+}
+
 .bilibili-inline-player__reader-article {
   color: var(--bili-card-fg, #111);
   font-size: 0.95rem;
