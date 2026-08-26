@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-08-26 (America/Los_Angeles)
 
-## 0.13.0 WeChat full-text candidate: Worker accepted, theme release pending
+## 0.13.0 WeChat full-text release: accepted in production
 
 - The candidate recognizes only exact `mp.weixin.qq.com/s/<token>` and
   identity-bearing `/s?__biz=...&mid=...&idx=...` article URLs. It sends the
@@ -16,7 +16,7 @@ Last reviewed: 2026-08-26 (America/Los_Angeles)
   separate link. Network, validation, environment-verification, or conversion
   failures remain fail-open source cards and are evicted from the cache so a
   later render can retry.
-- The paired `wx-ingest` candidate adds CORS only for
+- The paired `wx-ingest` release adds CORS only for
   `https://forum.rdfzer.com` on `/api/ingest` and permits that same exact forum
   origin as the only external `frame-ancestor` of stored article pages. No
   route, binding, R2 schema, existing archive, forum core, or post data changes
@@ -27,9 +27,17 @@ Last reviewed: 2026-08-26 (America/Los_Angeles)
   100%; immutable version `ded62088-877e-4d92-b0c8-5164efc69387` is now at
   100% in deployment `b526fa0a-af16-42ba-af71-86c955e7b011` after exact-origin
   CORS, denied-origin, stored-article CSP, cached-ingest, and health checks.
-  Production theme `119` remains at
-  `d8c43282ba19e7a0f4191e457f3b8573f00f60d9` until clean theme publication,
-  GitHub CI, guarded refresh, and real forum DOM verification complete.
+  Theme implementation commit `b335cc5f0bd4c1df05e051a19772ec1b76d478f6`
+  passed GitHub Actions run `32952009174` and was installed into theme `119`.
+  Database readback matched both local and remote versions at that SHA,
+  `commits_behind=0`, version `0.13.0`, 21 settings, and zero setting, field, or
+  import errors. Public forum and Worker health probes returned 200.
+- Logged-in browser acceptance on existing post `13235/7` preserved the exact
+  WeChat source link, added archive
+  `https://wx.bdfz.net/26bdfz-helpeer-6f8ab6a7`, and rendered a default-open,
+  lazy, no-referrer sandboxed iframe whose visible article body contained 1,405
+  characters. PDF control `5970/77` retained its onebox with zero WeChat or
+  reader wrappers. No forum post was created or changed for acceptance.
 - Source rollback anchor is the clean pre-change theme commit
   `d8c43282ba19e7a0f4191e457f3b8573f00f60d9`. Worker rollback is immutable
   version `72803e25-6f81-4965-aeea-aaf11cd7770e` at 100%.
@@ -81,15 +89,15 @@ Last reviewed: 2026-08-26 (America/Los_Angeles)
 
 ## Accepted production state
 
-- Accepted runtime/theme release: `0.11.1`.
+- Accepted runtime/theme release: `0.13.0`.
 - Accepted implementation and JavaScript runtime source SHA:
-  `cd8063bdc2f49ee00ee86dfeef0dc1b3105a1738`.
+  `b335cc5f0bd4c1df05e051a19772ec1b76d478f6`.
 - Production surface: Discourse remote theme component `119` on `forum.rdfzer.com`.
-- Accepted release readback: theme `119` was refreshed exactly to `cd8063b`; its
+- Accepted release readback: theme `119` was refreshed exactly to `b335cc5`; its
   `RemoteTheme.local_version` and `remote_version` both matched the full accepted
-  implementation SHA, `commits_behind=0`, `theme_version=0.11.1`, and
+  implementation SHA, `commits_behind=0`, `theme_version=0.13.0`, and
   `last_error_text=nil`.
-- GitHub Actions run `32582774357` completed successfully for the accepted
+- GitHub Actions run `32952009174` completed successfully for the accepted
   implementation.
 - The component is enabled and attached to parent themes `[-2, -1, 1, 8, 14, 117, 118]`.
 - The effective production reader settings were `enable_expand_reader=true`, `expand_reader_endpoint=https://reader.bdfz.net/read`, and `expand_reader_height=560`. They were defaults, not database overrides.
@@ -99,7 +107,7 @@ Last reviewed: 2026-08-26 (America/Los_Angeles)
   allowlist, monitoring, and Cloudflare rollback are owned by
   `/Users/ylsuen/CF/services/expand-reader`, not by this repository.
 - Runtime-behavior rollback reference:
-  `7dd04ed3c2586bfe70ab3d6ff42efc8ed546f607` (`0.11.0`). Restore that tree
+  `d8c43282ba19e7a0f4191e457f3b8573f00f60d9` (`0.12.0`). Restore that tree
   through a reviewed revert commit on `main`; do not rewrite history or point
   the remote theme at an unreviewed detached revision.
 - Live state is authoritative over this file. Use the readback procedure in `docs/OPERATIONS.md` before any mutation.
@@ -107,12 +115,12 @@ Last reviewed: 2026-08-26 (America/Los_Angeles)
 ### Runtime SHA versus docs-only theme SHA
 
 This accepted implementation was browser-verified while theme `119` pointed at
-`cd8063bdc2f49ee00ee86dfeef0dc1b3105a1738`. The follow-up commit that records this
+`b335cc5f0bd4c1df05e051a19772ec1b76d478f6`. The follow-up commit that records this
 closeout changes only `PROJECT_STATE.md` and `docs/OPERATIONS.md`. After that docs-only
 commit is pushed and refreshed, `RemoteTheme.local_version` and `remote_version` will
 correctly report the docs-only commit SHA. That source-synchronization SHA must not be
 reported as a new runtime release: the installed JavaScript and accepted runtime
-authority remain release `0.11.1` at `cd8063bdc2f49ee00ee86dfeef0dc1b3105a1738`.
+authority remain release `0.13.0` at `b335cc5f0bd4c1df05e051a19772ec1b76d478f6`.
 
 ## 0.11.1 scope
 

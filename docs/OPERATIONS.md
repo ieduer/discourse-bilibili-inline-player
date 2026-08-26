@@ -22,11 +22,12 @@ steps. Live Discourse and GitHub readback override this document when they disag
 - Release gate: clean exact source, tests, GitHub push, exact-SHA hosted-CI readback, guarded theme refresh, database readback, public health, and browser acceptance. A zero-step GitHub billing rejection may use only the bounded local-CI exception below; a real test failure may not.
 - Installed runtime at the 2026-08-26 preflight: `0.12.0`, exact SHA
   `d8c43282ba19e7a0f4191e457f3b8573f00f60d9`, with no import or field error.
-- Runtime rollback reference for the WeChat candidate is that exact installed SHA.
+- Current accepted runtime is `0.13.0` implementation SHA
+  `b335cc5f0bd4c1df05e051a19772ec1b76d478f6`; rollback is the pre-change SHA above.
   Immediate containment is `enable_wechat_inline=false`; the existing reader
   kill switch remains `enable_expand_reader=false`.
 
-## 0.13.0 WeChat transaction: Worker accepted, theme pending
+## 0.13.0 WeChat transaction: accepted
 
 Fresh database readback shows theme `119` already installed at the clean GitHub
 head `d8c4328` / `0.12.0`, despite the earlier 2026-08-24 closeout recording it as
@@ -44,8 +45,14 @@ The Worker release gate is complete. Clean source
 `ded62088-877e-4d92-b0c8-5164efc69387`, promoted through 0%, 10%, and 100% to
 deployment `b526fa0a-af16-42ba-af71-86c955e7b011`. Exact allowed and denied CORS,
 stored-article CSP, cached ingest without a duplicate recent row, health, and
-ordinary archive probes passed. The remaining gate is exact theme SHA hosted CI,
-guarded refresh, database readback, and real cooked-post DOM acceptance.
+ordinary archive probes passed. Theme implementation SHA
+`b335cc5f0bd4c1df05e051a19772ec1b76d478f6` passed hosted CI run
+`32952009174`, then guarded refresh and independent database readback confirmed
+version `0.13.0`, 21 settings, `commits_behind=0`, and no setting, field, or
+import errors. Logged-in browser acceptance on existing post `13235/7` proved
+the source link, exact archive link, and a default-open iframe containing 1,405
+characters of visible article text; PDF control `5970/77` retained its onebox
+with zero reader or WeChat wrappers. No forum content was mutated.
 Pre-change rollback is theme SHA `d8c4328` and Worker version
 `72803e25-6f81-4965-aeea-aaf11cd7770e`.
 
@@ -80,28 +87,29 @@ The component sends only a canonical public source URL to the reader endpoint wi
 
 ## Accepted production release
 
-Release `0.11.1` was accepted in production on 2026-08-22 with these exact
+Release `0.13.0` was accepted in production on 2026-08-26 with these exact
 authorities and receipts:
 
 - implementation and JavaScript runtime source SHA:
-  `cd8063bdc2f49ee00ee86dfeef0dc1b3105a1738`;
-- GitHub Actions run `32582774357`: `success`;
-- local gate: `50/50` tests passing, plus initializer and test syntax checks;
+  `b335cc5f0bd4c1df05e051a19772ec1b76d478f6`;
+- GitHub Actions run `32952009174`: `success`;
+- local gate: `58/58` tests passing, plus initializer, test, JSON, YAML,
+  Foliate hash, and diff checks;
 - theme `119` acceptance readback: `local_version` and `remote_version` both
-  `cd8063bdc2f49ee00ee86dfeef0dc1b3105a1738`, `commits_behind=0`,
-  `theme_version=0.11.1`, and no import error;
-- reader Worker version `b5d4ccac-b84a-4c5c-8716-4d20f4691689`, active through
-  deployment `d5d9d4f0-9a6d-4a6c-b301-c185dfea6bc0`;
+  `b335cc5f0bd4c1df05e051a19772ec1b76d478f6`, `commits_behind=0`,
+  `theme_version=0.13.0`, and no setting, field, or import error;
+- WeChat Worker version `ded62088-877e-4d92-b0c8-5164efc69387`, active at
+  100% through deployment `b526fa0a-af16-42ba-af71-86c955e7b011`;
 - runtime-behavior rollback reference SHA:
-  `7dd04ed3c2586bfe70ab3d6ff42efc8ed546f607` (`0.11.0`).
+  `d8c43282ba19e7a0f4191e457f3b8573f00f60d9` (`0.12.0`).
 
 The commit that records this accepted state is documentation-only. Once that
 follow-up commit is pushed and theme `119` is refreshed, Discourse will correctly
 show its SHA as `RemoteTheme.local_version` and `remote_version`. That later theme
 source-synchronization SHA is not a new JavaScript runtime: verify that its only
-changes from `cd8063bdc2f49ee00ee86dfeef0dc1b3105a1738` are
-`PROJECT_STATE.md` and `docs/OPERATIONS.md`; release `0.11.1` and the accepted runtime
-implementation remain anchored to `cd8063bdc2f49ee00ee86dfeef0dc1b3105a1738`.
+changes from `b335cc5f0bd4c1df05e051a19772ec1b76d478f6` are
+`PROJECT_STATE.md` and `docs/OPERATIONS.md`; release `0.13.0` and the accepted runtime
+implementation remain anchored to `b335cc5f0bd4c1df05e051a19772ec1b76d478f6`.
 
 ## Contract and settings
 
