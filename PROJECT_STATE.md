@@ -26,14 +26,18 @@ Last reviewed: 2026-08-27 (America/Los_Angeles)
   `0.14.1`, 24 settings, auto-scale enabled, and zero import/field errors. Live
   `https://bdfz.net/posts/180-qishike/` returns the full server-rendered article
   with no `X-Frame-Options` or `frame-ancestors` restriction.
-- Authenticated Brave acceptance on existing topic `8503/5` found four BDFZ
-  wrappers, all default-open in `auto` mode at the live 70% floor with lazy,
-  no-referrer, script-free frames. The `180-qishike` canary rendered its real
-  cross-origin article tree, collapsed to `展开正文` / `aria-expanded=false`,
-  and restored the same frame ID and URL at auto scale. WeChat topic `13235/7`
-  retained one WeChat wrapper; PDF control `5970/77` retained zero plugin
-  wrappers. The user independently confirmed the full text was visible before
-  requesting the follow-up scaling refinement.
+- The user-selected acceptance route `13449/7` exposed a source-side stylesheet
+  defect: both BDFZ SRI CSS links lacked `crossorigin`, so the opaque-origin
+  sandbox rejected the theme and exposed browser-default black text. The plugin
+  sandbox remained unchanged. BDFZ Blog commit `e017bbf` / Pages deployment
+  `bc41eabd-32ef-4421-a993-25873bd7750f` added anonymous CORS to both links.
+  Authenticated Brave revalidation from that exact route to its embedded first
+  post found one default-open `180-qishike` wrapper in `auto` mode at 70%; live
+  computed styles were background `#fcfcfc`, body `#444`, heading `#222`, the
+  expected font stack, and 27.6px line height. Collapse changed to `展开正文` /
+  `aria-expanded=false`; restore preserved the same frame ID and auto scale.
+  Earlier regression checks also retained one WeChat wrapper on `13235/7` and
+  zero plugin takeover on PDF control `5970/77`.
 - Source rollback anchor is the clean pre-change commit
   `06cfb26b7ab8d53ae717b68891076c1f8e758000`. No Worker, route, DNS, forum
   core, forum post, BDFZ source, or data mutation is part of the release.

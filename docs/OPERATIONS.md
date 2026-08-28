@@ -43,13 +43,17 @@ The feature has no Worker or server-side dependency. Implementation commit
 `33145461980`; guarded theme `119` refresh and independent database readback
 showed exact local/remote SHA parity, `commits_behind=0`, version `0.14.1`, 24
 settings, auto-scale enabled, and no import/field errors. Authenticated Brave
-acceptance on existing topic `8503/5` found four default-open BDFZ wrappers in
-`auto` mode at the live 70% floor with the exact lazy, no-referrer, script-free
-sandbox contract. The `180-qishike` canary collapsed and restored the same frame
-ID and source URL; its real cross-origin article tree rendered inside the frame.
-WeChat control `13235/7` retained one wrapper and PDF control `5970/77` retained
-zero plugin takeovers. The user also independently confirmed the full text was
-visible before asking for auto-scaling. Immediate scale-only containment is
+acceptance initially proved the width and toggle behavior, then the user-selected
+route `13449/7` exposed a source-side SRI/CORS defect: BDFZ's two integrity-bearing
+stylesheet links lacked `crossorigin`, so the opaque-origin sandbox correctly
+rejected the theme. The iframe sandbox was not weakened. BDFZ Blog commit
+`e017bbf` / Pages deployment `bc41eabd-32ef-4421-a993-25873bd7750f` added
+anonymous CORS to both links. Authenticated Brave revalidation from the exact
+user route to its embedded first post showed one default-open `180-qishike`
+wrapper at auto scale 70%, computed background `#fcfcfc`, body `#444`, heading
+`#222`, expected font/line-height, and a same-frame collapse/restore. WeChat
+control `13235/7` retained one wrapper and PDF control `5970/77` retained zero
+plugin takeovers. Immediate scale-only containment is
 `enable_bdfz_post_auto_scale=false`; full feature containment is
 `enable_bdfz_posts_inline=false`; the pre-scale rollback anchor is
 `537a4d84f934bbf1a3474e556dd1ccbf879226fd` and pre-feature rollback is
@@ -394,6 +398,13 @@ reload as needed and verify:
     The wrapper reports automatic scale mode; resizing the post recomputes a
     70%–100% scale and preserves the same iframe, while disabling the setting
     restores exactly 100%.
+12. Start the canonical BDFZ style regression from
+    `https://forum.rdfzer.com/t/topic/13449/7`, follow the topic to the embedded
+    first post, and verify `180-qishike` uses the BDFZ font, background, body,
+    heading, image, and spacing rules. Browser-default blue links on an otherwise
+    black canvas mean the source CSS was rejected. Check anonymous CORS on every
+    SRI stylesheet before considering any sandbox relaxation; `allow-same-origin`
+    remains forbidden.
 
 Accepted browser readback for `0.11.1` met items 1–6: `1330/2` and `2327/1`
 each had one wrapper/pane/open state with a telemetry-free real title and a
