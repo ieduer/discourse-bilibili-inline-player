@@ -1,6 +1,38 @@
 # Project state
 
-Last reviewed: 2026-08-27 (America/Los_Angeles)
+Last reviewed: 2026-08-28 (America/Los_Angeles)
+
+## 0.14.2 WeChat pending-conversion resilience: accepted in production
+
+- The WeChat client now treats HTTP `202` as a pending state, honors a bounded
+  `Retry-After` or response retry delay, and retries transient request
+  interruptions. The complete wait is capped at four minutes and 64 attempts;
+  only two network failures are retried. All terminal failures still preserve
+  the original source card and link.
+- Node `24.18.0` validation passes `63/63` parser, retry, timeout, cooked-DOM,
+  provider, sandbox, and regression tests, plus syntax, JSON, YAML, Foliate hash,
+  and diff checks. Implementation SHA
+  `a605fa0f317c7675d8db47c056f3bc59352edd00` passed hosted Actions run
+  `33178183580` with one real job and every step successful.
+- Guarded theme `119` refresh and independent database readback proved exact
+  local/remote SHA parity, `commits_behind=0`, version `0.14.2`, 24 settings,
+  and zero setting, field, or import errors.
+- Logged-in browser acceptance on topic `13456` rendered one default-open iframe
+  and archive link at `https://wx.bdfz.net/wx-9eab6673`, retained both original
+  WeChat links, and showed no conversion fallback or error. Existing WeChat
+  control `13235/7` still rendered its archive; PDF control `5970/77` produced
+  zero WeChat frames; BDFZ control `13449` retained its one article frame.
+- Paired Worker version `252a0d7f-7b73-466e-aca1-38e1e92dbeea` is active at
+  100% through deployment `a770a777-c716-4eee-8b51-b6a72ca73e87`; its two-minute
+  lease and bounded image-mirror work prevent long stale locks.
+- Immediate theme rollback is the clean pre-change SHA
+  `b834f530fce5e01863f0c07fc97572ed847a2c61`; immediate containment is
+  `enable_wechat_inline=false`. Worker rollback is immutable version
+  `ded62088-877e-4d92-b0c8-5164efc69387` at 100% with R2 data preserved.
+- Capability fit: `no-new-capability`; no forum core, post, database, route,
+  binding, schema, storage, identity, or new Cloudflare product was added.
+- Archive disposition: `not_applicable`; Git contains the source and fixtures,
+  and no non-reproducible local release artifact was created.
 
 ## 0.14.1 BDFZ post full-page release: accepted in production
 

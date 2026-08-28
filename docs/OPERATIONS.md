@@ -1,6 +1,6 @@
 # Operations authority
 
-Last reviewed: 2026-08-27 (America/Los_Angeles)
+Last reviewed: 2026-08-28 (America/Los_Angeles)
 
 This is the canonical operational procedure for the Extended Preview & Embed Suite.
 `AGENTS.md` owns constraints, `PROJECT_STATE.md` owns the accepted version and next
@@ -22,10 +22,30 @@ steps. Live Discourse and GitHub readback override this document when they disag
 - Release gate: clean exact source, tests, GitHub push, exact-SHA hosted-CI readback, guarded theme refresh, database readback, public health, and browser acceptance. A zero-step GitHub billing rejection may use only the bounded local-CI exception below; a real test failure may not.
 - Installed runtime at the 2026-08-26 preflight: `0.12.0`, exact SHA
   `d8c43282ba19e7a0f4191e457f3b8573f00f60d9`, with no import or field error.
-- Current accepted runtime is `0.13.0` implementation SHA
-  `b335cc5f0bd4c1df05e051a19772ec1b76d478f6`; rollback is the pre-change SHA above.
+- Current accepted runtime is `0.14.2` implementation SHA
+  `a605fa0f317c7675d8db47c056f3bc59352edd00`; immediate theme rollback is
+  `b834f530fce5e01863f0c07fc97572ed847a2c61`.
   Immediate containment is `enable_wechat_inline=false`; the existing reader
   kill switch remains `enable_expand_reader=false`.
+
+## 0.14.2 WeChat pending-conversion transaction: accepted
+
+The release treats HTTP `202` as a pending conversion instead of a terminal
+failure, honors bounded server retry guidance, and retries at most two transient
+request interruptions. The whole wait is capped at four minutes and 64 attempts;
+every terminal path remains fail-open to the original source card.
+
+Implementation SHA `a605fa0f317c7675d8db47c056f3bc59352edd00`
+passed Node `24.18.0` local validation with `63/63` tests and hosted Actions run
+`33178183580`. Guarded theme `119` refresh and independent database readback
+showed exact local/remote SHA parity, `commits_behind=0`, version `0.14.2`, 24
+settings, and no setting, field, or import errors. The paired Worker version
+`252a0d7f-7b73-466e-aca1-38e1e92dbeea` is active at 100% through deployment
+`a770a777-c716-4eee-8b51-b6a72ca73e87` with a two-minute lease and bounded image
+mirroring. Logged-in browser acceptance passed topic `13456`, existing WeChat
+control `13235/7`, PDF non-takeover `5970/77`, and BDFZ control `13449`.
+Immediate theme rollback is `b834f530fce5e01863f0c07fc97572ed847a2c61`;
+Worker rollback is `ded62088-877e-4d92-b0c8-5164efc69387@100` with R2 preserved.
 
 ## 0.14.1 BDFZ post transaction: accepted
 
@@ -118,7 +138,7 @@ secret files required by this repository. Discourse compiles the Git-backed fiel
 The component sends only a canonical public source URL to the reader endpoint with
 `credentials: "omit"` and `referrerPolicy: "no-referrer"`.
 
-## Accepted production release
+## 0.13.0 accepted production release
 
 Release `0.13.0` was accepted in production on 2026-08-26 with these exact
 authorities and receipts:
@@ -177,8 +197,11 @@ BDFZ post settings:
 The WeChat client sends `POST /api/ingest` with only the canonical public article
 URL, `credentials: "omit"`, and `referrerPolicy: "no-referrer"`. It accepts only
 an exact semantic source identity and exact `https://wx.bdfz.net/<slug>` response.
-Stored articles remain script-free and sandboxed. CORS and article framing are
-limited to `https://forum.rdfzer.com`; every failure retains the original source.
+HTTP `202` is polled with bounded server-guided delay; transient request
+interruptions receive at most two retries. The request timeout is 90 seconds and
+the complete pending wait is capped at four minutes and 64 attempts. Stored
+articles remain script-free and sandboxed. CORS and article framing are limited
+to `https://forum.rdfzer.com`; every terminal failure retains the original source.
 
 The endpoint receives `GET /read?url=<CANONICAL_URL>` and must return JSON with
 `ok=true` and an HTML string. The client treats every fragment as untrusted, performs
