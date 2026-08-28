@@ -2,9 +2,9 @@
 
 Last reviewed: 2026-08-27 (America/Los_Angeles)
 
-## 0.14.1 BDFZ post full-page candidate: release pending
+## 0.14.1 BDFZ post full-page release: accepted in production
 
-- The candidate recognizes only one exact article slug at
+- The release recognizes only one exact article slug at
   `bdfz.net/posts/<article>/`. It normalizes HTTP and `www` forms to the stable
   HTTPS canonical URL while rejecting the posts index, pagination, nested
   paths, credentials, custom ports, non-web schemes, and lookalike hosts.
@@ -16,16 +16,27 @@ Last reviewed: 2026-08-27 (America/Los_Angeles)
   Width-aware automatic scaling uses an 800-pixel reference viewport, stays
   within 70%–100%, and can be restored to original 100% rendering with
   `enable_bdfz_post_auto_scale=false`.
-- Local validation currently passes `61/61` parser, cooked-link, provider,
+- Local validation passes `61/61` parser, cooked-link, provider,
   sandbox, default-open, collapse-state, and legacy regression tests, plus
-  initializer/test syntax, JSON, YAML, Foliate hash, and diff checks. Live
+  initializer/test syntax, JSON, YAML, Foliate hash, and diff checks. GitHub
+  implementation commit `50c48df001ac5af93d7812ca5e4deb1893af8847`
+  passed hosted Actions run `33145461980` with one real job and every step
+  successful. Guarded theme `119` refresh and independent database readback
+  then proved exact local/remote SHA parity, `commits_behind=0`, version
+  `0.14.1`, 24 settings, auto-scale enabled, and zero import/field errors. Live
   `https://bdfz.net/posts/180-qishike/` returns the full server-rendered article
-  with no `X-Frame-Options` or `frame-ancestors` restriction. Production theme
-  `119` remains on accepted `0.13.0` until GitHub CI, guarded refresh, exact
-  database readback, and a real cooked-post browser canary pass.
+  with no `X-Frame-Options` or `frame-ancestors` restriction.
+- Authenticated Brave acceptance on existing topic `8503/5` found four BDFZ
+  wrappers, all default-open in `auto` mode at the live 70% floor with lazy,
+  no-referrer, script-free frames. The `180-qishike` canary rendered its real
+  cross-origin article tree, collapsed to `展开正文` / `aria-expanded=false`,
+  and restored the same frame ID and URL at auto scale. WeChat topic `13235/7`
+  retained one WeChat wrapper; PDF control `5970/77` retained zero plugin
+  wrappers. The user independently confirmed the full text was visible before
+  requesting the follow-up scaling refinement.
 - Source rollback anchor is the clean pre-change commit
   `06cfb26b7ab8d53ae717b68891076c1f8e758000`. No Worker, route, DNS, forum
-  core, forum post, BDFZ source, or data mutation is part of the candidate.
+  core, forum post, BDFZ source, or data mutation is part of the release.
 - Capability fit: `no-new-capability`. This reuses the existing remote-theme
   iframe runtime and public `bdfz.net` pages; it adds no Cloudflare product,
   binding, route, storage, identity, shared-service contract, or cost model.

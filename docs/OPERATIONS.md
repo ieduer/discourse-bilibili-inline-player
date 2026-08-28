@@ -27,9 +27,9 @@ steps. Live Discourse and GitHub readback override this document when they disag
   Immediate containment is `enable_wechat_inline=false`; the existing reader
   kill switch remains `enable_expand_reader=false`.
 
-## 0.14.1 BDFZ post transaction: candidate
+## 0.14.1 BDFZ post transaction: accepted
 
-The candidate adds only exact `https://bdfz.net/posts/<article>/` full-page
+The release adds only exact `https://bdfz.net/posts/<article>/` full-page
 embeds. It defaults the lazy iframe to expanded, automatically scales its
 800-pixel reading viewport down to the available forum width without crossing
 a 70% readability floor, strips tracking query and
@@ -38,12 +38,22 @@ privileges through sandboxing, retains the original link, and provides an
 accessible collapse/expand control. Archive and pagination URLs, nested paths,
 lookalike hosts, credentials, custom ports, and non-web schemes remain untouched.
 
-The feature has no Worker or server-side dependency. Its release gate is a clean
-source commit, successful hosted CI, guarded theme `119` refresh, exact database
-readback showing version `0.14.1` and 24 settings, public forum/BDFZ health, and
-real cooked-post browser acceptance proving the default-open frame plus both
-toggle states. Immediate containment is `enable_bdfz_posts_inline=false`; the
-full source rollback anchor is `06cfb26b7ab8d53ae717b68891076c1f8e758000`.
+The feature has no Worker or server-side dependency. Implementation commit
+`50c48df001ac5af93d7812ca5e4deb1893af8847` passed hosted Actions run
+`33145461980`; guarded theme `119` refresh and independent database readback
+showed exact local/remote SHA parity, `commits_behind=0`, version `0.14.1`, 24
+settings, auto-scale enabled, and no import/field errors. Authenticated Brave
+acceptance on existing topic `8503/5` found four default-open BDFZ wrappers in
+`auto` mode at the live 70% floor with the exact lazy, no-referrer, script-free
+sandbox contract. The `180-qishike` canary collapsed and restored the same frame
+ID and source URL; its real cross-origin article tree rendered inside the frame.
+WeChat control `13235/7` retained one wrapper and PDF control `5970/77` retained
+zero plugin takeovers. The user also independently confirmed the full text was
+visible before asking for auto-scaling. Immediate scale-only containment is
+`enable_bdfz_post_auto_scale=false`; full feature containment is
+`enable_bdfz_posts_inline=false`; the pre-scale rollback anchor is
+`537a4d84f934bbf1a3474e556dd1ccbf879226fd` and pre-feature rollback is
+`06cfb26b7ab8d53ae717b68891076c1f8e758000`.
 
 ## 0.13.0 WeChat transaction: accepted
 
@@ -286,6 +296,7 @@ puts JSON.pretty_generate(
     "expand_reader_height",
     "enable_marxists_inline_media",
     "enable_bdfz_posts_inline",
+    "enable_bdfz_post_auto_scale",
     "bdfz_post_embed_height"
   )
 )
