@@ -24,6 +24,7 @@ globalThis.__themeParserTestApi = {
   extractUrlsFromText,
   fetchReaderView,
   fetchWeChatArchive,
+  getWeChatRetryDelayMs,
   getCachedReaderRequest,
   getCachedWeChatArchive,
   getFallbackTitle,
@@ -60,6 +61,7 @@ globalThis.__themeParserTestApi = {
   READER_CACHE_TTL_MS,
   WECHAT_ARCHIVE_CACHE_MAX_ENTRIES,
   WECHAT_ARCHIVE_CACHE_TTL_MS,
+  WECHAT_ARCHIVE_REQUEST_TIMEOUT_MS,
   normalizeWeChatArchivePayload,
   sanitizeReaderImageUrl,
   sanitizeEbookCss,
@@ -96,6 +98,7 @@ const {
   extractUrlsFromText,
   fetchReaderView,
   fetchWeChatArchive,
+  getWeChatRetryDelayMs,
   getCachedReaderRequest,
   getCachedWeChatArchive,
   getFallbackTitle,
@@ -132,6 +135,7 @@ const {
   READER_CACHE_TTL_MS,
   WECHAT_ARCHIVE_CACHE_MAX_ENTRIES,
   WECHAT_ARCHIVE_CACHE_TTL_MS,
+  WECHAT_ARCHIVE_REQUEST_TIMEOUT_MS,
   normalizeWeChatArchivePayload,
   sanitizeReaderImageUrl,
   sanitizeEbookCss,
@@ -1355,6 +1359,93 @@ test("failed WeChat conversion is evicted so a later render can retry", async ()
 
   wechatArchiveCache.clear();
   context.fetch = globalThis.fetch;
+});
+
+test("WeChat conversion polls a pending lease until the archive is ready", async () => {
+  const parsed = parseBilibiliUrl("https://mp.weixin.qq.com/s/Fixture123");
+  let calls = 0;
+
+  wechatArchiveCache.clear();
+  context.fetch = async () => {
+    calls += 1;
+
+    if (calls === 1) {
+      return {
+        ok: true,
+        status: 202,
+        headers: { get: () => "0" },
+        json: async () => ({ ok: false, pending: true, retryAfter: 0 }),
+      };
+    }
+
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        ok: true,
+        url: "https://wx.bdfz.net/fixture-article",
+        slug: "fixture-article",
+        title: "测试微信文章",
+        orig: parsed.canonicalUrl,
+      }),
+    };
+  };
+
+  assert.equal((await fetchWeChatArchive(parsed)).slug, "fixture-article");
+  assert.equal(calls, 2);
+  assert.equal(getWeChatRetryDelayMs({ headers: { get: () => "2" } }, {}), 2000);
+  assert.equal(
+    getWeChatRetryDelayMs({ headers: { get: () => null } }, { retryAfter: 3 }),
+    3000
+  );
+
+  wechatArchiveCache.clear();
+  context.fetch = globalThis.fetch;
+});
+
+test("WeChat conversion retries after one transient request interruption", async () => {
+  const parsed = parseBilibiliUrl("https://mp.weixin.qq.com/s/Fixture123");
+  const originalSetTimeout = context.window.setTimeout;
+  const originalClearTimeout = context.window.clearTimeout;
+  let calls = 0;
+
+  wechatArchiveCache.clear();
+  context.window.setTimeout = (callback, delay) => {
+    if (delay < WECHAT_ARCHIVE_REQUEST_TIMEOUT_MS) {
+      callback();
+    }
+    return 1;
+  };
+  context.window.clearTimeout = () => {};
+  context.fetch = async () => {
+    calls += 1;
+
+    if (calls === 1) {
+      throw new Error("transient interruption");
+    }
+
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        ok: true,
+        url: "https://wx.bdfz.net/fixture-article",
+        slug: "fixture-article",
+        title: "测试微信文章",
+        orig: parsed.canonicalUrl,
+      }),
+    };
+  };
+
+  try {
+    assert.equal((await fetchWeChatArchive(parsed)).slug, "fixture-article");
+    assert.equal(calls, 2);
+  } finally {
+    wechatArchiveCache.clear();
+    context.fetch = globalThis.fetch;
+    context.window.setTimeout = originalSetTimeout;
+    context.window.clearTimeout = originalClearTimeout;
+  }
 });
 
 test("Zhihu reader output must remain summary-only and match exact type and ID", () => {

@@ -3742,7 +3742,11 @@ const READER_ALLOWED_ATTRIBUTES = {
 const READER_TIMEOUT_MS = 15000;
 const READER_CACHE_MAX_ENTRIES = 24;
 const READER_CACHE_TTL_MS = 5 * 60 * 1000;
-const WECHAT_ARCHIVE_TIMEOUT_MS = 20000;
+const WECHAT_ARCHIVE_REQUEST_TIMEOUT_MS = 90000;
+const WECHAT_ARCHIVE_MAX_WAIT_MS = 4 * 60 * 1000;
+const WECHAT_ARCHIVE_MAX_ATTEMPTS = 64;
+const WECHAT_ARCHIVE_MAX_NETWORK_FAILURES = 2;
+const WECHAT_ARCHIVE_RETRY_DELAY_MS = 2000;
 const WECHAT_ARCHIVE_CACHE_MAX_ENTRIES = 24;
 const WECHAT_ARCHIVE_CACHE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_WECHAT_INGEST_ENDPOINT = "https://wx.bdfz.net/api/ingest";
@@ -3895,9 +3899,56 @@ async function fetchWeChatArchive(parsed) {
     return cached;
   }
 
-  const request = (async () => {
+  const request = fetchWeChatArchiveWithRetry(parsed, endpoint);
+
+  const entry = storeWeChatArchive(cacheKey, request);
+  const result = await request;
+
+  if (!result && wechatArchiveCache.get(cacheKey) === entry) {
+    wechatArchiveCache.delete(cacheKey);
+  }
+
+  return result;
+}
+
+function getWeChatRetryDelayMs(response, payload, fallbackMs = WECHAT_ARCHIVE_RETRY_DELAY_MS) {
+  const retryAfterHeaderValue = response?.headers?.get?.("Retry-After");
+  const retryAfterHeader = retryAfterHeaderValue === null || retryAfterHeaderValue === undefined || retryAfterHeaderValue === ""
+    ? Number.NaN
+    : Number(retryAfterHeaderValue);
+  const retryAfterPayload = Number(payload?.retryAfter);
+  const delayMs = Number.isFinite(retryAfterHeader)
+    ? retryAfterHeader * 1000
+    : Number.isFinite(retryAfterPayload)
+      ? retryAfterPayload * 1000
+      : fallbackMs;
+
+  return Math.min(10000, Math.max(0, delayMs));
+}
+
+function waitForWeChatRetry(delayMs) {
+  if (delayMs <= 0) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => window.setTimeout(resolve, delayMs));
+}
+
+async function fetchWeChatArchiveWithRetry(parsed, endpoint) {
+  const deadline = Date.now() + WECHAT_ARCHIVE_MAX_WAIT_MS;
+  let networkFailures = 0;
+
+  for (let attempt = 0; attempt < WECHAT_ARCHIVE_MAX_ATTEMPTS; attempt += 1) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      return null;
+    }
+
     const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), WECHAT_ARCHIVE_TIMEOUT_MS);
+    let timer = window.setTimeout(
+      () => controller.abort(),
+      Math.max(1, Math.min(WECHAT_ARCHIVE_REQUEST_TIMEOUT_MS, remainingMs))
+    );
 
     try {
       const response = await fetch(endpoint, {
@@ -3909,26 +3960,49 @@ async function fetchWeChatArchive(parsed) {
         signal: controller.signal,
       });
 
+      if (response.status === 202) {
+        const pending = await response.json().catch(() => null);
+
+        if (!pending?.pending || attempt + 1 >= WECHAT_ARCHIVE_MAX_ATTEMPTS) {
+          return null;
+        }
+
+        window.clearTimeout(timer);
+        timer = null;
+        await waitForWeChatRetry(
+          Math.min(getWeChatRetryDelayMs(response, pending), deadline - Date.now())
+        );
+        continue;
+      }
+
       if (!response.ok) {
         return null;
       }
 
       return normalizeWeChatArchivePayload(await response.json(), parsed);
     } catch {
-      return null;
-    } finally {
+      networkFailures += 1;
+      if (
+        networkFailures >= WECHAT_ARCHIVE_MAX_NETWORK_FAILURES ||
+        attempt + 1 >= WECHAT_ARCHIVE_MAX_ATTEMPTS ||
+        Date.now() >= deadline
+      ) {
+        return null;
+      }
+
       window.clearTimeout(timer);
+      timer = null;
+      await waitForWeChatRetry(
+        Math.min(WECHAT_ARCHIVE_RETRY_DELAY_MS, deadline - Date.now())
+      );
+    } finally {
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
     }
-  })();
-
-  const entry = storeWeChatArchive(cacheKey, request);
-  const result = await request;
-
-  if (!result && wechatArchiveCache.get(cacheKey) === entry) {
-    wechatArchiveCache.delete(cacheKey);
   }
 
-  return result;
+  return null;
 }
 
 function getExpandReaderEndpoint() {
