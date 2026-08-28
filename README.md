@@ -28,7 +28,7 @@ Inline ebook reading for Discourse attachments:
 
 The reader is visible by default, fetches the attachment only in the user's browser, never uploads book bytes to a conversion service, and provides table-of-contents navigation, previous/next paging, reading progress, keyboard arrows, responsive mobile layout, and a permanent original-file link. It uses a pinned MIT-licensed Foliate JS bundle stored as a remote-theme asset. Active book markup is stripped before rendition and the forum CSP remains the final script-execution boundary.
 
-Every safe inline player and reader is expanded by default. Automatic media expansion uses the provider's non-autoplay URL when available; the `auto_expand_embeds` administrator setting restores click-to-expand behavior when disabled. Exact `bdfz.net/posts/<article>/` links open the complete server-rendered article in a script-free frame by default, retain the original link, and provide an accessible `收起正文` / `展开正文` control. WeChat public-article links are converted through the operator-owned `wx.bdfz.net` archive and show its full text inline by default; the original WeChat link remains visible on every success or failure. Zhihu question, answer, and article URLs use a bounded summary card from the operator-owned reader service; unsupported or failed results remain source cards.
+Every safe inline player and reader is expanded by default. Automatic media expansion uses the provider's non-autoplay URL when available; the `auto_expand_embeds` administrator setting restores click-to-expand behavior when disabled. Exact `bdfz.net/posts/<article>/` links open the complete server-rendered article in a script-free frame by default, automatically fit the source page to the available forum width with a 70% readability floor, retain the original link, and provide an accessible `收起正文` / `展开正文` control. WeChat public-article links are converted through the operator-owned `wx.bdfz.net` archive and show its full text inline by default; the original WeChat link remains visible on every success or failure. Zhihu question, answer, and article URLs use a bounded summary card from the operator-owned reader service; unsupported or failed results remain source cards.
 
 Marxists Internet Archive (`marxists.org`):
 
@@ -91,7 +91,7 @@ WeChat public-article full-text render (with permanent original-source fallback)
 - `https://mp.weixin.qq.com/s/<share_token>`
 - `https://mp.weixin.qq.com/s?__biz=<id>&mid=<id>&idx=<id>...`
 
-BDFZ post full-page render (default-open, script-free, and collapsible):
+BDFZ post full-page render (default-open, auto-fit, script-free, and collapsible):
 
 - `https://bdfz.net/posts/<article>/`
 
@@ -221,6 +221,7 @@ No rebuild is required.
 - `enable_zhihu_summary`
 - `enable_wechat_inline`
 - `enable_bdfz_posts_inline`
+- `enable_bdfz_post_auto_scale`
 - `bdfz_post_embed_height`
 - `wechat_ingest_endpoint`
 - `wechat_embed_height`
@@ -241,7 +242,7 @@ No rebuild is required.
 - If NetEase Cloud Music embeds are enabled by CSP, allow `https://music.163.com` in `frame-src`.
 - If QQ Music embeds are enabled by CSP, allow `https://i.y.qq.com` in `frame-src`.
 - WeChat conversion sends only the pasted public article URL to `https://wx.bdfz.net/api/ingest`, with credentials omitted and no referrer. The Worker allows CORS only from `https://forum.rdfzer.com`; stored article pages allow that same exact forum origin as their only external frame ancestor. A custom forum CSP with `connect-src` or `frame-src` must allow `https://wx.bdfz.net`.
-- BDFZ post embeds accept only one exact article slug below `https://bdfz.net/posts/`; archive, pagination, nested, credential-bearing, custom-port, and lookalike-host URLs are rejected. The iframe is lazy, sends no referrer, and is sandboxed without scripts, forms, or same-origin privileges. A custom forum `frame-src` policy must allow `https://bdfz.net`.
+- BDFZ post embeds accept only one exact article slug below `https://bdfz.net/posts/`; archive, pagination, nested, credential-bearing, custom-port, and lookalike-host URLs are rejected. The iframe is lazy, sends no referrer, and is sandboxed without scripts, forms, or same-origin privileges. Automatic scaling derives from the live container width, never exceeds 100%, and never drops below 70%; `enable_bdfz_post_auto_scale=false` restores the original 100% scale. A custom forum `frame-src` policy must allow `https://bdfz.net`.
 - Zhihu cards load no Zhihu iframe, script, or image resource. Summary JSON comes only from the configured reader endpoint with credentials omitted and no-referrer; the original canonical link is always present.
 - Xiaohongshu and RedNote cards default to an expanded lazy-loaded iframe for the official user-supplied note URL. A strict custom `frame-src` policy must allow both the root and wildcard forms of `xiaohongshu.com`, `xhslink.com`, `xhslink.cn`, and `rednote.com` (for example, `https://xiaohongshu.com https://*.xiaohongshu.com`).
 - Marxists documents and Zhihu summary requests call the configured `expand_reader_endpoint` with credentials omitted and a no-referrer policy. If a custom CSP adds `connect-src`, it must allow the exact reader endpoint origin. Marxists images are upgraded to HTTPS, restricted to the source archive host, lazy-loaded, and forced to `referrerpolicy="no-referrer"`; Zhihu summary images are rejected.

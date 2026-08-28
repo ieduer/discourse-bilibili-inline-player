@@ -28,6 +28,7 @@ globalThis.__themeParserTestApi = {
   getCachedWeChatArchive,
   getFallbackTitle,
   getFooterMeta,
+  getBdfzPostAutoScale,
   getInitialButtonLabel,
   getReaderCacheKey,
   getWeChatArchiveCacheKey,
@@ -99,6 +100,7 @@ const {
   getCachedWeChatArchive,
   getFallbackTitle,
   getFooterMeta,
+  getBdfzPostAutoScale,
   getInitialButtonLabel,
   getReaderCacheKey,
   getWeChatArchiveCacheKey,
@@ -791,6 +793,17 @@ test("bdfz.net article frames expose an accessible default-open collapse control
     /iframe\.sandbox = "allow-popups allow-popups-to-escape-sandbox";/u
   );
   assert.match(initializerSource, /attachBdfzPostToggle\(wrapper, frameWrap, footer\)/u);
+});
+
+test("bdfz.net article frames auto-fit without becoming unreadably small", () => {
+  assert.equal(getBdfzPostAutoScale(800), 1);
+  assert.equal(getBdfzPostAutoScale(640), 0.8);
+  assert.equal(getBdfzPostAutoScale(320), 0.7);
+  assert.equal(getBdfzPostAutoScale(1200), 1);
+  assert.equal(getBdfzPostAutoScale(0), 1);
+  assert.equal(getBdfzPostAutoScale(Number.NaN), 1);
+  assert.match(initializerSource, /new ResizeObserver\(updateScale\)/u);
+  assert.match(initializerSource, /enable_bdfz_post_auto_scale/u);
 });
 
 test("always keeps a direct source link for Xiaohongshu", () => {

@@ -11,6 +11,8 @@ const QQMUSIC_HOSTS = new Set(["y.qq.com", "i.y.qq.com"]);
 const ZHIHU_HOSTS = new Set(["zhihu.com", "www.zhihu.com", "zhuanlan.zhihu.com"]);
 const WECHAT_HOSTS = new Set(["mp.weixin.qq.com"]);
 const BDFZ_POST_HOSTS = new Set(["bdfz.net", "www.bdfz.net"]);
+const BDFZ_POST_AUTO_SCALE_MIN = 0.7;
+const BDFZ_POST_AUTO_SCALE_REFERENCE_WIDTH = 800;
 const XIAOHONGSHU_HOSTS = new Set(["xiaohongshu.com", "www.xiaohongshu.com"]);
 const REDNOTE_HOSTS = new Set(["rednote.com", "www.rednote.com"]);
 const XIAOHONGSHU_SHORT_HOSTS = new Set([
@@ -4520,6 +4522,47 @@ function updateBdfzPostExpandedState(wrapper, frameWrap, button, expanded) {
   button.setAttribute("aria-label", expanded ? "收起 BDFZ 博文正文" : "展开 BDFZ 博文正文");
 }
 
+function getBdfzPostAutoScale(containerWidth) {
+  const width = Number(containerWidth);
+
+  if (!Number.isFinite(width) || width <= 0) {
+    return 1;
+  }
+
+  return Math.min(
+    1,
+    Math.max(BDFZ_POST_AUTO_SCALE_MIN, width / BDFZ_POST_AUTO_SCALE_REFERENCE_WIDTH)
+  );
+}
+
+function attachBdfzPostAutoScale(wrapper, frameWrap) {
+  if (!getBooleanSetting("enable_bdfz_post_auto_scale", true)) {
+    wrapper.dataset.bilibiliScaleMode = "original";
+    frameWrap.style.setProperty("--bili-bdfz-scale", "1");
+    return;
+  }
+
+  const updateScale = () => {
+    const width = frameWrap.getBoundingClientRect?.().width || frameWrap.clientWidth || 0;
+
+    if (width <= 0) {
+      return;
+    }
+
+    const scale = getBdfzPostAutoScale(width);
+    wrapper.dataset.bilibiliScaleMode = "auto";
+    wrapper.dataset.bilibiliScale = scale.toFixed(3);
+    frameWrap.style.setProperty("--bili-bdfz-scale", String(scale));
+  };
+
+  updateScale();
+
+  if (typeof ResizeObserver === "function") {
+    const resizeObserver = new ResizeObserver(updateScale);
+    resizeObserver.observe(frameWrap);
+  }
+}
+
 function attachBdfzPostToggle(wrapper, frameWrap, footer) {
   const actions = footer.querySelector(".bilibili-inline-player__footer-actions");
 
@@ -4599,6 +4642,11 @@ function renderLoadedPlayer(wrapper, iframeUrl, { allowAutoplay = false } = {}) 
   }
 
   wrapper.replaceChildren(frameWrap, footer);
+
+  if (state.parsed.provider === "bdfz-post") {
+    attachBdfzPostAutoScale(wrapper, frameWrap);
+  }
+
   updateRetryButtonLabel(wrapper);
   updateFooterMeta(wrapper);
   maybeAttachStuckHelpNotice(wrapper);

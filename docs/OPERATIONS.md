@@ -27,10 +27,12 @@ steps. Live Discourse and GitHub readback override this document when they disag
   Immediate containment is `enable_wechat_inline=false`; the existing reader
   kill switch remains `enable_expand_reader=false`.
 
-## 0.14.0 BDFZ post transaction: candidate
+## 0.14.1 BDFZ post transaction: candidate
 
 The candidate adds only exact `https://bdfz.net/posts/<article>/` full-page
-embeds. It defaults the lazy iframe to expanded, strips tracking query and
+embeds. It defaults the lazy iframe to expanded, automatically scales its
+800-pixel reading viewport down to the available forum width without crossing
+a 70% readability floor, strips tracking query and
 fragment state from the canonical URL, disables scripts/forms/same-origin
 privileges through sandboxing, retains the original link, and provides an
 accessible collapse/expand control. Archive and pagination URLs, nested paths,
@@ -38,7 +40,7 @@ lookalike hosts, credentials, custom ports, and non-web schemes remain untouched
 
 The feature has no Worker or server-side dependency. Its release gate is a clean
 source commit, successful hosted CI, guarded theme `119` refresh, exact database
-readback showing version `0.14.0` and 23 settings, public forum/BDFZ health, and
+readback showing version `0.14.1` and 24 settings, public forum/BDFZ health, and
 real cooked-post browser acceptance proving the default-open frame plus both
 toggle states. Immediate containment is `enable_bdfz_posts_inline=false`; the
 full source rollback anchor is `06cfb26b7ab8d53ae717b68891076c1f8e758000`.
@@ -153,6 +155,8 @@ WeChat settings:
 BDFZ post settings:
 
 - `enable_bdfz_posts_inline`: immediate BDFZ post containment switch; default `true`.
+- `enable_bdfz_post_auto_scale`: width-aware scale with a 70% readability floor;
+  default `true`. Disable to restore the original 100% scale.
 - `bdfz_post_embed_height`: bounded `480`–`1600`, default `900` pixels; mobile
   uses a viewport-relative height.
 
@@ -376,6 +380,9 @@ reload as needed and verify:
     sandboxed without scripts/forms/same-origin privileges. Its toggle starts at
     `收起正文` with `aria-expanded=true`, hides the frame and changes to `展开正文`,
     then restores the same frame without losing the permanent original link.
+    The wrapper reports automatic scale mode; resizing the post recomputes a
+    70%–100% scale and preserves the same iframe, while disabling the setting
+    restores exactly 100%.
 
 Accepted browser readback for `0.11.1` met items 1–6: `1330/2` and `2327/1`
 each had one wrapper/pane/open state with a telemetry-free real title and a

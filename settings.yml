@@ -79,6 +79,11 @@ enable_bdfz_posts_inline:
   type: bool
   description: Show exact bdfz.net/posts/<article>/ pages inline by default in a script-free frame, with explicit collapse and expand controls plus a permanent original link.
 
+enable_bdfz_post_auto_scale:
+  default: true
+  type: bool
+  description: Automatically fit BDFZ post pages to the available forum width while preserving a readable minimum scale. Disable to render the embedded page at its original 100% scale.
+
 bdfz_post_embed_height:
   default: 900
   type: integer

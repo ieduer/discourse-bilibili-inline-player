@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-08-27 (America/Los_Angeles)
 
-## 0.14.0 BDFZ post full-page candidate: release pending
+## 0.14.1 BDFZ post full-page candidate: release pending
 
 - The candidate recognizes only one exact article slug at
   `bdfz.net/posts/<article>/`. It normalizes HTTP and `www` forms to the stable
@@ -13,7 +13,10 @@ Last reviewed: 2026-08-27 (America/Los_Angeles)
   the canonical original link and exposes one `收起正文` / `展开正文` button with
   synchronized `aria-expanded` and `aria-controls` state. The admin kill switch
   is `enable_bdfz_posts_inline=false`; the height is bounded to 480–1600 pixels.
-- Local validation currently passes `60/60` parser, cooked-link, provider,
+  Width-aware automatic scaling uses an 800-pixel reference viewport, stays
+  within 70%–100%, and can be restored to original 100% rendering with
+  `enable_bdfz_post_auto_scale=false`.
+- Local validation currently passes `61/61` parser, cooked-link, provider,
   sandbox, default-open, collapse-state, and legacy regression tests, plus
   initializer/test syntax, JSON, YAML, Foliate hash, and diff checks. Live
   `https://bdfz.net/posts/180-qishike/` returns the full server-rendered article

@@ -143,10 +143,15 @@
 .bilibili-inline-player--bdfz-post .bilibili-inline-player__frame-wrap--fixed {
   height: min(82vh, var(--bili-frame-height, 900px));
   min-height: 560px;
+  overflow: hidden;
   background: #fbfaf5;
 }
 
 .bilibili-inline-player--bdfz-post .bilibili-inline-player__frame {
+  width: calc(100% / var(--bili-bdfz-scale, 1));
+  height: calc(100% / var(--bili-bdfz-scale, 1));
+  transform: scale(var(--bili-bdfz-scale, 1));
+  transform-origin: top left;
   background: #fbfaf5;
 }
 
