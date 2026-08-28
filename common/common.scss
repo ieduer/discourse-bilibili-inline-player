@@ -125,6 +125,31 @@
   background: #fff;
 }
 
+/* ── bdfz.net posts ── */
+
+.bilibili-inline-player--bdfz-post .bilibili-inline-player__media {
+  min-height: 6rem;
+  background:
+    radial-gradient(circle at 18% 20%, rgb(255 255 255 / 0.16), transparent 34%),
+    linear-gradient(135deg, #302b26 0%, #66584a 52%, #201c19 100%);
+}
+
+.bilibili-inline-player--bdfz-post .bilibili-inline-player__play {
+  background: rgb(250 247 239 / 0.96);
+  color: #302b26;
+  box-shadow: 0 6px 18px rgb(32 28 25 / 0.3);
+}
+
+.bilibili-inline-player--bdfz-post .bilibili-inline-player__frame-wrap--fixed {
+  height: min(82vh, var(--bili-frame-height, 900px));
+  min-height: 560px;
+  background: #fbfaf5;
+}
+
+.bilibili-inline-player--bdfz-post .bilibili-inline-player__frame {
+  background: #fbfaf5;
+}
+
 /* ── EPUB / MOBI / AZW3 local reader ── */
 
 .bilibili-inline-player--ebook .bilibili-inline-player__media {
@@ -906,6 +931,11 @@
   .bilibili-inline-player--xiaohongshu .bilibili-inline-player__frame-wrap--fixed {
     height: 68vh;
     min-height: 480px;
+  }
+
+  .bilibili-inline-player--bdfz-post .bilibili-inline-player__frame-wrap--fixed {
+    height: 70vh;
+    min-height: 440px;
   }
 
   .bilibili-inline-player__play {

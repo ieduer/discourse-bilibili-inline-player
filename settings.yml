@@ -74,6 +74,18 @@ enable_wechat_inline:
   type: bool
   description: Convert supported mp.weixin.qq.com article links through wx.bdfz.net and show the archived full text inline by default. The original WeChat link remains available on every success or failure.
 
+enable_bdfz_posts_inline:
+  default: true
+  type: bool
+  description: Show exact bdfz.net/posts/<article>/ pages inline by default in a script-free frame, with explicit collapse and expand controls plus a permanent original link.
+
+bdfz_post_embed_height:
+  default: 900
+  type: integer
+  min: 480
+  max: 1600
+  description: Desktop height in pixels of the default-open bdfz.net article frame; mobile uses a viewport-relative height.
+
 wechat_ingest_endpoint:
   default: "https://wx.bdfz.net/api/ingest"
   type: string

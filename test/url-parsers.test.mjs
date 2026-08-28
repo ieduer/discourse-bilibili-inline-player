@@ -65,6 +65,7 @@ globalThis.__themeParserTestApi = {
   resolveReaderViewTitle,
   storeReaderRequest,
   storeWeChatArchive,
+  updateBdfzPostExpandedState,
 };
 `);
 const context = {
@@ -135,6 +136,7 @@ const {
   resolveReaderViewTitle,
   storeReaderRequest,
   storeWeChatArchive,
+  updateBdfzPostExpandedState,
 } = context.__themeParserTestApi;
 
 test("reader titles discard Discourse click telemetry and prefer source metadata", () => {
@@ -667,6 +669,10 @@ test("keeps representative existing providers working", () => {
     parseBilibiliUrl("https://mp.weixin.qq.com/s/Fixture123").provider,
     "wechat"
   );
+  assert.equal(
+    parseBilibiliUrl("https://bdfz.net/posts/180-qishike/").provider,
+    "bdfz-post"
+  );
 });
 
 test("parses only exact WeChat public-article URLs and preserves their source identity", () => {
@@ -694,6 +700,97 @@ test("parses only exact WeChat public-article URLs and preserves their source id
   assert.equal(getMetaLine(parsed), "微信公号全文");
   assert.equal(getFallbackTitle(parsed), "微信公号文章");
   assert.equal(getOpenLabel(parsed), "在微信打开原文");
+});
+
+test("parses only exact bdfz.net article pages and defaults them to an inline full-text frame", () => {
+  const parsed = parseBilibiliUrl(
+    "http://www.bdfz.net/posts/180-qishike/?utm_source=forum#section"
+  );
+
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(parsed)),
+    {
+      provider: "bdfz-post",
+      kind: "bdfz-post",
+      contentType: "article",
+      page: 1,
+      rawId: "180-qishike",
+      canonicalUrl: "https://bdfz.net/posts/180-qishike/",
+    }
+  );
+  assert.equal(getMetaLine(parsed), "BDFZ 博文全文");
+  assert.equal(getFallbackTitle(parsed), "BDFZ 博文");
+  assert.equal(getInitialButtonLabel(parsed), "展开正文");
+  assert.equal(getOpenLabel(parsed), "在 bdfz.net 打开原文");
+  assert.equal(getFooterMeta(parsed), "bdfz.net 原文 · 默认展开，可随时收起");
+  assert.equal(getPreviewAspectRatio(parsed), "auto");
+  assert.equal(getLoadedFrameHeight(parsed), 900);
+  assert.equal(isKnownInlineKind(parsed), true);
+  assert.equal(shouldAutoExpandEmbed(parsed), true);
+  assert.equal(shouldShowDirectSourceLink(parsed), true);
+
+  const standalone = makeCookedParagraphFixture({ url: parsed.canonicalUrl });
+  const [candidate] = collectStandaloneCandidates(standalone.cooked, []);
+  assert.equal(candidate.parsed.provider, "bdfz-post");
+  assert.equal(candidate.target, standalone.paragraph);
+
+  themeSettings.enable_bdfz_posts_inline = false;
+  assert.equal(isKnownInlineKind(parsed), false);
+  assert.equal(shouldAutoExpandEmbed(parsed), false);
+  assert.equal(getFooterMeta(parsed), "bdfz.net 原文链接");
+  delete themeSettings.enable_bdfz_posts_inline;
+
+  for (const source of [
+    "https://bdfz.net/posts/",
+    "https://bdfz.net/posts/page/2/",
+    "https://bdfz.net/posts/index.xml",
+    "https://bdfz.net/posts/one/two/",
+    "https://bdfz.net.evil.example/posts/180-qishike/",
+    "https://user:pass@bdfz.net/posts/180-qishike/",
+    "https://bdfz.net:444/posts/180-qishike/",
+    "ftp://bdfz.net/posts/180-qishike/",
+  ]) {
+    assert.equal(parseBilibiliUrl(source), null, source);
+  }
+});
+
+test("bdfz.net article frames expose an accessible default-open collapse control", () => {
+  const classes = new Map();
+  const attributes = new Map();
+  const wrapper = {
+    dataset: {},
+    classList: {
+      toggle(name, enabled) {
+        classes.set(name, enabled);
+      },
+    },
+  };
+  const frameWrap = { hidden: false };
+  const button = {
+    textContent: "",
+    setAttribute(name, value) {
+      attributes.set(name, value);
+    },
+  };
+
+  updateBdfzPostExpandedState(wrapper, frameWrap, button, true);
+  assert.equal(frameWrap.hidden, false);
+  assert.equal(wrapper.dataset.bilibiliExpanded, "1");
+  assert.equal(classes.get("bilibili-inline-player--collapsed"), false);
+  assert.equal(button.textContent, "收起正文");
+  assert.equal(attributes.get("aria-expanded"), "true");
+
+  updateBdfzPostExpandedState(wrapper, frameWrap, button, false);
+  assert.equal(frameWrap.hidden, true);
+  assert.equal(wrapper.dataset.bilibiliExpanded, "0");
+  assert.equal(classes.get("bilibili-inline-player--collapsed"), true);
+  assert.equal(button.textContent, "展开正文");
+  assert.equal(attributes.get("aria-expanded"), "false");
+  assert.match(
+    initializerSource,
+    /iframe\.sandbox = "allow-popups allow-popups-to-escape-sandbox";/u
+  );
+  assert.match(initializerSource, /attachBdfzPostToggle\(wrapper, frameWrap, footer\)/u);
 });
 
 test("always keeps a direct source link for Xiaohongshu", () => {
@@ -979,12 +1076,14 @@ test("recognizes one visible supported URL at any position in a paragraph", () =
     "https://music.163.com/song?id=123456",
     "https://y.qq.com/n/ryqq/songDetail/004Z8Ihr0JIu5s",
     "https://xhslink.cn/o/Fixture123",
+    "https://bdfz.net/posts/180-qishike/",
     "https://www.marxists.org/archive/marx/works/1848/communist-manifesto/ch01.htm",
     "https://www.zhihu.com/question/123456",
   ]) {
     const fixture = makeCookedParagraphFixture({ before: "来源：\n第二行：", url });
     const [candidate] = collectVisibleUrlCandidates(fixture.cooked, []);
 
+    assert.ok(candidate, url);
     assert.equal(candidate.target, fixture.paragraph, url);
     assert.equal(candidate.parsed.canonicalUrl, parseBilibiliUrl(url).canonicalUrl, url);
     assert.equal(candidate.preserveSource, true, url);

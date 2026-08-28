@@ -1,6 +1,6 @@
 # Operations authority
 
-Last reviewed: 2026-08-26 (America/Los_Angeles)
+Last reviewed: 2026-08-27 (America/Los_Angeles)
 
 This is the canonical operational procedure for the Extended Preview & Embed Suite.
 `AGENTS.md` owns constraints, `PROJECT_STATE.md` owns the accepted version and next
@@ -16,7 +16,7 @@ steps. Live Discourse and GitHub readback override this document when they disag
 - Canonical checkout: `/Users/ylsuen/Discourse/discourse-bilibili-inline-player`.
 - Repository: `https://github.com/ieduer/discourse-bilibili-inline-player.git`, branch `main`.
 - Runtime target: `forum.rdfzer.com`, Discourse remote theme component `119`.
-- Reader dependencies: `https://reader.bdfz.net/read`, owned by `expand-reader`, and `https://wx.bdfz.net/api/ingest`, owned by `wx-ingest`.
+- Reader dependencies: `https://reader.bdfz.net/read`, owned by `expand-reader`, and `https://wx.bdfz.net/api/ingest`, owned by `wx-ingest`; BDFZ posts frame their public `https://bdfz.net/posts/<article>/` source directly.
 - Health: forum `/`, `/srv/status`; reader `/health`; `wx.bdfz.net/health`; then real cooked-post acceptance.
 - Deploy prohibition: never rebuild Discourse, edit `app.yml`, or mutate forum content for a theme release.
 - Release gate: clean exact source, tests, GitHub push, exact-SHA hosted-CI readback, guarded theme refresh, database readback, public health, and browser acceptance. A zero-step GitHub billing rejection may use only the bounded local-CI exception below; a real test failure may not.
@@ -26,6 +26,22 @@ steps. Live Discourse and GitHub readback override this document when they disag
   `b335cc5f0bd4c1df05e051a19772ec1b76d478f6`; rollback is the pre-change SHA above.
   Immediate containment is `enable_wechat_inline=false`; the existing reader
   kill switch remains `enable_expand_reader=false`.
+
+## 0.14.0 BDFZ post transaction: candidate
+
+The candidate adds only exact `https://bdfz.net/posts/<article>/` full-page
+embeds. It defaults the lazy iframe to expanded, strips tracking query and
+fragment state from the canonical URL, disables scripts/forms/same-origin
+privileges through sandboxing, retains the original link, and provides an
+accessible collapse/expand control. Archive and pagination URLs, nested paths,
+lookalike hosts, credentials, custom ports, and non-web schemes remain untouched.
+
+The feature has no Worker or server-side dependency. Its release gate is a clean
+source commit, successful hosted CI, guarded theme `119` refresh, exact database
+readback showing version `0.14.0` and 23 settings, public forum/BDFZ health, and
+real cooked-post browser acceptance proving the default-open frame plus both
+toggle states. Immediate containment is `enable_bdfz_posts_inline=false`; the
+full source rollback anchor is `06cfb26b7ab8d53ae717b68891076c1f8e758000`.
 
 ## 0.13.0 WeChat transaction: accepted
 
@@ -78,6 +94,7 @@ Before any mutation, also read:
 | `reader.bdfz.net` | Worker custom domain and exact routing | external runtime | Cloudflare/shared-hub change procedure |
 | WeChat archive Worker | `/Users/ylsuen/CF/sites/tools/wx-ingest` and `ieduer/wx-ingest` | external leaf service | that project's operations authority |
 | `wx.bdfz.net` | existing Worker route, archive API, and script-free article pages | external runtime | immutable Worker version rollback; preserve R2 objects |
+| `bdfz.net/posts/<article>/` | public, server-rendered source page framed directly by the theme | external public source | source link fallback; feature kill switch |
 | Tests | `test/url-parsers.test.mjs` | source | Git |
 
 There are no external local build inputs, database exports, generated releases, or
@@ -133,6 +150,12 @@ WeChat settings:
 - `wechat_ingest_endpoint`: must be exactly `https://wx.bdfz.net/api/ingest`.
 - `wechat_embed_height`: bounded `360`–`1400`, default `720` pixels.
 
+BDFZ post settings:
+
+- `enable_bdfz_posts_inline`: immediate BDFZ post containment switch; default `true`.
+- `bdfz_post_embed_height`: bounded `480`–`1600`, default `900` pixels; mobile
+  uses a viewport-relative height.
+
 The WeChat client sends `POST /api/ingest` with only the canonical public article
 URL, `credentials: "omit"`, and `referrerPolicy: "no-referrer"`. It accepts only
 an exact semantic source identity and exact `https://wx.bdfz.net/<slug>` response.
@@ -167,7 +190,7 @@ work. Never reset, clean, stash, or overwrite another task's files.
 Before a release, record the expected Git SHA, currently installed SHA, rollback SHA,
 theme parents, effective reader settings, Worker/route owner, and explicit exclusions.
 Theme-only work excludes nginx, containers, post content, uploads, Redis, R2, CSP,
-forum core, and Cloudflare resources.
+forum core, BDFZ source content/deployment, and Cloudflare resources.
 
 ## Local verification
 
@@ -257,7 +280,9 @@ puts JSON.pretty_generate(
     "enable_zhihu_summary",
     "expand_reader_endpoint",
     "expand_reader_height",
-    "enable_marxists_inline_media"
+    "enable_marxists_inline_media",
+    "enable_bdfz_posts_inline",
+    "bdfz_post_embed_height"
   )
 )
 RUBY
@@ -315,6 +340,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' https://forum.rdfzer.com/
 curl -sS -o /dev/null -w '%{http_code}\n' https://forum.rdfzer.com/srv/status
 curl -sS -o /dev/null -w '%{http_code}\n' https://forum.rdfzer.com/session/csrf
 curl -sS https://reader.bdfz.net/health
+curl -sS -o /dev/null -w '%{http_code}\n' https://bdfz.net/posts/180-qishike/
 ```
 
 Then use an already authorized browser session; do not paste or log cookies. Hard
@@ -344,6 +370,12 @@ reload as needed and verify:
     embedded after explanatory paragraph text render exactly one card while the
     original paragraph remains. Code, navigation/multiple anchors, non-URL labels,
     PDF, EPUB/MOBI/AZW3, and existing onebox controls remain unchanged.
+11. An existing cooked post containing one exact BDFZ article URL produces one
+    `bdfz-post` wrapper and a visible default-open iframe at the normalized
+    `https://bdfz.net/posts/<article>/` URL. The frame is lazy, `no-referrer`, and
+    sandboxed without scripts/forms/same-origin privileges. Its toggle starts at
+    `收起正文` with `aria-expanded=true`, hides the frame and changes to `展开正文`,
+    then restores the same frame without losing the permanent original link.
 
 Accepted browser readback for `0.11.1` met items 1–6: `1330/2` and `2327/1`
 each had one wrapper/pane/open state with a telemetry-free real title and a
@@ -371,6 +403,8 @@ local gate. No archive hydrate, external source download, or data restore is req
 Contain only Zhihu summary rendering by setting `enable_zhihu_summary=false`, or
 contain every reader-backed provider by setting `enable_expand_reader=false`, then
 verify source cards/links remain; neither switch rolls back other provider code. A full
+BDFZ post containment sets `enable_bdfz_posts_inline=false` and verifies the
+canonical source link remains. A full
 rollback from `0.11.1` uses
 `7dd04ed3c2586bfe70ab3d6ff42efc8ed546f607` (`0.11.0`) as the known-good tree
 reference, restores that runtime behavior through a reviewed Git revert commit,

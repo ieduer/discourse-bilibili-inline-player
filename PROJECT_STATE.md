@@ -1,6 +1,33 @@
 # Project state
 
-Last reviewed: 2026-08-26 (America/Los_Angeles)
+Last reviewed: 2026-08-27 (America/Los_Angeles)
+
+## 0.14.0 BDFZ post full-page candidate: release pending
+
+- The candidate recognizes only one exact article slug at
+  `bdfz.net/posts/<article>/`. It normalizes HTTP and `www` forms to the stable
+  HTTPS canonical URL while rejecting the posts index, pagination, nested
+  paths, credentials, custom ports, non-web schemes, and lookalike hosts.
+- Every supported BDFZ article is lazy-loaded in a fixed-height, script-free
+  sandboxed iframe and defaults to expanded. The footer permanently retains
+  the canonical original link and exposes one `收起正文` / `展开正文` button with
+  synchronized `aria-expanded` and `aria-controls` state. The admin kill switch
+  is `enable_bdfz_posts_inline=false`; the height is bounded to 480–1600 pixels.
+- Local validation currently passes `60/60` parser, cooked-link, provider,
+  sandbox, default-open, collapse-state, and legacy regression tests, plus
+  initializer/test syntax, JSON, YAML, Foliate hash, and diff checks. Live
+  `https://bdfz.net/posts/180-qishike/` returns the full server-rendered article
+  with no `X-Frame-Options` or `frame-ancestors` restriction. Production theme
+  `119` remains on accepted `0.13.0` until GitHub CI, guarded refresh, exact
+  database readback, and a real cooked-post browser canary pass.
+- Source rollback anchor is the clean pre-change commit
+  `06cfb26b7ab8d53ae717b68891076c1f8e758000`. No Worker, route, DNS, forum
+  core, forum post, BDFZ source, or data mutation is part of the candidate.
+- Capability fit: `no-new-capability`. This reuses the existing remote-theme
+  iframe runtime and public `bdfz.net` pages; it adds no Cloudflare product,
+  binding, route, storage, identity, shared-service contract, or cost model.
+- Archive disposition: `not_applicable`; Git contains every source and test
+  input, and the task creates no non-reproducible release artifact or backup.
 
 ## 0.13.0 WeChat full-text release: accepted in production
 
