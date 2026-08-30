@@ -32,6 +32,7 @@ globalThis.__themeParserTestApi = {
   getFallbackTitle,
   getFooterMeta,
   getBdfzPostAutoScale,
+  getDouyinPlayerScale,
   getInitialButtonLabel,
   getReaderCacheKey,
   getWeChatArchiveCacheKey,
@@ -110,6 +111,7 @@ const {
   getFallbackTitle,
   getFooterMeta,
   getBdfzPostAutoScale,
+  getDouyinPlayerScale,
   getInitialButtonLabel,
   getReaderCacheKey,
   getWeChatArchiveCacheKey,
@@ -741,9 +743,16 @@ test("parses exact Douyin video forms and uses the official iframe player", () =
   assert.equal(getInitialButtonLabel(shared), "点击播放");
   assert.equal(getOpenLabel(shared), "在抖音打开");
   assert.equal(getFooterMeta(shared), "抖音开放平台播放器 · 保留原视频链接");
-  assert.equal(getPreviewAspectRatio(shared), "16 / 9");
+  assert.equal(getPreviewAspectRatio(shared), "324 / 672");
   assert.equal(isKnownInlineKind(shared), true);
   assert.equal(shouldAutoExpandEmbed(shared), true);
+
+  assert.equal(getDouyinPlayerScale(324), 1);
+  assert.equal(getDouyinPlayerScale(162), 0.5);
+  assert.equal(getDouyinPlayerScale(400), 1);
+  assert.equal(getDouyinPlayerScale(0), 1);
+  assert.equal(getDouyinPlayerScale(Number.NaN), 1);
+  assert.match(initializerSource, /attachDouyinPlayerScale\(wrapper, frameWrap\)/u);
 
   const wrapper = {};
   const state = { parsed: shared, environmentRisk: { level: "none" } };

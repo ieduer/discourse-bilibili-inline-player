@@ -16,6 +16,8 @@ const DOUYIN_SHARE_HOSTS = new Set(["iesdouyin.com", "www.iesdouyin.com"]);
 const DOUYIN_PLAYER_HOSTS = new Set(["open.douyin.com"]);
 const BDFZ_POST_AUTO_SCALE_MIN = 0.7;
 const BDFZ_POST_AUTO_SCALE_REFERENCE_WIDTH = 800;
+const DOUYIN_PLAYER_WIDTH = 324;
+const DOUYIN_PLAYER_HEIGHT = 672;
 const XIAOHONGSHU_HOSTS = new Set(["xiaohongshu.com", "www.xiaohongshu.com"]);
 const REDNOTE_HOSTS = new Set(["rednote.com", "www.rednote.com"]);
 const XIAOHONGSHU_SHORT_HOSTS = new Set([
@@ -378,6 +380,7 @@ const URL_LIKE_RE =
 const XIAOHONGSHU_URL_LIKE_RE =
   /(?:^|[\s(（\[【{《「『])((?:https?:\/\/)?(?:www\.)?(?:xiaohongshu\.com|rednote\.com|xhslink\.(?:com|cn))\/[^\s"'<>，。；！？、（）【】《》「」『』]+)/gi;
 const DEFAULT_ASPECT_RATIO = "16 / 9";
+const DOUYIN_PLAYER_ASPECT_RATIO = `${DOUYIN_PLAYER_WIDTH} / ${DOUYIN_PLAYER_HEIGHT}`;
 const DEFAULT_EBOOK_READER_HEIGHT = 680;
 const DEFAULT_MAX_EBOOK_SIZE_MB = 50;
 const BYTES_PER_MEBIBYTE = 1024 * 1024;
@@ -3231,8 +3234,9 @@ function getPreviewAspectRatio(parsed) {
     case "video":
     case "bangumi":
     case "live":
-    case "douyin":
       return "16 / 9";
+    case "douyin":
+      return DOUYIN_PLAYER_ASPECT_RATIO;
     case "netease":
       return isCompactNetEase(parsed) ? "auto" : "4 / 3";
     case "qqmusic":
@@ -4766,6 +4770,38 @@ function attachBdfzPostAutoScale(wrapper, frameWrap) {
   }
 }
 
+function getDouyinPlayerScale(containerWidth) {
+  const width = Number(containerWidth);
+
+  if (!Number.isFinite(width) || width <= 0) {
+    return 1;
+  }
+
+  return Math.min(1, width / DOUYIN_PLAYER_WIDTH);
+}
+
+function attachDouyinPlayerScale(wrapper, frameWrap) {
+  const updateScale = () => {
+    const width = frameWrap.getBoundingClientRect?.().width || frameWrap.clientWidth || 0;
+
+    if (width <= 0) {
+      return;
+    }
+
+    const scale = getDouyinPlayerScale(width);
+    wrapper.dataset.bilibiliScaleMode = scale < 1 ? "fit" : "original";
+    wrapper.dataset.bilibiliScale = scale.toFixed(3);
+    frameWrap.style.setProperty("--bili-douyin-scale", String(scale));
+  };
+
+  updateScale();
+
+  if (typeof ResizeObserver === "function") {
+    const resizeObserver = new ResizeObserver(updateScale);
+    resizeObserver.observe(frameWrap);
+  }
+}
+
 function attachBdfzPostToggle(wrapper, frameWrap, footer) {
   const actions = footer.querySelector(".bilibili-inline-player__footer-actions");
 
@@ -4814,7 +4850,12 @@ function renderLoadedPlayer(wrapper, iframeUrl, { allowAutoplay = false } = {}) 
     frameWrap.classList.add("bilibili-inline-player__frame-wrap--fixed");
     frameWrap.style.setProperty("--bili-frame-height", `${frameHeight}px`);
   } else {
-    frameWrap.style.setProperty("--bili-aspect-ratio", DEFAULT_ASPECT_RATIO);
+    frameWrap.style.setProperty(
+      "--bili-aspect-ratio",
+      state.parsed.provider === "douyin"
+        ? DOUYIN_PLAYER_ASPECT_RATIO
+        : DEFAULT_ASPECT_RATIO
+    );
   }
 
   iframe.src = iframeUrl;
@@ -4848,6 +4889,8 @@ function renderLoadedPlayer(wrapper, iframeUrl, { allowAutoplay = false } = {}) 
 
   if (state.parsed.provider === "bdfz-post") {
     attachBdfzPostAutoScale(wrapper, frameWrap);
+  } else if (state.parsed.provider === "douyin") {
+    attachDouyinPlayerScale(wrapper, frameWrap);
   }
 
   updateRetryButtonLabel(wrapper);

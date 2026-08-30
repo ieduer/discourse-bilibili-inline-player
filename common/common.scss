@@ -127,11 +127,31 @@
 
 /* ── Douyin provider overrides ── */
 
+.bilibili-inline-player.bilibili-inline-player--douyin {
+  inline-size: min(100%, 326px);
+  margin-inline: auto;
+}
+
 .bilibili-inline-player--douyin .bilibili-inline-player__media {
   background:
     radial-gradient(circle at 20% 22%, rgb(37 244 238 / 0.2), transparent 35%),
     radial-gradient(circle at 80% 78%, rgb(254 44 85 / 0.24), transparent 38%),
     linear-gradient(135deg, #09090b 0%, #18181d 52%, #050506 100%);
+}
+
+.bilibili-inline-player--douyin .bilibili-inline-player__frame-wrap {
+  aspect-ratio: auto;
+  height: calc(672px * var(--bili-douyin-scale, 1));
+  overflow: hidden;
+}
+
+.bilibili-inline-player--douyin .bilibili-inline-player__frame {
+  display: block;
+  width: 324px;
+  max-width: none;
+  height: 672px;
+  transform: scale(var(--bili-douyin-scale, 1));
+  transform-origin: top left;
 }
 
 .bilibili-inline-player--douyin .bilibili-inline-player__play {
