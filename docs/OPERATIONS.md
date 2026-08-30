@@ -22,15 +22,15 @@ steps. Live Discourse and GitHub readback override this document when they disag
 - Release gate: clean exact source, tests, GitHub push, exact-SHA hosted-CI readback, guarded theme refresh, database readback, public health, and browser acceptance. A zero-step GitHub billing rejection may use only the bounded local-CI exception below; a real test failure may not.
 - Installed runtime at the 2026-08-26 preflight: `0.12.0`, exact SHA
   `d8c43282ba19e7a0f4191e457f3b8573f00f60d9`, with no import or field error.
-- Current accepted runtime is `0.14.2` implementation SHA
-  `a605fa0f317c7675d8db47c056f3bc59352edd00`; immediate theme rollback is
-  `b834f530fce5e01863f0c07fc97572ed847a2c61`.
+- Current accepted runtime is `0.15.1` implementation SHA
+  `fea74ee121b4cf0f36a827782e4f21defbb6ea24`; immediate theme rollback is
+  `6d9a3f902e82fe28cf0e50f7ff1cb0599e50a45c` (`0.15.0`).
   Immediate containment is `enable_wechat_inline=false`; the existing reader
   kill switch remains `enable_expand_reader=false`.
 
-## 0.15.0 Douyin official-player transaction: source accepted, production not refreshed
+## 0.15.1 Douyin official-player portrait layout: accepted in production
 
-The candidate recognizes only exact numeric public-video identities from the
+The component recognizes only exact numeric public-video identities from the
 ordinary Douyin video path, the user-page `modal_id` form, the historical
 `iesdouyin.com/share/video/<ID>` form, and the official player URL. It builds the
 documented public player URL locally and always retains the canonical direct
@@ -53,17 +53,32 @@ Authority reviewed on 2026-08-29:
   author, counters, speed, share, and source controls. A separate security-SDK
   WebSocket diagnostic did not prevent playback.
 
-Implementation commit `321883a4d4f55797fe0e841bded7c0593f0cfb4c`
-passes Node `24.18.0` validation with `65/65` tests plus syntax, JSON, YAML,
-vendored Foliate hash, and diff checks. GitHub `main` accepted it with the first
-synchronized documentation commit `9ef5bb09b6ce325c69a7bad4a0de0bfebbe84cf7`;
-hosted Actions run `33293986798` used one real runner job and every step passed.
-Theme `119` was deliberately not refreshed. The remaining release sequence is
-to refresh theme `119`, read back its SHA/version/errors, then test the exact
-`modal_id` URL and direct `/video/<ID>` form in a real cooked post. A strict
-forum CSP must allow `https://open.douyin.com` in `frame-src`. Immediate rollback
-before release is source `e1a9e5c`; after release, revert the Douyin commit and
-refresh theme `119`.
+The official player internally uses a fixed `324 × 672` portrait surface.
+Implementation `fea74ee121b4cf0f36a827782e4f21defbb6ea24` replaces the incorrect
+`16:9` loaded frame with that native canvas, centers a 326-pixel bordered card,
+removes the iframe baseline gap, and proportionally scales the fixed iframe only
+when the cooked post is narrower than 324 pixels. It passes `65/65` tests plus
+syntax, JSON, YAML, vendored Foliate hash, and diff checks. Hosted Actions runs
+`33294642222` and documentation run `33294899042` each used one real runner job
+and every step passed.
+
+Theme `119` readback showed version `0.15.1`, exact local/remote SHA parity,
+`commits_behind=0`, 24 settings, and no import or field errors. The first guarded
+Rails-runner refresh updated the database source and JavaScript but the active
+web process kept the old compiled stylesheet asset `d3958660…`. Database SCSS
+already contained the new width and scale rules. Running the standard Discourse
+admin `Check for updates` / `Update to latest` path against the already-tested
+newer commit rebuilt the active CSS asset as `4269ec9e…`; no app restart, server
+configuration edit, or content mutation was used.
+
+Logged-in Brave acceptance on topic `13472/3` proved one centered 326-pixel card
+and exact `324 × 672` iframe at desktop and 390-pixel widths. At 320 pixels the
+298.5625-pixel cooked width produced scale `0.915316`, kept the iframe's internal
+viewport at `324 × 672`, and introduced no document overflow. A real play click
+advanced to `1.926258 / 87.005011` seconds with `paused=false`. The canonical
+source link remained visible. A strict forum CSP must allow
+`https://open.douyin.com` in `frame-src`. Immediate rollback is source
+`6d9a3f902e82fe28cf0e50f7ff1cb0599e50a45c` and a guarded theme refresh.
 
 `CAPABILITY_FIT: no-new-capability` — no Cloudflare service, binding, route,
 storage, data, identity, hub, monitoring, cost, or Companion contract changes.
