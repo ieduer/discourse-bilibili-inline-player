@@ -28,7 +28,7 @@ steps. Live Discourse and GitHub readback override this document when they disag
   Immediate containment is `enable_wechat_inline=false`; the existing reader
   kill switch remains `enable_expand_reader=false`.
 
-## 0.15.0 Douyin official-player transaction: source candidate only
+## 0.15.0 Douyin official-player transaction: source accepted, production not refreshed
 
 The candidate recognizes only exact numeric public-video identities from the
 ordinary Douyin video path, the user-page `modal_id` form, the historical
@@ -55,9 +55,11 @@ Authority reviewed on 2026-08-29:
 
 Implementation commit `321883a4d4f55797fe0e841bded7c0593f0cfb4c`
 passes Node `24.18.0` validation with `65/65` tests plus syntax, JSON, YAML,
-vendored Foliate hash, and diff checks. The release sequence remains unchanged:
-push exact tested source, verify hosted CI, refresh theme `119`, read back its
-SHA/version/errors, then test the exact
+vendored Foliate hash, and diff checks. GitHub `main` accepted it with the first
+synchronized documentation commit `9ef5bb09b6ce325c69a7bad4a0de0bfebbe84cf7`;
+hosted Actions run `33293986798` used one real runner job and every step passed.
+Theme `119` was deliberately not refreshed. The remaining release sequence is
+to refresh theme `119`, read back its SHA/version/errors, then test the exact
 `modal_id` URL and direct `/video/<ID>` form in a real cooked post. A strict
 forum CSP must allow `https://open.douyin.com` in `frame-src`. Immediate rollback
 before release is source `e1a9e5c`; after release, revert the Douyin commit and

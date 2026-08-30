@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-08-29 (America/Los_Angeles)
 
-## 0.15.0 Douyin official-player support: locally accepted, not released
+## 0.15.0 Douyin official-player support: source accepted, production not refreshed
 
 - Exact public-video identities are accepted from `douyin.com/video/<ID>`,
   `douyin.com/user/<SEC_UID>?modal_id=<ID>`, historical
@@ -25,9 +25,14 @@ Last reviewed: 2026-08-29 (America/Los_Angeles)
 - `CAPABILITY_FIT: no-new-capability`: this is a leaf theme-component change
   using Douyin's existing public official iframe player. No Cloudflare runtime,
   binding, route, data, identity, monitoring, hub, or Companion contract changes.
-- Release remains pending: no GitHub push, theme `119` refresh, Discourse
-  setting change, forum content mutation, or production browser acceptance has
-  occurred. Pre-change source and production rollback anchor is `e1a9e5c`.
+- GitHub `main` accepted implementation `321883a4d4f55797fe0e841bded7c0593f0cfb4c`
+  plus synchronized documentation at `9ef5bb09b6ce325c69a7bad4a0de0bfebbe84cf7`.
+  Hosted Actions run `33293986798` used one real runner job and every checkout,
+  JSON, YAML, syntax, parser-test, ebook-boundary, and completion step succeeded.
+- Production release remains pending: theme `119` was not refreshed; no
+  Discourse setting, forum content, server, CSP, or Cloudflare resource changed,
+  and no production cooked-post acceptance is claimed. Current production and
+  immediate theme rollback anchor remains `e1a9e5c` / `0.14.2`.
 
 ## 0.14.2 WeChat pending-conversion resilience: accepted in production
 
