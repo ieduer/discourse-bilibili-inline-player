@@ -32,6 +32,8 @@ Every safe inline player and reader is expanded by default. Automatic media expa
 
 Douyin video links use Douyin Open Platform's official iframe player directly. Exact `/video/<ID>`, `/user/<SEC_UID>?modal_id=<ID>`, historical `iesdouyin.com/share/video/<ID>`, and official player URLs are recognized without scraping, signatures, cookies, media downloads, or a resolver service. Opaque `v.douyin.com` short links and image-note URLs remain untouched.
 
+The official Douyin player uses a fixed `324 × 672` portrait canvas. The component centers that native canvas in the cooked post and preserves its full height instead of cropping it into a `16:9` frame; on viewports narrower than 324 CSS pixels, the iframe scales down proportionally without adding horizontal page overflow.
+
 Marxists Internet Archive (`marxists.org`):
 
 - documents under `/archive/`, `/reference/`, `/history/`, `/subject/`, `/glossary/`, `/ebooks/`, `/audiobooks/`, and every language section including `/chinese/`
