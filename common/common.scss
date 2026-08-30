@@ -125,6 +125,29 @@
   background: #fff;
 }
 
+/* ── Douyin provider overrides ── */
+
+.bilibili-inline-player--douyin .bilibili-inline-player__media {
+  background:
+    radial-gradient(circle at 20% 22%, rgb(37 244 238 / 0.2), transparent 35%),
+    radial-gradient(circle at 80% 78%, rgb(254 44 85 / 0.24), transparent 38%),
+    linear-gradient(135deg, #09090b 0%, #18181d 52%, #050506 100%);
+}
+
+.bilibili-inline-player--douyin .bilibili-inline-player__play {
+  background: rgb(255 255 255 / 0.96);
+  color: #111;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.36);
+}
+
+.bilibili-inline-player--douyin .bilibili-inline-player__play:hover,
+.bilibili-inline-player--douyin .bilibili-inline-player__play:focus-visible {
+  background: #fff;
+  box-shadow:
+    -5px 0 18px rgb(37 244 238 / 0.22),
+    5px 0 18px rgb(254 44 85 / 0.24);
+}
+
 /* ── bdfz.net posts ── */
 
 .bilibili-inline-player--bdfz-post .bilibili-inline-player__media {

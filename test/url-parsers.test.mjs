@@ -13,6 +13,8 @@ const executableSource = initializerSource
   .replace("export default apiInitializer((api) => {", "const themeInitializer = apiInitializer((api) => {")
   .concat(`
 globalThis.__themeParserTestApi = {
+  buildIframeUrl,
+  buildNoAutoplayIframeUrl,
   buildXiaohongshuPreviewText,
   cleanProviderTitle,
   collectEbookAttachmentCandidates,
@@ -52,6 +54,7 @@ globalThis.__themeParserTestApi = {
   extractXiaohongshuShareContext,
   parseBilibiliUrl,
   parseEbookAttachmentUrl,
+  primeEmbedState,
   placeCandidateReplacement,
   hardenReaderAnchor,
   hardenReaderImage,
@@ -69,6 +72,7 @@ globalThis.__themeParserTestApi = {
   storeReaderRequest,
   storeWeChatArchive,
   updateBdfzPostExpandedState,
+  wrapperState,
 };
 `);
 const context = {
@@ -87,6 +91,8 @@ vm.runInNewContext(executableSource, context, {
 });
 
 const {
+  buildIframeUrl,
+  buildNoAutoplayIframeUrl,
   buildXiaohongshuPreviewText,
   cleanProviderTitle,
   collectEbookAttachmentCandidates,
@@ -126,6 +132,7 @@ const {
   extractXiaohongshuShareContext,
   parseBilibiliUrl,
   parseEbookAttachmentUrl,
+  primeEmbedState,
   placeCandidateReplacement,
   hardenReaderAnchor,
   hardenReaderImage,
@@ -143,6 +150,7 @@ const {
   storeReaderRequest,
   storeWeChatArchive,
   updateBdfzPostExpandedState,
+  wrapperState,
 } = context.__themeParserTestApi;
 
 test("reader titles discard Discourse click telemetry and prefer source metadata", () => {
@@ -681,6 +689,110 @@ test("keeps representative existing providers working", () => {
   );
 });
 
+test("parses exact Douyin video forms and uses the official iframe player", () => {
+  const shared = parseBilibiliUrl(
+    "https://www.douyin.com/user/MS4wLjABAAAAJvJKCUI1dlwh2e_M-6YX06NDDhLbIEpshPyNyW-K-_jYj4_dr2dkc7n1EElIkuhj?modal_id=7026333893087202567"
+  );
+
+  assert.deepEqual(JSON.parse(JSON.stringify(shared)), {
+    provider: "douyin",
+    kind: "douyin",
+    contentType: "video",
+    videoId: "7026333893087202567",
+    page: 1,
+    rawId: "7026333893087202567",
+    canonicalUrl: "https://www.douyin.com/video/7026333893087202567",
+  });
+  assert.deepEqual(
+    JSON.parse(
+      JSON.stringify(parseBilibiliUrl("https://www.douyin.com/video/7026333893087202567"))
+    ),
+    JSON.parse(JSON.stringify(shared))
+  );
+  assert.deepEqual(
+    JSON.parse(
+      JSON.stringify(
+        parseBilibiliUrl("https://www.iesdouyin.com/share/video/7026333893087202567/")
+      )
+    ),
+    JSON.parse(JSON.stringify(shared))
+  );
+  assert.deepEqual(
+    JSON.parse(
+      JSON.stringify(
+        parseBilibiliUrl(
+          "https://open.douyin.com/player/video?vid=7026333893087202567&autoplay=0"
+        )
+      )
+    ),
+    JSON.parse(JSON.stringify(shared))
+  );
+
+  assert.equal(
+    buildIframeUrl(shared),
+    "https://open.douyin.com/player/video?vid=7026333893087202567&autoplay=1"
+  );
+  assert.equal(
+    buildNoAutoplayIframeUrl(shared),
+    "https://open.douyin.com/player/video?vid=7026333893087202567&autoplay=0"
+  );
+  assert.equal(getMetaLine(shared), "抖音视频");
+  assert.equal(getFallbackTitle(shared), "抖音视频 7026333893087202567");
+  assert.equal(getInitialButtonLabel(shared), "点击播放");
+  assert.equal(getOpenLabel(shared), "在抖音打开");
+  assert.equal(getFooterMeta(shared), "抖音开放平台播放器 · 保留原视频链接");
+  assert.equal(getPreviewAspectRatio(shared), "16 / 9");
+  assert.equal(isKnownInlineKind(shared), true);
+  assert.equal(shouldAutoExpandEmbed(shared), true);
+
+  const wrapper = {};
+  const state = { parsed: shared, environmentRisk: { level: "none" } };
+  wrapperState.set(wrapper, state);
+  primeEmbedState(wrapper);
+  assert.equal(
+    state.iframeUrl,
+    "https://open.douyin.com/player/video?vid=7026333893087202567&autoplay=1"
+  );
+  assert.equal(
+    state.noAutoplayIframeUrl,
+    "https://open.douyin.com/player/video?vid=7026333893087202567&autoplay=0"
+  );
+  assert.equal(state.externalOnly, false);
+
+  context.settings.show_open_link = false;
+  assert.equal(shouldShowDirectSourceLink(shared), true);
+  delete context.settings.show_open_link;
+
+  context.settings.autoplay_on_click = false;
+  assert.equal(
+    buildIframeUrl(shared),
+    "https://open.douyin.com/player/video?vid=7026333893087202567&autoplay=0"
+  );
+  delete context.settings.autoplay_on_click;
+});
+
+test("rejects unsafe or ambiguous Douyin URLs and extracts the supported modal form", () => {
+  const supported =
+    "https://www.douyin.com/user/MS4wLjABAAAAJvJKCUI1dlwh2e_M-6YX06NDDhLbIEpshPyNyW-K-_jYj4_dr2dkc7n1EElIkuhj?modal_id=7026333893087202567";
+
+  assert.deepEqual(Array.from(extractUrlsFromText(`抖音：${supported}`)), [supported]);
+
+  for (const source of [
+    "https://www.douyin.com/user/MS4wLjABAAAA",
+    "https://www.douyin.com/user/MS4wLjABAAAA?modal_id=not-numeric",
+    "https://www.douyin.com/user/MS4wLjABAAAA?modal_id=7026333893087202567&modal_id=7026333893087202568",
+    "https://www.douyin.com/note/7026333893087202567",
+    "https://v.douyin.com/Fixture123/",
+    "https://www.douyin.com.evil.example/video/7026333893087202567",
+    "https://user:pass@www.douyin.com/video/7026333893087202567",
+    "https://www.douyin.com:444/video/7026333893087202567",
+    "ftp://www.douyin.com/video/7026333893087202567",
+    "https://open.douyin.com/player/video?vid=7026333893087202567&vid=7026333893087202568",
+  ]) {
+    assert.equal(parseBilibiliUrl(source), null, source);
+  }
+});
+
 test("parses only exact WeChat public-article URLs and preserves their source identity", () => {
   const parsed = parseBilibiliUrl(
     "http://mp.weixin.qq.com/s?__biz=MzDemo%3D%3D&mid=123&idx=1&sn=abc#wechat_redirect"
@@ -1090,6 +1202,7 @@ test("rejects topic 6813's three non-URL navigation anchors", () => {
 test("recognizes one visible supported URL at any position in a paragraph", () => {
   for (const url of [
     "https://www.bilibili.com/video/BV1xx411c7mD",
+    "https://www.douyin.com/user/MS4wLjABAAAAJvJKCUI1dlwh2e_M-6YX06NDDhLbIEpshPyNyW-K-_jYj4_dr2dkc7n1EElIkuhj?modal_id=7026333893087202567",
     "https://music.163.com/song?id=123456",
     "https://y.qq.com/n/ryqq/songDetail/004Z8Ihr0JIu5s",
     "https://xhslink.cn/o/Fixture123",

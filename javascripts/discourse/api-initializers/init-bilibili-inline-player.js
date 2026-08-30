@@ -11,6 +11,9 @@ const QQMUSIC_HOSTS = new Set(["y.qq.com", "i.y.qq.com"]);
 const ZHIHU_HOSTS = new Set(["zhihu.com", "www.zhihu.com", "zhuanlan.zhihu.com"]);
 const WECHAT_HOSTS = new Set(["mp.weixin.qq.com"]);
 const BDFZ_POST_HOSTS = new Set(["bdfz.net", "www.bdfz.net"]);
+const DOUYIN_HOSTS = new Set(["douyin.com", "www.douyin.com"]);
+const DOUYIN_SHARE_HOSTS = new Set(["iesdouyin.com", "www.iesdouyin.com"]);
+const DOUYIN_PLAYER_HOSTS = new Set(["open.douyin.com"]);
 const BDFZ_POST_AUTO_SCALE_MIN = 0.7;
 const BDFZ_POST_AUTO_SCALE_REFERENCE_WIDTH = 800;
 const XIAOHONGSHU_HOSTS = new Set(["xiaohongshu.com", "www.xiaohongshu.com"]);
@@ -352,6 +355,10 @@ const ZHIHU_DIRECT_ANSWER_PATH_RE = /^\/answer\/(\d+)\/?$/;
 const ZHIHU_ARTICLE_PATH_RE = /^\/p\/(\d+)\/?$/;
 const WECHAT_SHORT_ARTICLE_PATH_RE = /^\/s\/([A-Za-z0-9_-]{6,128})\/?$/;
 const BDFZ_POST_PATH_RE = /^\/posts\/([^/]+)\/?$/;
+const DOUYIN_VIDEO_PATH_RE = /^\/video\/(\d{15,22})\/?$/;
+const DOUYIN_USER_PATH_RE = /^\/user\/([A-Za-z0-9._-]{8,256})\/?$/;
+const DOUYIN_SHARE_VIDEO_PATH_RE = /^\/share\/video\/(\d{15,22})\/?$/;
+const DOUYIN_PLAYER_PATH_RE = /^\/player\/video\/?$/;
 const XIAOHONGSHU_NOTE_PATH_RE = /^\/(?:explore|discovery\/item)\/([0-9a-f]{24})\/?$/i;
 const REDNOTE_NOTE_PATH_RE = /^\/explore\/([0-9a-f]{24})\/?$/i;
 const XIAOHONGSHU_SHORT_PATH_RE = /^\/(?:a|m|o)\/([A-Za-z0-9_-]{4,})\/?$/i;
@@ -367,7 +374,7 @@ const XIAOHONGSHU_UNUSABLE_TITLE_RE =
 const TRAILING_URL_PUNCTUATION_RE = /[)\],.;!?，。；！？、）】》」』]+$/u;
 const IFRAME_SRC_RE = /<iframe\b[^>]*\bsrc=(["'])([^"']+)\1/gi;
 const URL_LIKE_RE =
-  /((?:https?:)?\/\/(?:player\.bilibili\.com\/player\.html|www\.bilibili\.com\/blackboard\/(?:live\/live-mobile-playerV3|live\/live-activity-player|webplayer\/mbplayer)\.html|(?:www\.|m\.)?bilibili\.com\/(?:s\/)?video\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/bangumi\/play\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/audio\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/read\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/opus\/[^\s"'<>]+|t\.bilibili\.com\/[^\s"'<>]+|live\.bilibili\.com\/[^\s"'<>]+|(?:www\.)?(?:b23\.tv|bili2233\.cn)\/[^\s"'<>]+|(?:y\.)?music\.163\.com\/[^\s"'<>]+|(?:i\.)?y\.qq\.com\/[^\s"'<>]+|(?:www\.)?zhihu\.com\/[^\s"'<>]+|zhuanlan\.zhihu\.com\/[^\s"'<>]+|mp\.weixin\.qq\.com\/[^\s"'<>]+|(?:www\.)?bdfz\.net\/posts\/[^\s"'<>]+|(?:www\.)?marxists\.org\/[^\s"'<>]+))/gi;
+  /((?:https?:)?\/\/(?:player\.bilibili\.com\/player\.html|www\.bilibili\.com\/blackboard\/(?:live\/live-mobile-playerV3|live\/live-activity-player|webplayer\/mbplayer)\.html|(?:www\.|m\.)?bilibili\.com\/(?:s\/)?video\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/bangumi\/play\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/audio\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/read\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/opus\/[^\s"'<>]+|t\.bilibili\.com\/[^\s"'<>]+|live\.bilibili\.com\/[^\s"'<>]+|(?:www\.)?(?:b23\.tv|bili2233\.cn)\/[^\s"'<>]+|(?:www\.)?douyin\.com\/(?:video|user)\/[^\s"'<>]+|(?:www\.)?iesdouyin\.com\/share\/video\/[^\s"'<>]+|open\.douyin\.com\/player\/video\?[^\s"'<>]+|(?:y\.)?music\.163\.com\/[^\s"'<>]+|(?:i\.)?y\.qq\.com\/[^\s"'<>]+|(?:www\.)?zhihu\.com\/[^\s"'<>]+|zhuanlan\.zhihu\.com\/[^\s"'<>]+|mp\.weixin\.qq\.com\/[^\s"'<>]+|(?:www\.)?bdfz\.net\/posts\/[^\s"'<>]+|(?:www\.)?marxists\.org\/[^\s"'<>]+))/gi;
 const XIAOHONGSHU_URL_LIKE_RE =
   /(?:^|[\s(（\[【{《「『])((?:https?:\/\/)?(?:www\.)?(?:xiaohongshu\.com|rednote\.com|xhslink\.(?:com|cn))\/[^\s"'<>，。；！？、（）【】《》「」『』]+)/gi;
 const DEFAULT_ASPECT_RATIO = "16 / 9";
@@ -658,6 +665,18 @@ function createParsedXiaohongshu(contentType, sourceUrl, extras = {}) {
     rawId: extras.noteId ? String(extras.noteId) : "share",
     canonicalUrl: sourceUrl.toString(),
     ...extras,
+  };
+}
+
+function createParsedDouyin(videoId) {
+  return {
+    provider: "douyin",
+    kind: "douyin",
+    contentType: "video",
+    videoId: String(videoId),
+    page: 1,
+    rawId: String(videoId),
+    canonicalUrl: `https://www.douyin.com/video/${videoId}`,
   };
 }
 
@@ -1198,6 +1217,68 @@ function isSafeXiaohongshuSourceUrl(url) {
   );
 }
 
+function isSafeDouyinSourceUrl(url) {
+  return (
+    ["http:", "https:"].includes(url.protocol) &&
+    !url.username &&
+    !url.password &&
+    (!url.port || url.port === "443")
+  );
+}
+
+function parseDouyinPageUrl(url) {
+  const hostname = url.hostname.toLowerCase();
+
+  if (
+    !DOUYIN_HOSTS.has(hostname) &&
+    !DOUYIN_SHARE_HOSTS.has(hostname) &&
+    !DOUYIN_PLAYER_HOSTS.has(hostname)
+  ) {
+    return null;
+  }
+
+  if (!isSafeDouyinSourceUrl(url)) {
+    return null;
+  }
+
+  if (DOUYIN_HOSTS.has(hostname)) {
+    const videoMatch = url.pathname.match(DOUYIN_VIDEO_PATH_RE);
+
+    if (videoMatch) {
+      return createParsedDouyin(videoMatch[1]);
+    }
+
+    const modalIds = url.searchParams.getAll("modal_id");
+
+    if (
+      url.pathname.match(DOUYIN_USER_PATH_RE) &&
+      modalIds.length === 1 &&
+      /^\d{15,22}$/.test(modalIds[0])
+    ) {
+      return createParsedDouyin(modalIds[0]);
+    }
+
+    return null;
+  }
+
+  if (DOUYIN_SHARE_HOSTS.has(hostname)) {
+    const shareMatch = url.pathname.match(DOUYIN_SHARE_VIDEO_PATH_RE);
+    return shareMatch ? createParsedDouyin(shareMatch[1]) : null;
+  }
+
+  const playerIds = url.searchParams.getAll("vid");
+
+  if (
+    url.pathname.match(DOUYIN_PLAYER_PATH_RE) &&
+    playerIds.length === 1 &&
+    /^\d{15,22}$/.test(playerIds[0])
+  ) {
+    return createParsedDouyin(playerIds[0]);
+  }
+
+  return null;
+}
+
 function parseXiaohongshuPageUrl(url) {
   const hostname = url.hostname.toLowerCase();
 
@@ -1659,6 +1740,7 @@ function parseBilibiliUrl(href) {
     parseZhihuPageUrl(url) ||
     parseWeChatPageUrl(url) ||
     parseBdfzPostUrl(url) ||
+    parseDouyinPageUrl(url) ||
     parseXiaohongshuPageUrl(url) ||
     parseXiaohongshuShortUrl(url) ||
     parseMarxistsUrl(url)
@@ -1666,6 +1748,10 @@ function parseBilibiliUrl(href) {
 }
 
 function buildIframeUrl(parsed) {
+  if (parsed.kind === "douyin") {
+    return buildDouyinIframeUrl(parsed, getBooleanSetting("autoplay_on_click", true));
+  }
+
   if (parsed.kind === "qqmusic") {
     return buildQQMusicIframeUrl(parsed, getBooleanSetting("autoplay_on_click", true));
   }
@@ -1723,6 +1809,10 @@ function buildIframeUrl(parsed) {
 }
 
 function buildNoAutoplayIframeUrl(parsed) {
+  if (parsed.kind === "douyin") {
+    return buildDouyinIframeUrl(parsed, false);
+  }
+
   if (parsed.kind === "qqmusic") {
     return buildQQMusicIframeUrl(parsed, false);
   }
@@ -1853,6 +1943,15 @@ function buildNetEaseIframeUrl(parsed, autoplay) {
   return `${basePath}?${params.toString()}`;
 }
 
+function buildDouyinIframeUrl(parsed, autoplay) {
+  const params = new URLSearchParams({
+    vid: String(parsed.videoId),
+    autoplay: autoplay ? "1" : "0",
+  });
+
+  return `https://open.douyin.com/player/video?${params.toString()}`;
+}
+
 function parseFirstSupportedUrl(...hrefs) {
   for (const href of hrefs) {
     if (!href) {
@@ -1917,6 +2016,8 @@ function getMetaLine(parsed) {
       return "微信公号全文";
     case "bdfz-post":
       return "BDFZ 博文全文";
+    case "douyin":
+      return "抖音视频";
     case "xiaohongshu":
       return getXiaohongshuMetaLine(parsed);
     case "marxists":
@@ -2027,6 +2128,7 @@ function getPreviewStatText(parsed, viewCount = null) {
     case "zhihu":
     case "wechat":
     case "bdfz-post":
+    case "douyin":
     case "xiaohongshu":
     case "marxists":
       return getMetaLine(parsed);
@@ -2116,6 +2218,8 @@ function getFallbackTitle(parsed) {
       return "微信公号文章";
     case "bdfz-post":
       return "BDFZ 博文";
+    case "douyin":
+      return `抖音视频 ${parsed.videoId}`;
     case "xiaohongshu":
       return getXiaohongshuMetaLine(parsed);
     case "marxists":
@@ -2196,6 +2300,10 @@ function isKnownInlineKind(parsed) {
     return getBooleanSetting("enable_bdfz_posts_inline", true);
   }
 
+  if (parsed.kind === "douyin") {
+    return true;
+  }
+
   if (parsed.kind === "marxists") {
     return isMarxistsInlineMedia(parsed);
   }
@@ -2240,6 +2348,7 @@ function shouldShowDirectSourceLink(parsed) {
     parsed?.provider === "xiaohongshu" ||
     parsed?.provider === "wechat" ||
     parsed?.provider === "bdfz-post" ||
+    parsed?.provider === "douyin" ||
     parsed?.provider === "ebook" ||
     parsed?.provider === "marxists" ||
     getBooleanSetting("show_open_link", true)
@@ -2284,6 +2393,8 @@ function getFooterMeta(parsed) {
       return getBooleanSetting("enable_bdfz_posts_inline", true)
         ? "bdfz.net 原文 · 默认展开，可随时收起"
         : "bdfz.net 原文链接";
+    case "douyin":
+      return "抖音开放平台播放器 · 保留原视频链接";
     case "xiaohongshu":
       if (parsed.brand === "rednote") {
         return "RedNote 原文卡片";
@@ -2347,6 +2458,10 @@ function getOpenLabel(parsed) {
     return "在 bdfz.net 打开原文";
   }
 
+  if (parsed.provider === "douyin") {
+    return "在抖音打开";
+  }
+
   if (parsed.provider === "marxists") {
     return parsed.contentType === "download" ? "下载原文件" : "在马克思主义文库打开";
   }
@@ -2377,6 +2492,10 @@ function getEmbedTitle(parsed) {
 
   if (parsed.provider === "bdfz-post") {
     return "BDFZ post";
+  }
+
+  if (parsed.provider === "douyin") {
+    return "Douyin player";
   }
 
   if (parsed.provider === "marxists") {
@@ -3112,6 +3231,7 @@ function getPreviewAspectRatio(parsed) {
     case "video":
     case "bangumi":
     case "live":
+    case "douyin":
       return "16 / 9";
     case "netease":
       return isCompactNetEase(parsed) ? "auto" : "4 / 3";
@@ -3386,6 +3506,15 @@ function primeEmbedState(wrapper) {
   }
 
   if (state.parsed.kind === "bangumi") {
+    state.iframeUrl = buildIframeUrl(state.parsed);
+    state.standardIframeUrl = state.iframeUrl;
+    state.noAutoplayIframeUrl = buildNoAutoplayIframeUrl(state.parsed);
+    state.externalOnly = false;
+    state.resolvePromise = Promise.resolve(state.parsed);
+    return;
+  }
+
+  if (state.parsed.kind === "douyin") {
     state.iframeUrl = buildIframeUrl(state.parsed);
     state.standardIframeUrl = state.iframeUrl;
     state.noAutoplayIframeUrl = buildNoAutoplayIframeUrl(state.parsed);
