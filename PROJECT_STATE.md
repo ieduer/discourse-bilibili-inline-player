@@ -1,6 +1,33 @@
 # Project state
 
-Last reviewed: 2026-08-28 (America/Los_Angeles)
+Last reviewed: 2026-08-29 (America/Los_Angeles)
+
+## 0.15.0 Douyin official-player support: locally accepted, not released
+
+- Exact public-video identities are accepted from `douyin.com/video/<ID>`,
+  `douyin.com/user/<SEC_UID>?modal_id=<ID>`, historical
+  `iesdouyin.com/share/video/<ID>`, and Douyin Open Platform player URLs. Every
+  accepted form normalizes to `https://www.douyin.com/video/<ID>` and embeds
+  only `https://open.douyin.com/player/video?vid=<ID>&autoplay=<0|1>`.
+- The implementation does not scrape Douyin, call a private API, resolve opaque
+  short links, download media, send credentials, add a signature, or introduce
+  a Worker/service dependency. Notes, lookalike hosts, credentials, custom
+  ports, duplicate IDs, invalid IDs, and `v.douyin.com` links remain untouched.
+- Implementation commit `321883a4d4f55797fe0e841bded7c0593f0cfb4c`
+  passes Node `24.18.0` validation with `65/65` parser, cooked-DOM, provider,
+  sandbox, retry, reader, and regression tests. The exact user-supplied video ID
+  `7026333893087202567` returned the documented official iframe URL and a real
+  Chromium click changed the official player from `Play` at `00:00` to `Pause`
+  at `00:01 / 01:27`; title, author, counts, speed, share, and source controls
+  were present. One non-blocking Douyin security-SDK WebSocket diagnostic was
+  emitted after playback began. JSON, YAML, syntax, vendored Foliate hash, and
+  diff checks also pass.
+- `CAPABILITY_FIT: no-new-capability`: this is a leaf theme-component change
+  using Douyin's existing public official iframe player. No Cloudflare runtime,
+  binding, route, data, identity, monitoring, hub, or Companion contract changes.
+- Release remains pending: no GitHub push, theme `119` refresh, Discourse
+  setting change, forum content mutation, or production browser acceptance has
+  occurred. Pre-change source and production rollback anchor is `e1a9e5c`.
 
 ## 0.14.2 WeChat pending-conversion resilience: accepted in production
 

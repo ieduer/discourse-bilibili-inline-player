@@ -1,6 +1,6 @@
 # Extended Preview & Embed Suite for Discourse
 
-A Discourse theme component that fills preview and embed gaps left by Discourse core and official Discourse components. It currently adds bilibili, NetEase Cloud Music, QQ Music, WeChat public articles, BDFZ posts, Zhihu, Xiaohongshu/RedNote, plus inline EPUB, MOBI, and AZW3 reading without requiring a container rebuild.
+A Discourse theme component that fills preview and embed gaps left by Discourse core and official Discourse components. It currently adds bilibili, Douyin, NetEase Cloud Music, QQ Music, WeChat public articles, BDFZ posts, Zhihu, Xiaohongshu/RedNote, plus inline EPUB, MOBI, and AZW3 reading without requiring a container rebuild.
 
 ## Ownership boundary
 
@@ -29,6 +29,8 @@ Inline ebook reading for Discourse attachments:
 The reader is visible by default, fetches the attachment only in the user's browser, never uploads book bytes to a conversion service, and provides table-of-contents navigation, previous/next paging, reading progress, keyboard arrows, responsive mobile layout, and a permanent original-file link. It uses a pinned MIT-licensed Foliate JS bundle stored as a remote-theme asset. Active book markup is stripped before rendition and the forum CSP remains the final script-execution boundary.
 
 Every safe inline player and reader is expanded by default. Automatic media expansion uses the provider's non-autoplay URL when available; the `auto_expand_embeds` administrator setting restores click-to-expand behavior when disabled. Exact `bdfz.net/posts/<article>/` links open the complete server-rendered article in a script-free frame by default, automatically fit the source page to the available forum width with a 70% readability floor, retain the original link, and provide an accessible `收起正文` / `展开正文` control. WeChat public-article links are converted through the operator-owned `wx.bdfz.net` archive and show its full text inline by default; pending conversions and brief request interruptions are retried within a four-minute cap, while the original WeChat link remains visible on every success or failure. Zhihu question, answer, and article URLs use a bounded summary card from the operator-owned reader service; unsupported or failed results remain source cards.
+
+Douyin video links use Douyin Open Platform's official iframe player directly. Exact `/video/<ID>`, `/user/<SEC_UID>?modal_id=<ID>`, historical `iesdouyin.com/share/video/<ID>`, and official player URLs are recognized without scraping, signatures, cookies, media downloads, or a resolver service. Opaque `v.douyin.com` short links and image-note URLs remain untouched.
 
 Marxists Internet Archive (`marxists.org`):
 
@@ -59,6 +61,10 @@ Inline playback:
 - `https://www.bilibili.com/bangumi/play/ss...`
 - `https://live.bilibili.com/<room_id>`
 - `https://live.bilibili.com/blanc/<room_id>`
+- `https://www.douyin.com/video/<video_id>`
+- `https://www.douyin.com/user/<sec_uid>?modal_id=<video_id>`
+- `https://www.iesdouyin.com/share/video/<video_id>/`
+- `https://open.douyin.com/player/video?vid=<video_id>&autoplay=0`
 - `https://music.163.com/song?id=...`
 - `https://music.163.com/playlist?id=...`
 - `https://music.163.com/album?id=...`
@@ -178,6 +184,7 @@ The component does not modify Discourse core and does not require a rebuild.
 ## Official endpoints used
 
 - Player: `https://player.bilibili.com/player.html`
+- Douyin official player: `https://open.douyin.com/player/video`
 - Video metadata: `https://api.bilibili.com/x/web-interface/view`
 - Bangumi metadata page source: `https://api.bilibili.com/pgc/view/web/season`
 - Live activity player: `https://www.bilibili.com/blackboard/live/live-activity-player.html`
@@ -237,6 +244,7 @@ No rebuild is required.
 
 - Default Discourse installs should not need `allowed_iframes` changes because this component injects the iframe after cooking, not from raw post HTML.
 - If a site runs a custom reverse-proxy CSP that restricts `frame-src`, allow `https://player.bilibili.com`.
+- Douyin playback uses only the official `https://open.douyin.com/player/video` iframe. A custom `frame-src` policy must allow `https://open.douyin.com`. The original `www.douyin.com/video/<ID>` link is always retained because private, removed, region-blocked, or platform-rejected videos cannot play inline.
 - If a site runs a strict custom script CSP that blocks dynamic third-party scripts, allow `https://api.bilibili.com` for the render-time bilibili metadata request.
 - If experimental live embeds are enabled, allow `https://www.bilibili.com` in `frame-src`.
 - If NetEase Cloud Music embeds are enabled by CSP, allow `https://music.163.com` in `frame-src`.
@@ -260,7 +268,7 @@ No rebuild is required.
 2. Health probe: `https://forum.rdfzer.com/`, `/srv/status`, and `/session/csrf` must continue returning success.
 3. Contract checks: run `npm test`, validate `about.json` and `settings.yml`, verify the vendored Foliate bundle hash/license, confirm the intended `blocked_onebox_domains` policy, then confirm Discourse remote theme `119` reports the intended Git commit without `last_error_text`.
 4. Deploy command: push a tested commit to GitHub, then update remote theme `119` through Discourse theme administration. Never add this component to `app.yml` or rebuild the container.
-5. Dependency regression: verify one real cooked post for bilibili, NetEase, QQ Music, a WeChat public article success plus conversion-failure fallback, an exact-ID Zhihu summary, a full Xiaohongshu note URL, and an `xhslink.cn` short share. Confirm the WeChat iframe uses an exact `wx.bdfz.net/<slug>` URL, displays the full archived article, and leaves both original and archive links available. For every non-Zhihu provider, also verify an eligible visible URL after explanatory text or a line break. Verify Marxists document readers at standalone topic/post `1330/2` and the preserved source paragraph at `2327/1`, while confirming the PDF onebox at `5970/77`, pasted navigation topics `6813/1` and `9340/1`, code, multi-link paragraphs, and non-URL anchor labels remain untouched. The executable suite separately covers a synthetic document onebox. Also open, page, and navigate the TOC of real EPUB, MOBI, and KF8/AZW3 attachments. Confirm a PDF attachment is still owned by the official PDF component.
+5. Dependency regression: verify one real cooked post for bilibili, the exact Douyin `/user?...modal_id=` form plus direct `/video/<ID>`, NetEase, QQ Music, a WeChat public article success plus conversion-failure fallback, an exact-ID Zhihu summary, a full Xiaohongshu note URL, and an `xhslink.cn` short share. Confirm Douyin uses only `open.douyin.com/player/video`, can begin playback after a user click, and retains the direct source link. Confirm the WeChat iframe uses an exact `wx.bdfz.net/<slug>` URL, displays the full archived article, and leaves both original and archive links available. For every non-Zhihu provider, also verify an eligible visible URL after explanatory text or a line break. Verify Marxists document readers at standalone topic/post `1330/2` and the preserved source paragraph at `2327/1`, while confirming the PDF onebox at `5970/77`, pasted navigation topics `6813/1` and `9340/1`, code, multi-link paragraphs, and non-URL anchor labels remain untouched. The executable suite separately covers a synthetic document onebox. Also open, page, and navigate the TOC of real EPUB, MOBI, and KF8/AZW3 attachments. Confirm a PDF attachment is still owned by the official PDF component.
 6. Backup and restore: the previous Git commit is the immutable backup; a fresh clone of the repository is the restore path.
 7. Rollback: revert the release commit on GitHub and refresh remote theme `119`, then repeat health and provider regression checks.
 8. Last verified release evidence is recorded in `PROJECT_STATE.md` and the forum operations report; live Discourse readback is authoritative.

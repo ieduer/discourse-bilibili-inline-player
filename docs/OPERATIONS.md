@@ -1,6 +1,6 @@
 # Operations authority
 
-Last reviewed: 2026-08-28 (America/Los_Angeles)
+Last reviewed: 2026-08-29 (America/Los_Angeles)
 
 This is the canonical operational procedure for the Extended Preview & Embed Suite.
 `AGENTS.md` owns constraints, `PROJECT_STATE.md` owns the accepted version and next
@@ -27,6 +27,44 @@ steps. Live Discourse and GitHub readback override this document when they disag
   `b834f530fce5e01863f0c07fc97572ed847a2c61`.
   Immediate containment is `enable_wechat_inline=false`; the existing reader
   kill switch remains `enable_expand_reader=false`.
+
+## 0.15.0 Douyin official-player transaction: source candidate only
+
+The candidate recognizes only exact numeric public-video identities from the
+ordinary Douyin video path, the user-page `modal_id` form, the historical
+`iesdouyin.com/share/video/<ID>` form, and the official player URL. It builds the
+documented public player URL locally and always retains the canonical direct
+video link. It deliberately does not fetch metadata from the browser, because
+the iframe-code API does not return an allow-origin header for the forum; it also
+does not add a proxy, scraper, private endpoint, signature, cookie, media
+download, or short-link resolver.
+
+Authority reviewed on 2026-08-29:
+
+- Douyin Open Platform documents the permission-free iframe-code endpoint and
+  returns `https://open.douyin.com/player/video?vid=<ID>&autoplay=0`.
+- GitHub implementations independently use the same player and extract
+  `modal_id` as a numeric video identity. Direct `www.douyin.com` pages cannot
+  be framed because the current response sends `X-Frame-Options: DENY` and a
+  restrictive `frame-ancestors` policy.
+- The supplied ID `7026333893087202567` returned a public 1920×1080 iframe
+  payload. Real Chromium loaded the official player without a page error; a
+  user click advanced it from `00:00` to `00:01 / 01:27` and exposed the title,
+  author, counters, speed, share, and source controls. A separate security-SDK
+  WebSocket diagnostic did not prevent playback.
+
+Implementation commit `321883a4d4f55797fe0e841bded7c0593f0cfb4c`
+passes Node `24.18.0` validation with `65/65` tests plus syntax, JSON, YAML,
+vendored Foliate hash, and diff checks. The release sequence remains unchanged:
+push exact tested source, verify hosted CI, refresh theme `119`, read back its
+SHA/version/errors, then test the exact
+`modal_id` URL and direct `/video/<ID>` form in a real cooked post. A strict
+forum CSP must allow `https://open.douyin.com` in `frame-src`. Immediate rollback
+before release is source `e1a9e5c`; after release, revert the Douyin commit and
+refresh theme `119`.
+
+`CAPABILITY_FIT: no-new-capability` — no Cloudflare service, binding, route,
+storage, data, identity, hub, monitoring, cost, or Companion contract changes.
 
 ## 0.14.2 WeChat pending-conversion transaction: accepted
 
@@ -131,6 +169,7 @@ Before any mutation, also read:
 | WeChat archive Worker | `/Users/ylsuen/CF/sites/tools/wx-ingest` and `ieduer/wx-ingest` | external leaf service | that project's operations authority |
 | `wx.bdfz.net` | existing Worker route, archive API, and script-free article pages | external runtime | immutable Worker version rollback; preserve R2 objects |
 | `bdfz.net/posts/<article>/` | public, server-rendered source page framed directly by the theme | external public source | source link fallback; feature kill switch |
+| `open.douyin.com/player/video` | official public Douyin iframe player; exact numeric video ID only | external public player | canonical `www.douyin.com/video/<ID>` fallback; revert theme commit |
 | Tests | `test/url-parsers.test.mjs` | source | Git |
 
 There are no external local build inputs, database exports, generated releases, or
