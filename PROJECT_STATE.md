@@ -11,18 +11,24 @@ Last reviewed: 2026-08-29 (America/Los_Angeles)
   embed-text exclusion contracts do not change. A separate anchor marker gives
   each card its own identity, while the existing paragraph marker remains the
   re-decoration guard. Preserved-source cards use a moving insertion cursor so
-  multiple cards retain source order after the paragraph.
+  multiple cards retain source order after the paragraph. Card metadata is
+  extracted from a detached clone of that card's visual segment, preventing a
+  later row from inheriting the first row's copied title.
 - Each accepted visual segment consumes one `max_embeds_per_post` slot. Visible
   anchor text and raw `href` receive the same bounded trailing-punctuation trim
   only in this detector; the shared URL parser remains strict.
-- Local candidate evidence: 70/70 Node tests plus initializer syntax, JSON,
+- Local candidate evidence: 71/71 Node tests plus initializer syntax, JSON,
   YAML, Foliate SHA-256, and diff checks pass. New tests cover separate BR
   segments, same-segment multi-link rejection, card-budget counting, NBSP and
   terminal Chinese punctuation, stable insertion order, and same-element
-  re-decoration without duplicate cards.
-- Production theme 119 remains unchanged at exact source `7ddffd5`, version
-  `0.15.1`. Browser acceptance, GitHub CI, guarded refresh, and production
-  readback are still required before this section may be marked accepted.
+  re-decoration without duplicate cards. An authenticated composer-preview
+  probe exposed cross-row title reuse in the first published candidate; the
+  segment-clone correction and a dedicated regression test now cover it.
+- Production theme 119 currently points to first candidate `f87398c`, version
+  `0.15.2`, with exact database parity and no import errors. Authenticated
+  composer preview exposed the cross-row title defect described above; the
+  corrected source still requires GitHub CI, guarded refresh, database readback,
+  and repeated browser controls before this section may be marked accepted.
 - `CAPABILITY_FIT=no-new-capability`: this is a leaf-only cooked-DOM detector
   correction. It adds no endpoint, Worker, binding, route, storage, identity,
   data, cost, or CSP surface. Immediate rollback is theme source `7ddffd5`.

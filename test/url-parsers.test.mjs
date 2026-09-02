@@ -17,6 +17,7 @@ globalThis.__themeParserTestApi = {
   buildNoAutoplayIframeUrl,
   buildXiaohongshuPreviewText,
   cleanProviderTitle,
+  cloneParagraphVisualSegment,
   collectEbookAttachmentCandidates,
   collectEmbedTextCandidates,
   collectIframeCandidates,
@@ -96,6 +97,7 @@ const {
   buildNoAutoplayIframeUrl,
   buildXiaohongshuPreviewText,
   cleanProviderTitle,
+  cloneParagraphVisualSegment,
   collectEbookAttachmentCandidates,
   collectEmbedTextCandidates,
   collectIframeCandidates,
@@ -1265,6 +1267,46 @@ test("collects multiple URL-labelled anchors from separate BR visual segments", 
   assert.deepEqual(Array.from(candidates, (candidate) => candidate.segmentIndex), [0, 1]);
   assert.ok(candidates.every((candidate) => candidate.target === paragraph));
   assert.deepEqual(Array.from(candidates, (candidate) => candidate.markerTarget), [first, second]);
+});
+
+test("scopes copied-share metadata to its own BR visual segment", () => {
+  const makeNode = (nodeName, textContent = "") => ({
+    nodeName,
+    textContent,
+    cloneNode() {
+      return makeNode(nodeName, textContent);
+    },
+  });
+  const firstText = makeNode("#text", "【第一则】 ");
+  const firstAnchor = makeNode("A", "https://www.bilibili.com/video/BV1xx411c7mD");
+  const lineBreak = makeNode("BR");
+  const secondText = makeNode("#text", "【第二则】 ");
+  const secondAnchor = makeNode("A", "https://www.bilibili.com/video/BV1xx411c7mE");
+  const paragraph = {
+    childNodes: [firstText, firstAnchor, lineBreak, secondText, secondAnchor],
+    cloneNode() {
+      return {
+        childNodes: [],
+        textContent: "",
+        appendChild(node) {
+          this.childNodes.push(node);
+          this.textContent += node.textContent || "";
+        },
+      };
+    },
+  };
+
+  const first = cloneParagraphVisualSegment(paragraph, 0);
+  const second = cloneParagraphVisualSegment(paragraph, 1);
+
+  assert.equal(
+    first.textContent,
+    "【第一则】 https://www.bilibili.com/video/BV1xx411c7mD"
+  );
+  assert.equal(
+    second.textContent,
+    "【第二则】 https://www.bilibili.com/video/BV1xx411c7mE"
+  );
 });
 
 test("rejects multiple links in one visual segment but not separate share rows", () => {

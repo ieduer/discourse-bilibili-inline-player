@@ -21,12 +21,16 @@ collector exclusion. Each accepted anchor is also marked, and the paragraph's
 existing processed marker remains in place, so a second decoration of the same
 element cannot duplicate a card. Code, lists, blockquotes, media, oneboxes,
 non-URL labels, PDFs, and multiple anchors within one visual segment remain
-untouched. Trailing punctuation is normalized only in this visible-link path.
+untouched. Each card extracts metadata from a detached clone of its own visual
+segment, so later rows cannot inherit the first row's copied title. Trailing
+punctuation is normalized only in this visible-link path.
 
-Local candidate gate: 70/70 tests plus JavaScript syntax, JSON, YAML, Foliate
-hash, and diff checks pass. Production is still `7ddffd5` / `0.15.1`; do not
-claim release until GitHub CI, guarded theme 119 refresh, exact database
-readback, and authenticated real-post positive/negative controls pass.
+Local candidate gate: 71/71 tests plus JavaScript syntax, JSON, YAML, Foliate
+hash, and diff checks pass. Production currently points to the first candidate
+`f87398c` / `0.15.2`; its database readback is clean, but browser preview exposed
+cross-row title reuse. Do not claim release until the corrected source passes
+GitHub CI, guarded theme 119 refresh, exact database readback, and repeated
+authenticated positive/negative browser controls.
 
 `CAPABILITY_FIT=no-new-capability`. This is a leaf-only DOM detector change with
 no Worker, endpoint, route, binding, storage, identity, data, CSP, or provider

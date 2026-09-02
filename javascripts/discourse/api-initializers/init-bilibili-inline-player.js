@@ -5487,6 +5487,32 @@ function getParagraphVisualSegmentIndex(paragraph, anchor) {
   return -1;
 }
 
+function cloneParagraphVisualSegment(paragraph, segmentIndex) {
+  if (!paragraph?.cloneNode || !Number.isInteger(segmentIndex) || segmentIndex < 0) {
+    return paragraph;
+  }
+
+  const clone = paragraph.cloneNode(false);
+  let currentSegment = 0;
+
+  for (const node of Array.from(paragraph.childNodes || [])) {
+    if (node.nodeName === "BR") {
+      if (currentSegment === segmentIndex) {
+        break;
+      }
+
+      currentSegment += 1;
+      continue;
+    }
+
+    if (currentSegment === segmentIndex) {
+      clone.appendChild(node.cloneNode(true));
+    }
+  }
+
+  return clone.childNodes?.length ? clone : paragraph;
+}
+
 /* Paragraph-inline takeover is intentionally limited to one URL-labelled
    anchor per BR-delimited visual segment. This supports multiple copied share
    rows that Discourse cooks into one paragraph while leaving titled prose
@@ -5574,6 +5600,10 @@ function collectVisibleUrlCandidates(element, existingTargets) {
     seenAnchors.add(anchor);
     results.push({
       target: matched.paragraph,
+      metadataTarget: cloneParagraphVisualSegment(
+        matched.paragraph,
+        matched.segmentIndex
+      ),
       markerTarget: anchor,
       anchor,
       parsed: matched.parsed,
@@ -5708,7 +5738,11 @@ function replaceCandidate(candidate, insertionCursors = null) {
 
   markerTarget.dataset.bilibiliInlinePlayer = "processing";
   candidate.target.dataset.bilibiliInlinePlayer = "processing";
-  const metadata = buildMetadata(candidate.target, candidate.anchor, candidate.parsed);
+  const metadata = buildMetadata(
+    candidate.metadataTarget || candidate.target,
+    candidate.anchor,
+    candidate.parsed
+  );
   const replacement = buildWrapper(metadata);
   replacement.dataset.bilibiliInlinePlayer = "done";
 
