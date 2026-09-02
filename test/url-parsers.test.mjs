@@ -25,17 +25,21 @@ globalThis.__themeParserTestApi = {
   collectVisibleUrlCandidates,
   collectStandaloneCandidates,
   extractUrlsFromText,
+  fetchBilibiliShortLinkResolution,
   fetchReaderView,
   fetchWeChatArchive,
   getWeChatRetryDelayMs,
   getCachedReaderRequest,
+  getCachedShortLinkResolution,
   getCachedWeChatArchive,
   getFallbackTitle,
+  getBilibiliShortResolverEndpoint,
   getFooterMeta,
   getBdfzPostAutoScale,
   getDouyinPlayerScale,
   getInitialButtonLabel,
   getReaderCacheKey,
+  getShortLinkResolutionCacheKey,
   getWeChatArchiveCacheKey,
   getWeChatIngestEndpoint,
   getScopedReaderFragment,
@@ -55,15 +59,20 @@ globalThis.__themeParserTestApi = {
   themeSettings,
   extractXiaohongshuShareContext,
   parseBilibiliUrl,
+  parseResolvableBilibiliShortUrl,
   parseEbookAttachmentUrl,
   primeEmbedState,
   placeCandidateReplacement,
+  replaceCandidateGroup,
   hardenReaderAnchor,
   hardenReaderImage,
   readerViewCache,
+  shortLinkResolutionCache,
   wechatArchiveCache,
   READER_CACHE_MAX_ENTRIES,
   READER_CACHE_TTL_MS,
+  SHORT_LINK_RESOLUTION_CACHE_MAX_ENTRIES,
+  SHORT_LINK_RESOLUTION_CACHE_TTL_MS,
   WECHAT_ARCHIVE_CACHE_MAX_ENTRIES,
   WECHAT_ARCHIVE_CACHE_TTL_MS,
   WECHAT_ARCHIVE_REQUEST_TIMEOUT_MS,
@@ -72,6 +81,7 @@ globalThis.__themeParserTestApi = {
   sanitizeEbookCss,
   resolveReaderViewTitle,
   storeReaderRequest,
+  storeShortLinkResolution,
   storeWeChatArchive,
   updateBdfzPostExpandedState,
   wrapperState,
@@ -105,17 +115,21 @@ const {
   collectVisibleUrlCandidates,
   collectStandaloneCandidates,
   extractUrlsFromText,
+  fetchBilibiliShortLinkResolution,
   fetchReaderView,
   fetchWeChatArchive,
   getWeChatRetryDelayMs,
   getCachedReaderRequest,
+  getCachedShortLinkResolution,
   getCachedWeChatArchive,
   getFallbackTitle,
+  getBilibiliShortResolverEndpoint,
   getFooterMeta,
   getBdfzPostAutoScale,
   getDouyinPlayerScale,
   getInitialButtonLabel,
   getReaderCacheKey,
+  getShortLinkResolutionCacheKey,
   getWeChatArchiveCacheKey,
   getWeChatIngestEndpoint,
   getScopedReaderFragment,
@@ -135,15 +149,20 @@ const {
   themeSettings,
   extractXiaohongshuShareContext,
   parseBilibiliUrl,
+  parseResolvableBilibiliShortUrl,
   parseEbookAttachmentUrl,
   primeEmbedState,
   placeCandidateReplacement,
+  replaceCandidateGroup,
   hardenReaderAnchor,
   hardenReaderImage,
   readerViewCache,
+  shortLinkResolutionCache,
   wechatArchiveCache,
   READER_CACHE_MAX_ENTRIES,
   READER_CACHE_TTL_MS,
+  SHORT_LINK_RESOLUTION_CACHE_MAX_ENTRIES,
+  SHORT_LINK_RESOLUTION_CACHE_TTL_MS,
   WECHAT_ARCHIVE_CACHE_MAX_ENTRIES,
   WECHAT_ARCHIVE_CACHE_TTL_MS,
   WECHAT_ARCHIVE_REQUEST_TIMEOUT_MS,
@@ -152,6 +171,7 @@ const {
   sanitizeEbookCss,
   resolveReaderViewTitle,
   storeReaderRequest,
+  storeShortLinkResolution,
   storeWeChatArchive,
   updateBdfzPostExpandedState,
   wrapperState,
@@ -695,6 +715,36 @@ test("keeps representative existing providers working", () => {
     parseBilibiliUrl("https://bdfz.net/posts/180-qishike/").provider,
     "bdfz-post"
   );
+});
+
+test("accepts only exact opaque Bilibili short links for server resolution", () => {
+  assert.equal(
+    parseResolvableBilibiliShortUrl("https://b23.tv/cUbeWZt"),
+    "https://b23.tv/cUbeWZt"
+  );
+  assert.equal(
+    parseResolvableBilibiliShortUrl("https://bili2233.cn/AbC123"),
+    "https://bili2233.cn/AbC123"
+  );
+  assert.equal(parseBilibiliUrl("https://b23.tv/cUbeWZt"), null);
+
+  for (const source of [
+    "http://b23.tv/cUbeWZt",
+    "https://www.b23.tv/cUbeWZt",
+    "https://b23.tv/abcd",
+    "https://b23.tv/AbCdEfGhIjKlM",
+    "https://b23.tv/a/b/cUbeWZt",
+    "https://b23.tv/cUbeWZt?share=1",
+    "https://b23.tv/cUbeWZt#fragment",
+    "https://user:pass@b23.tv/cUbeWZt",
+    "https://b23.tv:443/cUbeWZt",
+    "https://b23.tv:444/cUbeWZt",
+    String.raw`https:\\b23.tv\cUbeWZt`,
+    "https://b23.tv.evil.example/cUbeWZt",
+    "https://v.douyin.com/cUbeWZt",
+  ]) {
+    assert.equal(parseResolvableBilibiliShortUrl(source), "", source);
+  }
 });
 
 test("parses exact Douyin video forms and uses the official iframe player", () => {
@@ -1373,6 +1423,99 @@ test("trims pasted URL punctuation only in the visible-link candidate path", () 
   assert.equal(parseBilibiliUrl(`${canonical}】`), null);
 });
 
+test("collects mixed-text opaque short links only when the resolver is enabled", () => {
+  const shortUrl = "https://b23.tv/cUbeWZt";
+  const fixture = makeCookedParagraphFixture({
+    anchorText: `${shortUrl}】`,
+    before: "【你好陌生人，如果你刷到这个视频，请对自己说一句辛苦了】\u00a0",
+    url: `${shortUrl}】`,
+  });
+  fixture.anchor.getAttribute = (name) => (name === "href" ? `${shortUrl}】` : null);
+
+  assert.equal(collectVisibleUrlCandidates(fixture.cooked, []).length, 0);
+
+  themeSettings.enable_short_link_resolution = true;
+  try {
+    const [candidate] = collectVisibleUrlCandidates(fixture.cooked, []);
+
+    assert.equal(candidate.target, fixture.paragraph);
+    assert.equal(candidate.markerTarget, fixture.anchor);
+    assert.equal(candidate.parsed, null);
+    assert.equal(candidate.shortUrl, shortUrl);
+    assert.equal(candidate.preserveSource, true);
+  } finally {
+    delete themeSettings.enable_short_link_resolution;
+  }
+});
+
+test("opaque short links count against max_embeds_per_post before resolution", () => {
+  const first = makeCookedParagraphFixture({ url: "https://b23.tv/Code0001" });
+  const second = makeCookedParagraphFixture({ url: "https://bili2233.cn/Code0002" });
+  const cooked = {
+    querySelectorAll(selector) {
+      return selector === "p > a[href]:only-child"
+        ? [first.anchor, second.anchor]
+        : [];
+    },
+  };
+
+  themeSettings.enable_short_link_resolution = true;
+  themeSettings.max_embeds_per_post = 1;
+  try {
+    const candidates = collectStandaloneCandidates(cooked, []);
+
+    assert.equal(candidates.length, 1);
+    assert.equal(candidates[0].shortUrl, "https://b23.tv/Code0001");
+    assert.equal(candidates[0].preserveSource, true);
+  } finally {
+    delete themeSettings.enable_short_link_resolution;
+    delete themeSettings.max_embeds_per_post;
+  }
+});
+
+test("pending short-link resolution blocks re-decoration and fails open", async () => {
+  const shortUrl = "https://b23.tv/cUbeWZt";
+  const fixture = makeCookedParagraphFixture({
+    before: "【短链测试】\u00a0",
+    url: shortUrl,
+  });
+  const originalFetch = context.fetch;
+  let releaseFetch;
+
+  themeSettings.enable_short_link_resolution = true;
+  shortLinkResolutionCache.clear();
+  context.fetch = () =>
+    new Promise((resolve) => {
+      releaseFetch = () =>
+        resolve({
+          ok: true,
+          json: async () => ({
+            version: 1,
+            canonicalUrl: "https://example.com/not-bilibili",
+          }),
+        });
+    });
+
+  try {
+    const [candidate] = collectVisibleUrlCandidates(fixture.cooked, []);
+    const pending = replaceCandidateGroup([candidate], new WeakMap());
+
+    assert.equal(fixture.anchor.dataset.bilibiliInlinePlayer, "processing");
+    assert.equal(fixture.paragraph.dataset.bilibiliInlinePlayer, "processing");
+    assert.equal(collectVisibleUrlCandidates(fixture.cooked, []).length, 0);
+
+    releaseFetch();
+    await pending;
+
+    assert.equal(fixture.anchor.dataset.bilibiliInlinePlayer, "done");
+    assert.equal(fixture.paragraph.dataset.bilibiliInlinePlayer, "done");
+  } finally {
+    shortLinkResolutionCache.clear();
+    delete themeSettings.enable_short_link_resolution;
+    context.fetch = originalFetch;
+  }
+});
+
 test("preserves insertion order and prevents duplicate cards on re-decoration", () => {
   const firstUrl = "https://www.bilibili.com/video/BV1xx411c7mD";
   const secondUrl = "https://www.bilibili.com/video/BV1xx411c7mE";
@@ -1787,6 +1930,162 @@ test("Zhihu reader output must remain summary-only and match exact type and ID",
     false,
     "the Worker must echo the exact canonical source URL"
   );
+});
+
+test("short-link resolution derives a same-origin endpoint behind an independent switch", () => {
+  assert.equal(getBilibiliShortResolverEndpoint(), "");
+
+  themeSettings.enable_short_link_resolution = true;
+  try {
+    assert.equal(
+      getBilibiliShortResolverEndpoint(),
+      "https://reader.bdfz.net/resolve"
+    );
+
+    themeSettings.expand_reader_endpoint = "http://localhost:8817/read?ignored=1";
+    assert.equal(
+      getBilibiliShortResolverEndpoint(),
+      "http://localhost:8817/resolve"
+    );
+
+    themeSettings.expand_reader_endpoint = "http://reader.example/read";
+    assert.equal(getBilibiliShortResolverEndpoint(), "");
+  } finally {
+    delete themeSettings.enable_short_link_resolution;
+    delete themeSettings.expand_reader_endpoint;
+  }
+});
+
+test("short-link requests share one in-flight fetch and revalidate the response locally", async () => {
+  const shortUrl = "https://b23.tv/cUbeWZt";
+  const originalFetch = context.fetch;
+  let calls = 0;
+  let releaseFetch;
+  let requestedUrl;
+  let requestedOptions;
+
+  shortLinkResolutionCache.clear();
+  themeSettings.enable_short_link_resolution = true;
+  context.fetch = (url, options) => {
+    calls += 1;
+    requestedUrl = new URL(url);
+    requestedOptions = options;
+    return new Promise((resolve) => {
+      releaseFetch = () =>
+        resolve({
+          ok: true,
+          json: async () => ({
+            version: 1,
+            canonicalUrl: "https://www.bilibili.com/video/BV1XntA6eEED?p=1",
+          }),
+        });
+    });
+  };
+
+  try {
+    const first = fetchBilibiliShortLinkResolution(shortUrl);
+    const second = fetchBilibiliShortLinkResolution(shortUrl);
+
+    assert.equal(calls, 1);
+    releaseFetch();
+    const [firstParsed, secondParsed] = await Promise.all([first, second]);
+
+    assert.equal(firstParsed.canonicalUrl, secondParsed.canonicalUrl);
+    assert.equal(
+      firstParsed.canonicalUrl,
+      "https://www.bilibili.com/video/BV1XntA6eEED"
+    );
+    assert.equal(firstParsed.page, 1);
+    assert.equal(requestedUrl.origin, "https://reader.bdfz.net");
+    assert.equal(requestedUrl.pathname, "/resolve");
+    assert.equal(requestedUrl.searchParams.get("url"), shortUrl);
+    assert.equal(requestedOptions.method, "GET");
+    assert.equal(requestedOptions.credentials, "omit");
+    assert.equal(requestedOptions.referrerPolicy, "no-referrer");
+  } finally {
+    shortLinkResolutionCache.clear();
+    delete themeSettings.enable_short_link_resolution;
+    context.fetch = originalFetch;
+  }
+});
+
+test("invalid resolver payloads fail open and are evicted for a later retry", async () => {
+  const shortUrl = "https://b23.tv/cUbeWZt";
+  const originalFetch = context.fetch;
+  let calls = 0;
+
+  shortLinkResolutionCache.clear();
+  themeSettings.enable_short_link_resolution = true;
+  context.fetch = async () => {
+    calls += 1;
+    return {
+      ok: true,
+      json: async () =>
+        calls === 1
+          ? {
+              version: 1,
+              canonicalUrl: "https://www.douyin.com/video/7026333893087202567",
+            }
+          : {
+              version: 1,
+              canonicalUrl: "https://www.bilibili.com/video/BV1XntA6eEED?p=1",
+            },
+    };
+  };
+
+  try {
+    assert.equal(await fetchBilibiliShortLinkResolution(shortUrl), null);
+    assert.equal(
+      (await fetchBilibiliShortLinkResolution(shortUrl)).provider,
+      "bilibili"
+    );
+    assert.equal(calls, 2);
+  } finally {
+    shortLinkResolutionCache.clear();
+    delete themeSettings.enable_short_link_resolution;
+    context.fetch = originalFetch;
+  }
+});
+
+test("short-link resolution cache is endpoint-specific, TTL-bound, and small", () => {
+  const key = getShortLinkResolutionCacheKey(
+    "https://b23.tv/cUbeWZt",
+    "https://reader.bdfz.net/resolve"
+  );
+
+  assert.notEqual(
+    key,
+    getShortLinkResolutionCacheKey(
+      "https://b23.tv/cUbeWZt",
+      "https://reader-backup.bdfz.net/resolve"
+    )
+  );
+  assert.equal(SHORT_LINK_RESOLUTION_CACHE_TTL_MS, 5 * 60 * 1000);
+  assert.equal(SHORT_LINK_RESOLUTION_CACHE_MAX_ENTRIES, 24);
+
+  shortLinkResolutionCache.clear();
+  const now = 1000;
+
+  for (let index = 0; index <= SHORT_LINK_RESOLUTION_CACHE_MAX_ENTRIES; index += 1) {
+    storeShortLinkResolution(`key-${index}`, Promise.resolve(index), now);
+  }
+
+  assert.equal(shortLinkResolutionCache.size, SHORT_LINK_RESOLUTION_CACHE_MAX_ENTRIES);
+  assert.equal(shortLinkResolutionCache.has("key-0"), false);
+
+  const fresh = getCachedShortLinkResolution(
+    `key-${SHORT_LINK_RESOLUTION_CACHE_MAX_ENTRIES}`,
+    now + SHORT_LINK_RESOLUTION_CACHE_TTL_MS - 1
+  );
+  assert.ok(fresh);
+  assert.equal(
+    getCachedShortLinkResolution(
+      `key-${SHORT_LINK_RESOLUTION_CACHE_MAX_ENTRIES}`,
+      now + SHORT_LINK_RESOLUTION_CACHE_TTL_MS
+    ),
+    null
+  );
+  shortLinkResolutionCache.clear();
 });
 
 test("the reader is skipped when disabled or pointed at a non-HTTPS endpoint", () => {

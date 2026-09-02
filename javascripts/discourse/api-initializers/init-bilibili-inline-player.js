@@ -334,6 +334,7 @@ const EBOOK_MIME_TYPES = {
 };
 const VIDEO_PATH_RE = /^\/(?:s\/)?video\/(BV[0-9A-Za-z]+|av\d+)\/?$/i;
 const SHORT_VIDEO_PATH_RE = /^\/(?:video\/)?(BV[0-9A-Za-z]+|av\d+)(?:\/p(\d+))?\/?$/i;
+const RESOLVABLE_SHORT_VIDEO_PATH_RE = /^\/([A-Za-z0-9]{5,12})\/?$/;
 const BANGUMI_PATH_RE = /^\/bangumi\/play\/(ep|ss)(\d+)\/?$/i;
 const AUDIO_PATH_RE = /^\/audio\/(au|am)(\d+)\/?$/i;
 const ARTICLE_PATH_RE = /^\/read\/cv(\d+)\/?$/i;
@@ -811,6 +812,43 @@ function parseShortVideoUrl(url) {
   return createParsedVideo(match[1], parsePageNumber(url.searchParams.get("p"), match[2]), {
     shortUrl: url.toString(),
   });
+}
+
+function parseResolvableBilibiliShortUrl(href) {
+  const raw = normalizeUrlLikeString(href);
+  let url;
+
+  if (!/^https:\/\/(?:b23\.tv|bili2233\.cn)\/[A-Za-z0-9]{5,12}\/?$/.test(raw)) {
+    return "";
+  }
+
+  try {
+    url = new URL(raw);
+  } catch {
+    return "";
+  }
+
+  if (
+    url.protocol !== "https:" ||
+    !["b23.tv", "bili2233.cn"].includes(url.hostname.toLowerCase()) ||
+    url.port ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash
+  ) {
+    return "";
+  }
+
+  const match = url.pathname.match(RESOLVABLE_SHORT_VIDEO_PATH_RE);
+
+  if (!match) {
+    return "";
+  }
+
+  url.hostname = url.hostname.toLowerCase();
+  url.pathname = `/${match[1]}`;
+  return url.toString();
 }
 
 function parsePlayerUrl(url) {
@@ -3882,11 +3920,15 @@ const WECHAT_ARCHIVE_MAX_NETWORK_FAILURES = 2;
 const WECHAT_ARCHIVE_RETRY_DELAY_MS = 2000;
 const WECHAT_ARCHIVE_CACHE_MAX_ENTRIES = 24;
 const WECHAT_ARCHIVE_CACHE_TTL_MS = 5 * 60 * 1000;
+const SHORT_LINK_RESOLUTION_TIMEOUT_MS = 10000;
+const SHORT_LINK_RESOLUTION_CACHE_MAX_ENTRIES = 24;
+const SHORT_LINK_RESOLUTION_CACHE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_WECHAT_INGEST_ENDPOINT = "https://wx.bdfz.net/api/ingest";
 const DEFAULT_READER_ENDPOINT = "https://reader.bdfz.net/read";
 const DEFAULT_READER_PANE_HEIGHT = 560;
 const readerViewCache = new Map();
 const wechatArchiveCache = new Map();
+const shortLinkResolutionCache = new Map();
 let readerFragmentSequence = 0;
 let bdfzPostFrameSequence = 0;
 
@@ -4164,6 +4206,149 @@ function getExpandReaderEndpoint() {
   } catch {
     return "";
   }
+}
+
+function getBilibiliShortResolverEndpoint() {
+  if (!getBooleanSetting("enable_short_link_resolution", false)) {
+    return "";
+  }
+
+  const readerEndpoint = getExpandReaderEndpoint();
+
+  if (!readerEndpoint) {
+    return "";
+  }
+
+  const url = new URL(readerEndpoint);
+
+  url.pathname = "/resolve";
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
+function getResolvableBilibiliShortUrl(...values) {
+  if (!getBilibiliShortResolverEndpoint()) {
+    return "";
+  }
+
+  for (const value of values) {
+    const shortUrl = parseResolvableBilibiliShortUrl(value);
+
+    if (shortUrl) {
+      return shortUrl;
+    }
+  }
+
+  return "";
+}
+
+function getShortLinkResolutionCacheKey(
+  shortUrl,
+  endpoint = getBilibiliShortResolverEndpoint()
+) {
+  return `${endpoint}\n${shortUrl}`;
+}
+
+function getCachedShortLinkResolution(cacheKey, now = Date.now()) {
+  const entry = shortLinkResolutionCache.get(cacheKey);
+
+  if (!entry) {
+    return null;
+  }
+
+  if (entry.expiresAt <= now) {
+    shortLinkResolutionCache.delete(cacheKey);
+    return null;
+  }
+
+  shortLinkResolutionCache.delete(cacheKey);
+  shortLinkResolutionCache.set(cacheKey, entry);
+  return entry.promise;
+}
+
+function storeShortLinkResolution(cacheKey, promise, now = Date.now()) {
+  for (const [key, entry] of shortLinkResolutionCache) {
+    if (entry.expiresAt <= now) {
+      shortLinkResolutionCache.delete(key);
+    }
+  }
+
+  shortLinkResolutionCache.delete(cacheKey);
+  const entry = {
+    expiresAt: now + SHORT_LINK_RESOLUTION_CACHE_TTL_MS,
+    promise,
+  };
+  shortLinkResolutionCache.set(cacheKey, entry);
+
+  while (shortLinkResolutionCache.size > SHORT_LINK_RESOLUTION_CACHE_MAX_ENTRIES) {
+    shortLinkResolutionCache.delete(shortLinkResolutionCache.keys().next().value);
+  }
+
+  return entry;
+}
+
+async function fetchBilibiliShortLinkResolution(shortUrl) {
+  const endpoint = getBilibiliShortResolverEndpoint();
+  const normalizedShortUrl = parseResolvableBilibiliShortUrl(shortUrl);
+
+  if (!endpoint || !normalizedShortUrl) {
+    return null;
+  }
+
+  const cacheKey = getShortLinkResolutionCacheKey(normalizedShortUrl, endpoint);
+  const cached = getCachedShortLinkResolution(cacheKey);
+
+  if (cached) {
+    return cached;
+  }
+
+  const request = (async () => {
+    const requestUrl = new URL(endpoint);
+    const controller = new AbortController();
+    const timer = window.setTimeout(
+      () => controller.abort(),
+      SHORT_LINK_RESOLUTION_TIMEOUT_MS
+    );
+
+    requestUrl.searchParams.set("url", normalizedShortUrl);
+
+    try {
+      const response = await fetch(requestUrl.toString(), {
+        method: "GET",
+        credentials: "omit",
+        referrerPolicy: "no-referrer",
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const payload = await response.json();
+      const parsed =
+        payload?.version === 1 && typeof payload.canonicalUrl === "string"
+          ? parseBilibiliUrl(payload.canonicalUrl)
+          : null;
+
+      return parsed?.provider === "bilibili" && parsed.kind === "video"
+        ? parsed
+        : null;
+    } catch {
+      return null;
+    } finally {
+      window.clearTimeout(timer);
+    }
+  })();
+
+  const entry = storeShortLinkResolution(cacheKey, request);
+  const result = await request;
+
+  if (!result && shortLinkResolutionCache.get(cacheKey) === entry) {
+    shortLinkResolutionCache.delete(cacheKey);
+  }
+
+  return result;
 }
 
 function supportsExpandReader(parsed) {
@@ -5385,9 +5570,11 @@ function collectOneboxCandidates(element) {
     }
 
     const anchor = block.querySelector("a[href]");
-    const parsed = parseFirstSupportedUrl(...collectSourceUrls(block));
+    const sourceUrls = collectSourceUrls(block);
+    const parsed = parseFirstSupportedUrl(...sourceUrls);
+    const shortUrl = parsed ? "" : getResolvableBilibiliShortUrl(...sourceUrls);
 
-    if (!parsed) {
+    if (!parsed && !shortUrl) {
       continue;
     }
 
@@ -5395,6 +5582,7 @@ function collectOneboxCandidates(element) {
       target: block,
       anchor,
       parsed,
+      shortUrl,
     });
   }
 
@@ -5444,8 +5632,9 @@ function collectStandaloneCandidates(element, existingTargets) {
     }
 
     const parsed = parseBilibiliUrl(anchor.href);
+    const shortUrl = parsed ? "" : getResolvableBilibiliShortUrl(anchor.href);
 
-    if (!parsed) {
+    if (!parsed && !shortUrl) {
       continue;
     }
 
@@ -5454,7 +5643,9 @@ function collectStandaloneCandidates(element, existingTargets) {
       target,
       anchor,
       parsed,
-      preserveSource: ["xiaohongshu", "wechat"].includes(parsed.provider),
+      shortUrl,
+      preserveSource:
+        Boolean(shortUrl) || ["xiaohongshu", "wechat"].includes(parsed.provider),
     });
   }
 
@@ -5558,22 +5749,34 @@ function getVisibleUrlAnchorTarget(anchor) {
   }
 
   const rawHref = anchor.getAttribute?.("href") || anchor.href;
-  const parsedHref = parseBilibiliUrl(
-    normalizeUrlLikeString(rawHref, { trimTrailingPunctuation: true })
-  );
+  const cleanedHref = normalizeUrlLikeString(rawHref, {
+    trimTrailingPunctuation: true,
+  });
+  const parsedHref = parseBilibiliUrl(cleanedHref);
   const parsedVisible = parseBilibiliUrl(visibleUrls[0]);
+  const shortHref = parsedHref ? "" : getResolvableBilibiliShortUrl(cleanedHref);
+  const shortVisible = parsedVisible
+    ? ""
+    : getResolvableBilibiliShortUrl(visibleUrls[0]);
 
-  if (
-    !parsedHref ||
-    !parsedVisible ||
-    parsedHref.canonicalUrl !== parsedVisible.canonicalUrl
-  ) {
+  const directMatch =
+    parsedHref &&
+    parsedVisible &&
+    parsedHref.canonicalUrl === parsedVisible.canonicalUrl;
+  const shortMatch = shortHref && shortVisible && shortHref === shortVisible;
+
+  if (!directMatch && !shortMatch) {
     return null;
   }
 
   return normalizeTitleText(cleanedVisibleText.replace(visibleUrls[0], ""))
     ? null
-    : { paragraph, parsed: parsedHref, segmentIndex };
+    : {
+        paragraph,
+        parsed: directMatch ? parsedHref : null,
+        shortUrl: shortMatch ? shortHref : "",
+        segmentIndex,
+      };
 }
 
 function collectVisibleUrlCandidates(element, existingTargets) {
@@ -5607,6 +5810,7 @@ function collectVisibleUrlCandidates(element, existingTargets) {
       markerTarget: anchor,
       anchor,
       parsed: matched.parsed,
+      shortUrl: matched.shortUrl,
       preserveSource: true,
       segmentIndex: matched.segmentIndex,
     });
@@ -5701,9 +5905,11 @@ function collectEmbedTextCandidates(element, existingTargets) {
       continue;
     }
 
-    const parsed = parseFirstSupportedUrl(...extractUrlsFromText(block.textContent || ""));
+    const sourceUrls = extractUrlsFromText(block.textContent || "");
+    const parsed = parseFirstSupportedUrl(...sourceUrls);
+    const shortUrl = parsed ? "" : getResolvableBilibiliShortUrl(...sourceUrls);
 
-    if (!parsed) {
+    if (!parsed && !shortUrl) {
       continue;
     }
 
@@ -5712,6 +5918,7 @@ function collectEmbedTextCandidates(element, existingTargets) {
       target: block,
       anchor: null,
       parsed,
+      shortUrl,
       preserveSource: true,
     });
   }
@@ -5720,11 +5927,8 @@ function collectEmbedTextCandidates(element, existingTargets) {
 }
 
 function placeCandidateReplacement(candidate, replacement, insertionCursors = null) {
-  const markerTarget = candidate.markerTarget || candidate.target;
-
   if (candidate.preserveSource) {
-    markerTarget.dataset.bilibiliInlinePlayer = "done";
-    candidate.target.dataset.bilibiliInlinePlayer = "done";
+    markCandidate(candidate, "done");
     const insertionTarget = insertionCursors?.get(candidate.target) || candidate.target;
     insertionTarget.insertAdjacentElement("afterend", replacement);
     insertionCursors?.set(candidate.target, replacement);
@@ -5733,11 +5937,15 @@ function placeCandidateReplacement(candidate, replacement, insertionCursors = nu
   }
 }
 
-function replaceCandidate(candidate, insertionCursors = null) {
+function markCandidate(candidate, state) {
   const markerTarget = candidate.markerTarget || candidate.target;
 
-  markerTarget.dataset.bilibiliInlinePlayer = "processing";
-  candidate.target.dataset.bilibiliInlinePlayer = "processing";
+  markerTarget.dataset.bilibiliInlinePlayer = state;
+  candidate.target.dataset.bilibiliInlinePlayer = state;
+}
+
+function replaceCandidate(candidate, insertionCursors = null) {
+  markCandidate(candidate, "processing");
   const metadata = buildMetadata(
     candidate.metadataTarget || candidate.target,
     candidate.anchor,
@@ -5748,6 +5956,57 @@ function replaceCandidate(candidate, insertionCursors = null) {
 
   placeCandidateReplacement(candidate, replacement, insertionCursors);
   maybeResolveMusicPreviewMetadata(replacement);
+}
+
+async function replaceCandidateGroup(candidates, insertionCursors = null) {
+  for (const candidate of candidates) {
+    markCandidate(candidate, "processing");
+  }
+
+  const parsedCandidates = await Promise.all(
+    candidates.map((candidate) =>
+      candidate.shortUrl
+        ? fetchBilibiliShortLinkResolution(candidate.shortUrl)
+        : candidate.parsed
+    )
+  );
+
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index];
+    const parsed = parsedCandidates[index];
+
+    if (!parsed) {
+      markCandidate(candidate, "done");
+      continue;
+    }
+
+    replaceCandidate({ ...candidate, parsed, shortUrl: "" }, insertionCursors);
+  }
+}
+
+function replaceCandidates(candidates, insertionCursors = null) {
+  const pendingTargets = new Set(
+    candidates.filter((candidate) => candidate.shortUrl).map((candidate) => candidate.target)
+  );
+  const pendingGroups = new Map();
+
+  for (const candidate of candidates) {
+    if (!pendingTargets.has(candidate.target)) {
+      replaceCandidate(candidate, insertionCursors);
+      continue;
+    }
+
+    const group = pendingGroups.get(candidate.target) || [];
+
+    group.push(candidate);
+    pendingGroups.set(candidate.target, group);
+  }
+
+  return Promise.all(
+    Array.from(pendingGroups.values(), (group) =>
+      replaceCandidateGroup(group, insertionCursors)
+    )
+  );
 }
 
 export default apiInitializer((api) => {
@@ -5794,15 +6053,13 @@ export default apiInitializer((api) => {
       ].map((candidate) => candidate.target)
     );
 
-    for (const candidate of [
+    void replaceCandidates([
       ...oneboxCandidates,
       ...standaloneCandidates,
       ...visibleUrlCandidates,
       ...ebookAttachmentCandidates,
       ...iframeCandidates,
       ...embedTextCandidates,
-    ]) {
-      replaceCandidate(candidate, insertionCursors);
-    }
+    ], insertionCursors);
   });
 });

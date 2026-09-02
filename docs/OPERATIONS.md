@@ -1,13 +1,40 @@
 # Operations authority
 
-Last reviewed: 2026-08-29 (America/Los_Angeles)
+Last reviewed: 2026-09-01 (America/Los_Angeles)
 
 This is the canonical operational procedure for the Extended Preview & Embed Suite.
 `AGENTS.md` owns constraints, `PROJECT_STATE.md` owns the accepted version and next
 action, and this file owns executable test, release, readback, restore, and rollback
 steps. Live Discourse and GitHub readback override this document when they disagree.
 
-## 0.15.2 BR-delimited copied-share candidate
+## 0.15.3 opaque Bilibili short-link candidate
+
+This candidate adds only exact HTTPS `b23.tv` and `bili2233.cn` opaque paths
+whose token is 5-12 ASCII alphanumeric characters. It does not resolve `www`,
+query/fragment-bearing links, lookalikes, `v.douyin.com`, or any other provider.
+The independent `enable_short_link_resolution` setting defaults to `false`.
+
+When enabled, the client derives `/resolve` from the configured
+`expand_reader_endpoint` origin and sends `GET /resolve?url=<SHORT_URL>` with
+credentials omitted and no referrer. It accepts only contract version `1` and
+then runs the returned canonical URL through the existing local Bilibili video
+parser. Identical links share a 24-entry, five-minute promise cache; timeout is
+ten seconds and every failure leaves the source paragraph/link in place.
+
+Candidates count against `max_embeds_per_post` before resolution. Both the
+paragraph placement target and per-anchor marker are set while requests are in
+flight, preventing duplicate cards on re-decoration. Same-paragraph results are
+inserted in source order after all pending results for that paragraph settle.
+
+Local candidate gate: 79/79 tests plus JavaScript syntax, JSON, YAML, Foliate
+hash, and diff checks pass. The prerequisite Worker resolver is already accepted
+as immutable version `392e13be-70f7-464c-9c09-34e1a139eff6` at 100%; blocked
+Zhihu candidate `3edbcd17-da5e-4dc2-9de1-314609717bb7` has been restored at 0%.
+Theme containment is `enable_short_link_resolution=false`; full theme rollback
+is `b3f9006a4d83bd74b1d8b76ca1f9e9edd2972b88`. Worker rollback is
+`b5d4ccac-b84a-4c5c-8716-4d20f4691689@100%` plus preserved Zhihu at 0%.
+
+## 0.15.2 BR-delimited copied-share rendering: accepted
 
 The candidate fixes copied share rows that Discourse cooks into one paragraph
 with `<br>` separators. Eligibility is evaluated per visual segment, not per
@@ -25,12 +52,13 @@ untouched. Each card extracts metadata from a detached clone of its own visual
 segment, so later rows cannot inherit the first row's copied title. Trailing
 punctuation is normalized only in this visible-link path.
 
-Local candidate gate: 71/71 tests plus JavaScript syntax, JSON, YAML, Foliate
-hash, and diff checks pass. Production currently points to the first candidate
-`f87398c` / `0.15.2`; its database readback is clean, but browser preview exposed
-cross-row title reuse. Do not claim release until the corrected source passes
-GitHub CI, guarded theme 119 refresh, exact database readback, and repeated
-authenticated positive/negative browser controls.
+Corrected implementation `b3f9006a4d83bd74b1d8b76ca1f9e9edd2972b88`
+passed 71/71 local tests and hosted Actions run `33594231330`. Theme 119 exact
+database readback showed local/remote parity, zero commits behind, version
+0.15.2, 24 settings, and no import/field errors. Authenticated composer preview
+rendered two ordered BR-separated cards with distinct URLs and titles while a
+same-segment two-link negative remained untouched. The draft was discarded and
+reopened empty; no forum post was created.
 
 `CAPABILITY_FIT=no-new-capability`. This is a leaf-only DOM detector change with
 no Worker, endpoint, route, binding, storage, identity, data, CSP, or provider
@@ -51,11 +79,14 @@ contract change. Roll back theme 119 to exact source `7ddffd5`.
 - Release gate: clean exact source, tests, GitHub push, exact-SHA hosted-CI readback, guarded theme refresh, database readback, public health, and browser acceptance. A zero-step GitHub billing rejection may use only the bounded local-CI exception below; a real test failure may not.
 - Installed runtime at the 2026-08-26 preflight: `0.12.0`, exact SHA
   `d8c43282ba19e7a0f4191e457f3b8573f00f60d9`, with no import or field error.
-- Current accepted runtime is `0.15.1` implementation SHA
-  `fea74ee121b4cf0f36a827782e4f21defbb6ea24`; immediate theme rollback is
-  `6d9a3f902e82fe28cf0e50f7ff1cb0599e50a45c` (`0.15.0`).
-  Immediate containment is `enable_wechat_inline=false`; the existing reader
-  kill switch remains `enable_expand_reader=false`.
+- Current accepted theme runtime before the 0.15.3 candidate is `0.15.2`
+  implementation SHA `b3f9006a4d83bd74b1d8b76ca1f9e9edd2972b88`;
+  immediate theme rollback is `7ddffd589c58b0ebd3af2962cfaf3ee578576ba2`
+  (`0.15.1`). Resolver containment is
+  `enable_short_link_resolution=false`; the broader reader kill switch remains
+  `enable_expand_reader=false`. Accepted reader topology is resolver version
+  `392e13be-70f7-464c-9c09-34e1a139eff6@100%` plus preserved blocked Zhihu
+  version `3edbcd17-da5e-4dc2-9de1-314609717bb7@0%`.
 
 ## 0.15.1 Douyin official-player portrait layout: accepted in production
 
@@ -258,6 +289,8 @@ PDF remains owned by the official `discourse-pdf-previews` component.
 Reader settings:
 
 - `enable_expand_reader`: immediate containment switch; default `true`.
+- `enable_short_link_resolution`: independent Bilibili opaque-short-link switch;
+  default `false`. It has no effect when the reader endpoint is invalid.
 - `enable_zhihu_summary`: Zhihu summary-only switch; default `true`. It has no
   effect when the main reader switch or endpoint is unavailable.
 - `expand_reader_endpoint`: operator-controlled HTTPS endpoint; default
@@ -295,6 +328,12 @@ out, or non-2xx responses. For Zhihu it additionally requires `provider=zhihu`,
 `summaryOnly=true`, the exact parsed content type and numeric ID, and the exact
 canonical echoed URL; images are rejected. The service owns target policy and SSRF
 controls. This component must not add a second proxy or forward credentials.
+
+Opaque Bilibili short links use same-origin `GET /resolve?url=<SHORT_URL>`. The
+client admits only exact HTTPS `b23.tv` and `bili2233.cn` 5-12 character
+alphanumeric paths, sends no credentials or referrer, requires response
+`version=1`, and re-parses `canonicalUrl` through the local Bilibili video parser.
+No other short-link provider is routed through this endpoint.
 
 ## Preflight and ownership
 
@@ -403,6 +442,7 @@ puts JSON.pretty_generate(
   theme_field_error_count: ThemeField.where(theme_id: theme.id).where.not(error: [nil, ""]).count,
   reader_settings: values.slice(
     "enable_expand_reader",
+    "enable_short_link_resolution",
     "enable_zhihu_summary",
     "expand_reader_endpoint",
     "expand_reader_height",
@@ -537,7 +577,10 @@ git -C "$component_restore_dir" status --short
 Verify the restored SHA against GitHub and the intended release, then run the complete
 local gate. No archive hydrate, external source download, or data restore is required.
 
-Contain only Zhihu summary rendering by setting `enable_zhihu_summary=false`, or
+Contain opaque Bilibili resolution first by setting
+`enable_short_link_resolution=false`; direct BV/av links and every other provider
+remain unchanged. Contain only Zhihu summary rendering by setting
+`enable_zhihu_summary=false`, or
 contain every reader-backed provider by setting `enable_expand_reader=false`, then
 verify source cards/links remain; neither switch rolls back other provider code. A full
 BDFZ post containment sets `enable_bdfz_posts_inline=false` and verifies the
@@ -550,7 +593,10 @@ guarded theme refresh/readback with the new rollback commit. Never rewrite Git
 history. Re-run forum health and all affected browser controls after rollback.
 
 Worker or route failures are rolled back only through the `expand-reader` operations
-authority and shared-hub receipt. Do not compensate by adding another proxy here.
+authority and shared-hub receipt. Resolver rollback restores immutable
+`b5d4ccac-b84a-4c5c-8716-4d20f4691689@100%` together with preserved
+`3edbcd17-da5e-4dc2-9de1-314609717bb7@0%`. Do not compensate by adding another
+proxy here.
 
 ## Monitoring, privacy, and closeout
 

@@ -64,6 +64,11 @@ enable_expand_reader:
   type: bool
   description: Expand the full text of sources that refuse to be framed or read by the browser, using the shared BDFZ expand-reader service. Disable to fall back to link-only source cards.
 
+enable_short_link_resolution:
+  default: false
+  type: bool
+  description: Resolve opaque b23.tv and bili2233.cn video share links through the configured expand-reader service. Disabled by default as an independent fail-open circuit breaker.
+
 enable_zhihu_summary:
   default: true
   type: bool

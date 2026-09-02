@@ -1,8 +1,42 @@
 # Project state
 
-Last reviewed: 2026-08-29 (America/Los_Angeles)
+Last reviewed: 2026-09-01 (America/Los_Angeles)
 
-## 0.15.2 BR-delimited copied-share candidate
+## 0.15.3 opaque Bilibili short-link candidate
+
+- The theme recognizes only exact HTTPS `b23.tv` and `bili2233.cn` paths whose
+  opaque token is 5-12 ASCII alphanumeric characters. `www`, query, fragment,
+  credentials, ports, lookalikes, `v.douyin.com`, and every other provider are
+  rejected. Existing directly parseable BV/av short paths remain synchronous.
+- Resolution is behind `enable_short_link_resolution`, default `false`. The
+  client derives `/resolve` from the existing operator-controlled
+  `expand_reader_endpoint` origin, sends a credential-free/no-referrer GET, and
+  accepts only contract version 1 plus a canonical URL that passes the existing
+  local Bilibili video parser again. Failures preserve the original content.
+- Identical URLs share a 24-entry, five-minute in-memory promise cache and a
+  ten-second client timeout. Failed or invalid responses are evicted. Candidates
+  consume `max_embeds_per_post` before resolution. Paragraph placement and
+  downstream exclusion remain unchanged; anchor and paragraph are both marked
+  while awaiting resolution, and same-paragraph results are inserted in source
+  order after all pending results for that paragraph settle.
+- Local candidate evidence: 79/79 Node tests plus initializer syntax, JSON,
+  YAML, Foliate SHA-256, and diff checks pass. New tests cover the exact short
+  grammar, default-off behavior, same-origin endpoint derivation, mixed copied
+  text with NBSP and terminal punctuation, pre-resolution card budgeting,
+  shared in-flight fetch, local response revalidation, bounded TTL/LRU behavior,
+  failure eviction, and re-decoration blocking while a request is pending.
+- Worker prerequisite is already accepted: clean resolver version
+  `392e13be-70f7-464c-9c09-34e1a139eff6` is active at 100%, while preserved
+  blocked Zhihu candidate `3edbcd17-da5e-4dc2-9de1-314609717bb7` is restored at
+  0%. The resolver passed real-host override, 10%, 50%, and 100% acceptance.
+- `CAPABILITY_FIT=no-new-cloudflare-capability`: the client reuses the accepted
+  Worker, custom domain, Cache API, limiter, observability, and CSP origin. Theme
+  containment is `enable_short_link_resolution=false`; full theme rollback is
+  source `b3f9006a4d83bd74b1d8b76ca1f9e9edd2972b88`. Worker rollback restores
+  `b5d4ccac-b84a-4c5c-8716-4d20f4691689@100%` plus the preserved Zhihu version
+  at 0%.
+
+## 0.15.2 BR-delimited copied-share rendering: accepted in production
 
 - The candidate treats direct-child `<br>` elements in one cooked paragraph as
   visual-segment boundaries. Each segment may contribute one URL-labelled,
@@ -24,11 +58,13 @@ Last reviewed: 2026-08-29 (America/Los_Angeles)
   re-decoration without duplicate cards. An authenticated composer-preview
   probe exposed cross-row title reuse in the first published candidate; the
   segment-clone correction and a dedicated regression test now cover it.
-- Production theme 119 currently points to first candidate `f87398c`, version
-  `0.15.2`, with exact database parity and no import errors. Authenticated
-  composer preview exposed the cross-row title defect described above; the
-  corrected source still requires GitHub CI, guarded refresh, database readback,
-  and repeated browser controls before this section may be marked accepted.
+- Corrected implementation `b3f9006a4d83bd74b1d8b76ca1f9e9edd2972b88`
+  passed hosted Actions run `33594231330`, was installed into theme 119 with
+  exact local/remote SHA parity, `commits_behind=0`, version `0.15.2`, 24
+  settings, and no import/field errors. Authenticated composer preview rendered
+  two BR-separated rows as two ordered cards with distinct canonical URLs and
+  distinct row titles; the same-segment two-link negative remained untouched.
+  The draft was discarded and reopened empty, so no forum post was created.
 - `CAPABILITY_FIT=no-new-capability`: this is a leaf-only cooked-DOM detector
   correction. It adds no endpoint, Worker, binding, route, storage, identity,
   data, cost, or CSP surface. Immediate rollback is theme source `7ddffd5`.
@@ -240,38 +276,37 @@ Last reviewed: 2026-08-29 (America/Los_Angeles)
 
 ## Accepted production state
 
-- Accepted runtime/theme release: `0.13.0`.
+- Accepted runtime/theme release before the 0.15.3 candidate: `0.15.2`.
 - Accepted implementation and JavaScript runtime source SHA:
-  `b335cc5f0bd4c1df05e051a19772ec1b76d478f6`.
+  `b3f9006a4d83bd74b1d8b76ca1f9e9edd2972b88`.
 - Production surface: Discourse remote theme component `119` on `forum.rdfzer.com`.
-- Accepted release readback: theme `119` was refreshed exactly to `b335cc5`; its
+- Accepted release readback: theme `119` was refreshed exactly to `b3f9006`; its
   `RemoteTheme.local_version` and `remote_version` both matched the full accepted
-  implementation SHA, `commits_behind=0`, `theme_version=0.13.0`, and
+  implementation SHA, `commits_behind=0`, `theme_version=0.15.2`, and
   `last_error_text=nil`.
-- GitHub Actions run `32952009174` completed successfully for the accepted
+- GitHub Actions run `33594231330` completed successfully for the accepted
   implementation.
 - The component is enabled and attached to parent themes `[-2, -1, 1, 8, 14, 117, 118]`.
 - The effective production reader settings were `enable_expand_reader=true`, `expand_reader_endpoint=https://reader.bdfz.net/read`, and `expand_reader_height=560`. They were defaults, not database overrides.
 - The accepted reader Worker version is
-  `b5d4ccac-b84a-4c5c-8716-4d20f4691689`, active through deployment
-  `d5d9d4f0-9a6d-4a6c-b301-c185dfea6bc0`. Its custom-domain routing,
+  `392e13be-70f7-464c-9c09-34e1a139eff6` at 100%, with blocked Zhihu candidate
+  `3edbcd17-da5e-4dc2-9de1-314609717bb7` preserved at 0%. Its custom-domain routing,
   allowlist, monitoring, and Cloudflare rollback are owned by
   `/Users/ylsuen/CF/services/expand-reader`, not by this repository.
 - Runtime-behavior rollback reference:
-  `d8c43282ba19e7a0f4191e457f3b8573f00f60d9` (`0.12.0`). Restore that tree
+  `7ddffd589c58b0ebd3af2962cfaf3ee578576ba2` (`0.15.1`). Restore that tree
   through a reviewed revert commit on `main`; do not rewrite history or point
   the remote theme at an unreviewed detached revision.
 - Live state is authoritative over this file. Use the readback procedure in `docs/OPERATIONS.md` before any mutation.
 
-### Runtime SHA versus docs-only theme SHA
+### Source authority during the 0.15.3 release
 
-This accepted implementation was browser-verified while theme `119` pointed at
-`b335cc5f0bd4c1df05e051a19772ec1b76d478f6`. The follow-up commit that records this
-closeout changes only `PROJECT_STATE.md` and `docs/OPERATIONS.md`. After that docs-only
-commit is pushed and refreshed, `RemoteTheme.local_version` and `remote_version` will
-correctly report the docs-only commit SHA. That source-synchronization SHA must not be
-reported as a new runtime release: the installed JavaScript and accepted runtime
-authority remain release `0.13.0` at `b335cc5f0bd4c1df05e051a19772ec1b76d478f6`.
+Theme `119` remains accepted at 0.15.2 source
+`b3f9006a4d83bd74b1d8b76ca1f9e9edd2972b88` until the 0.15.3 implementation
+passes hosted CI, guarded refresh, exact database readback, and authenticated
+browser acceptance. The final closeout must record both the 0.15.3 runtime
+implementation SHA and any later docs-only synchronization SHA without treating
+documentation-only movement as a second JavaScript release.
 
 ## 0.11.1 scope
 

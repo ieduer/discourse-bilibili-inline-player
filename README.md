@@ -46,7 +46,7 @@ Archive audio and video play inline in a native media element, expanded on load 
 
 Some sources refuse to be framed **and** refuse cross-origin reads, which leaves a client-side component with nothing but a link. For those, the component calls a reading-view service the forum operator runs — [`expand-reader`](https://github.com/ieduer/expand-reader) — which fetches the page server-side and returns an already-sanitized reading fragment. The component re-sanitizes that fragment against its own allowlist before it touches the DOM, and any failure falls back silently to the URL-derived source card.
 
-This is the single sanctioned path for content that cannot be expanded directly. It is configured with `enable_expand_reader`, provider-specific `enable_zhihu_summary`, `expand_reader_endpoint`, and `expand_reader_height`. The endpoint must be HTTPS and must be a service the operator controls. Marxists pages use the service's direct-read allowlist; Zhihu never joins that fetch allowlist and instead uses only the fixed official search API for an exact-ID summary.
+This is the single sanctioned path for content that cannot be expanded directly. It is configured with `enable_expand_reader`, provider-specific `enable_zhihu_summary`, `expand_reader_endpoint`, and `expand_reader_height`. The endpoint must be HTTPS and must be a service the operator controls. Marxists pages use the service's direct-read allowlist; Zhihu never joins that fetch allowlist and instead uses only the fixed official search API for an exact-ID summary. The independent, default-off `enable_short_link_resolution` switch derives `/resolve` on the same endpoint origin for exact opaque `b23.tv` and `bili2233.cn` video shares. The client accepts a result only after the returned canonical URL passes the existing local Bilibili parser again.
 
 Inline playback:
 
@@ -58,6 +58,8 @@ Inline playback:
 - `https://b23.tv/av...`
 - `https://bili2233.cn/BV...`
 - `https://bili2233.cn/av...`
+- opaque `https://b23.tv/<5-12 alphanumeric characters>` when `enable_short_link_resolution` is enabled
+- opaque `https://bili2233.cn/<5-12 alphanumeric characters>` when `enable_short_link_resolution` is enabled
 - `https://player.bilibili.com/player.html?...`
 - `https://www.bilibili.com/bangumi/play/ep...`
 - `https://www.bilibili.com/bangumi/play/ss...`
@@ -146,7 +148,7 @@ For Xiaohongshu and RedNote, the official platform documentation reviewed on 202
 
 Still not supported:
 
-- opaque non-Xiaohongshu short-link tokens that cannot be resolved client-side before Discourse oneboxes them
+- opaque short-link tokens outside the exact optional `b23.tv` / `bili2233.cn` resolver contract
 - visual segments with multiple links, a non-URL link label, code, navigation anchors, lists, blockquotes, media, or an existing onebox; separate BR-delimited copied share rows in one cooked paragraph may each contain one visible supported URL and consume one embed from the per-post limit
 - favorites, collections, channels, playlists, watch-later, and other multi-item containers
 - DRM-encrypted EPUB/MOBI/AZW3 files
@@ -179,7 +181,8 @@ Pasted Xiaohongshu share text, with either plain or auto-linkified share URLs, i
 17. For content types without a stable official iframe path in this theme-component-only architecture, the component still upgrades the post into a unified media card and falls back to opening the canonical source page.
 18. For EPUB, MOBI, and AZW3 attachment links, the component downloads the bounded file in the current browser, removes active markup, and opens it in the local Foliate reader. Parse, size, CORS, or DRM failures leave the original download available.
 19. For sources that can be neither framed nor read by the browser, the component asks the operator's expand-reader service for a sanitized reading fragment and renders it expanded in place, with no click step. Reader output is re-sanitized locally against an element and attribute allowlist, links are forced to `target="_blank" rel="noopener nofollow ugc"`, an over-long page is trimmed with a notice, and any failure leaves the source card untouched.
-20. For the Marxists Internet Archive, the component reads the archive's own URL grammar. It resolves the section, the author slug against a curated English and Chinese name table, the year from a path segment such as `1848` or `1867-c1`, the date the Chinese archive encodes in filenames such as `marxist.org-chinese-mao-19251201.htm`, and the chapter from files such as `ch01.htm`. Opaque archive abbreviations such as `staterev` are not promoted to titles; the resolved author is used instead. Archive audio and video are attached to a native media element and expand without a click; documents render as an already-open reading card.
+20. For exact opaque Bilibili short shares, the component can call the operator-owned reader service's same-origin `GET /resolve?url=...` endpoint. Identical links share one bounded in-flight request, the returned URL must pass the local Bilibili video parser, and every failure leaves the original copied text and link untouched.
+21. For the Marxists Internet Archive, the component reads the archive's own URL grammar. It resolves the section, the author slug against a curated English and Chinese name table, the year from a path segment such as `1848` or `1867-c1`, the date the Chinese archive encodes in filenames such as `marxist.org-chinese-mao-19251201.htm`, and the chapter from files such as `ch01.htm`. Opaque archive abbreviations such as `staterev` are not promoted to titles; the resolved author is used instead. Archive audio and video are attached to a native media element and expand without a click; documents render as an already-open reading card.
 
 The component does not modify Discourse core and does not require a rebuild.
 
@@ -227,6 +230,7 @@ No rebuild is required.
 - `enable_xiaohongshu_inline_page`
 - `enable_marxists_inline_media`
 - `enable_expand_reader`
+- `enable_short_link_resolution` (default `false`; independent circuit breaker)
 - `enable_zhihu_summary`
 - `enable_wechat_inline`
 - `enable_bdfz_posts_inline`
@@ -256,11 +260,12 @@ No rebuild is required.
 - Zhihu cards load no Zhihu iframe, script, or image resource. Summary JSON comes only from the configured reader endpoint with credentials omitted and no-referrer; the original canonical link is always present.
 - Xiaohongshu and RedNote cards default to an expanded lazy-loaded iframe for the official user-supplied note URL. A strict custom `frame-src` policy must allow both the root and wildcard forms of `xiaohongshu.com`, `xhslink.com`, `xhslink.cn`, and `rednote.com` (for example, `https://xiaohongshu.com https://*.xiaohongshu.com`).
 - Marxists documents and Zhihu summary requests call the configured `expand_reader_endpoint` with credentials omitted and a no-referrer policy. If a custom CSP adds `connect-src`, it must allow the exact reader endpoint origin. Marxists images are upgraded to HTTPS, restricted to the source archive host, lazy-loaded, and forced to `referrerpolicy="no-referrer"`; Zhihu summary images are rejected.
+- Opaque Bilibili short-link resolution derives `/resolve` from the configured reader endpoint origin, sends only the exact public short URL with credentials omitted and no referrer, and accepts only contract version `1` plus a canonical URL that the local Bilibili video parser accepts. It never resolves `v.douyin.com` or any other provider.
 - Reader and WeChat conversion results use separate 24-entry, five-minute in-memory LRUs. Source fragments share a reader fetch; repeated WeChat links share one conversion request. WeChat HTTP `202` responses are polled with bounded delay; at most two transient request interruptions are retried, and the entire wait is capped at four minutes and 64 attempts. Failed responses are evicted immediately so a transient outage does not persist for the SPA lifetime.
 - Discourse Onebox is a separate server-side stage. The component does not require Onebox metadata; copied share text supplies the preview content, and `blocked_onebox_domains` can prevent redundant server fetches.
 - If a supported media link cannot be parsed, the original cooked content is left untouched.
 - Ebook parsing only applies to cooked Discourse attachment links ending in `.epub`, `.mobi`, or `.azw3`; arbitrary inline URLs and PDF attachments are not taken over.
-- The reader bundle is self-hosted as a theme asset. No runtime CDN, resolver, converter, account, cookie, or API key is required.
+- The reader bundle is self-hosted as a theme asset. The optional Bilibili resolver uses only the existing operator-owned reader service; no runtime CDN, third-party resolver, converter, account, cookie, or client API key is required.
 - The default ebook inline limit is 50 MiB and can be configured from 1–100 MiB. The site upload limit is separate; a larger attachment remains downloadable.
 - The current forum CSP blocks untrusted book scripts. Do not loosen `script-src` to include `blob:` or unsafe inline script for ebook compatibility.
 
