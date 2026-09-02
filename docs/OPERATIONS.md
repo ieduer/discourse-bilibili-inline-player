@@ -7,9 +7,9 @@ This is the canonical operational procedure for the Extended Preview & Embed Sui
 action, and this file owns executable test, release, readback, restore, and rollback
 steps. Live Discourse and GitHub readback override this document when they disagree.
 
-## 0.15.3 opaque Bilibili short-link candidate
+## 0.15.3 opaque Bilibili short-link resolution: accepted
 
-This candidate adds only exact HTTPS `b23.tv` and `bili2233.cn` opaque paths
+This release adds only exact HTTPS `b23.tv` and `bili2233.cn` opaque paths
 whose token is 5-12 ASCII alphanumeric characters. It does not resolve `www`,
 query/fragment-bearing links, lookalikes, `v.douyin.com`, or any other provider.
 The independent `enable_short_link_resolution` setting defaults to `false`.
@@ -26,13 +26,25 @@ paragraph placement target and per-anchor marker are set while requests are in
 flight, preventing duplicate cards on re-decoration. Same-paragraph results are
 inserted in source order after all pending results for that paragraph settle.
 
-Local candidate gate: 79/79 tests plus JavaScript syntax, JSON, YAML, Foliate
-hash, and diff checks pass. The prerequisite Worker resolver is already accepted
+Accepted implementation `a265077319a492fefe3ca25ff8dc41d508dbae12`
+passed 80/80 tests plus JavaScript syntax, JSON, YAML, Foliate hash, and diff
+checks; hosted Actions run `33599017104` passed. The prerequisite Worker resolver is accepted
 as immutable version `392e13be-70f7-464c-9c09-34e1a139eff6` at 100%; blocked
 Zhihu candidate `3edbcd17-da5e-4dc2-9de1-314609717bb7` has been restored at 0%.
 Theme containment is `enable_short_link_resolution=false`; full theme rollback
 is `b3f9006a4d83bd74b1d8b76ca1f9e9edd2972b88`. Worker rollback is
 `b5d4ccac-b84a-4c5c-8716-4d20f4691689@100%` plus preserved Zhihu at 0%.
+
+Theme 119 readback proved exact local/remote implementation SHA parity,
+`commits_behind=0`, version 0.15.3, 25 settings, effective production override
+`enable_short_link_resolution=true`, and no import/field errors. Authenticated
+composer acceptance of the supplied mixed copied text retained the original
+paragraph and anchor, generated exactly one canonical `BV1XntA6eEED` card, and
+removed the short URL only from the card title. Adding and removing one trailing
+space triggered repeated preview decoration while the card count and resolver
+request count both remained one. The test draft was discarded and reopened
+empty, so no post was created. The page's only console error was an existing
+Douyin iframe WebSocket diagnostic unrelated to the resolver.
 
 ## 0.15.2 BR-delimited copied-share rendering: accepted
 
@@ -79,10 +91,9 @@ contract change. Roll back theme 119 to exact source `7ddffd5`.
 - Release gate: clean exact source, tests, GitHub push, exact-SHA hosted-CI readback, guarded theme refresh, database readback, public health, and browser acceptance. A zero-step GitHub billing rejection may use only the bounded local-CI exception below; a real test failure may not.
 - Installed runtime at the 2026-08-26 preflight: `0.12.0`, exact SHA
   `d8c43282ba19e7a0f4191e457f3b8573f00f60d9`, with no import or field error.
-- Current accepted theme runtime before the 0.15.3 candidate is `0.15.2`
-  implementation SHA `b3f9006a4d83bd74b1d8b76ca1f9e9edd2972b88`;
-  immediate theme rollback is `7ddffd589c58b0ebd3af2962cfaf3ee578576ba2`
-  (`0.15.1`). Resolver containment is
+- Current accepted theme runtime is `0.15.3`, implementation SHA
+  `a265077319a492fefe3ca25ff8dc41d508dbae12`; immediate theme rollback is
+  `b3f9006a4d83bd74b1d8b76ca1f9e9edd2972b88` (`0.15.2`). Resolver containment is
   `enable_short_link_resolution=false`; the broader reader kill switch remains
   `enable_expand_reader=false`. Accepted reader topology is resolver version
   `392e13be-70f7-464c-9c09-34e1a139eff6@100%` plus preserved blocked Zhihu

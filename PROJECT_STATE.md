@@ -2,13 +2,14 @@
 
 Last reviewed: 2026-09-01 (America/Los_Angeles)
 
-## 0.15.3 opaque Bilibili short-link candidate
+## 0.15.3 opaque Bilibili short-link resolution: accepted in production
 
 - The theme recognizes only exact HTTPS `b23.tv` and `bili2233.cn` paths whose
   opaque token is 5-12 ASCII alphanumeric characters. `www`, query, fragment,
   credentials, ports, lookalikes, `v.douyin.com`, and every other provider are
   rejected. Existing directly parseable BV/av short paths remain synchronous.
-- Resolution is behind `enable_short_link_resolution`, default `false`. The
+- Resolution is behind `enable_short_link_resolution`, whose source default is
+  `false`; theme 119 has an explicit accepted production override of `true`. The
   client derives `/resolve` from the existing operator-controlled
   `expand_reader_endpoint` origin, sends a credential-free/no-referrer GET, and
   accepts only contract version 1 plus a canonical URL that passes the existing
@@ -19,12 +20,15 @@ Last reviewed: 2026-09-01 (America/Los_Angeles)
   downstream exclusion remain unchanged; anchor and paragraph are both marked
   while awaiting resolution, and same-paragraph results are inserted in source
   order after all pending results for that paragraph settle.
-- Local candidate evidence: 79/79 Node tests plus initializer syntax, JSON,
+- Accepted implementation `a265077319a492fefe3ca25ff8dc41d508dbae12`
+  passed 80/80 Node tests plus initializer syntax, JSON,
   YAML, Foliate SHA-256, and diff checks pass. New tests cover the exact short
   grammar, default-off behavior, same-origin endpoint derivation, mixed copied
   text with NBSP and terminal punctuation, pre-resolution card budgeting,
   shared in-flight fetch, local response revalidation, bounded TTL/LRU behavior,
-  failure eviction, and re-decoration blocking while a request is pending.
+  failure eviction, re-decoration blocking while a request is pending, and
+  removal of the visible short URL from generated card titles without changing
+  the source paragraph. Hosted Actions run `33599017104` completed successfully.
 - Worker prerequisite is already accepted: clean resolver version
   `392e13be-70f7-464c-9c09-34e1a139eff6` is active at 100%, while preserved
   blocked Zhihu candidate `3edbcd17-da5e-4dc2-9de1-314609717bb7` is restored at
@@ -35,6 +39,18 @@ Last reviewed: 2026-09-01 (America/Los_Angeles)
   source `b3f9006a4d83bd74b1d8b76ca1f9e9edd2972b88`. Worker rollback restores
   `b5d4ccac-b84a-4c5c-8716-4d20f4691689@100%` plus the preserved Zhihu version
   at 0%.
+- Guarded theme 119 refresh and database readback proved exact local/remote SHA
+  parity at `a265077319a492fefe3ca25ff8dc41d508dbae12`,
+  `commits_behind=0`, version `0.15.3`, 25 settings, effective short-link switch
+  `true`, and no import/field errors. Authenticated composer acceptance used the
+  exact supplied text and opaque `b23.tv/cUbeWZt` link: the original paragraph
+  and anchor remained visible, exactly one card linked canonical
+  `BV1XntA6eEED`, its title omitted the short URL, and both paragraph and anchor
+  completion markers were present. Adding and removing a harmless trailing
+  space triggered two new previews without creating a second card or a second
+  `/resolve` request. The draft was discarded and reopened empty; no post was
+  created. The only console error was the pre-existing Douyin iframe WebSocket
+  diagnostic and did not involve this provider.
 
 ## 0.15.2 BR-delimited copied-share rendering: accepted in production
 
@@ -276,15 +292,15 @@ Last reviewed: 2026-09-01 (America/Los_Angeles)
 
 ## Accepted production state
 
-- Accepted runtime/theme release before the 0.15.3 candidate: `0.15.2`.
+- Accepted runtime/theme release: `0.15.3`.
 - Accepted implementation and JavaScript runtime source SHA:
-  `b3f9006a4d83bd74b1d8b76ca1f9e9edd2972b88`.
+  `a265077319a492fefe3ca25ff8dc41d508dbae12`.
 - Production surface: Discourse remote theme component `119` on `forum.rdfzer.com`.
-- Accepted release readback: theme `119` was refreshed exactly to `b3f9006`; its
+- Accepted release readback: theme `119` was refreshed exactly to `a265077`; its
   `RemoteTheme.local_version` and `remote_version` both matched the full accepted
-  implementation SHA, `commits_behind=0`, `theme_version=0.15.2`, and
-  `last_error_text=nil`.
-- GitHub Actions run `33594231330` completed successfully for the accepted
+  implementation SHA, `commits_behind=0`, `theme_version=0.15.3`, 25 settings,
+  effective `enable_short_link_resolution=true`, and `last_error_text=nil`.
+- GitHub Actions run `33599017104` completed successfully for the accepted
   implementation.
 - The component is enabled and attached to parent themes `[-2, -1, 1, 8, 14, 117, 118]`.
 - The effective production reader settings were `enable_expand_reader=true`, `expand_reader_endpoint=https://reader.bdfz.net/read`, and `expand_reader_height=560`. They were defaults, not database overrides.
@@ -293,20 +309,21 @@ Last reviewed: 2026-09-01 (America/Los_Angeles)
   `3edbcd17-da5e-4dc2-9de1-314609717bb7` preserved at 0%. Its custom-domain routing,
   allowlist, monitoring, and Cloudflare rollback are owned by
   `/Users/ylsuen/CF/services/expand-reader`, not by this repository.
-- Runtime-behavior rollback reference:
-  `7ddffd589c58b0ebd3af2962cfaf3ee578576ba2` (`0.15.1`). Restore that tree
+- Immediate containment is `enable_short_link_resolution=false`. Runtime-behavior
+  rollback reference is
+  `b3f9006a4d83bd74b1d8b76ca1f9e9edd2972b88` (`0.15.2`). Restore that tree
   through a reviewed revert commit on `main`; do not rewrite history or point
   the remote theme at an unreviewed detached revision.
 - Live state is authoritative over this file. Use the readback procedure in `docs/OPERATIONS.md` before any mutation.
 
-### Source authority during the 0.15.3 release
+### Source authority after the 0.15.3 release
 
-Theme `119` remains accepted at 0.15.2 source
-`b3f9006a4d83bd74b1d8b76ca1f9e9edd2972b88` until the 0.15.3 implementation
-passes hosted CI, guarded refresh, exact database readback, and authenticated
-browser acceptance. The final closeout must record both the 0.15.3 runtime
-implementation SHA and any later docs-only synchronization SHA without treating
-documentation-only movement as a second JavaScript release.
+Theme `119` accepted the 0.15.3 JavaScript implementation at
+`a265077319a492fefe3ca25ff8dc41d508dbae12` after hosted CI, guarded refresh,
+exact database readback, and authenticated browser acceptance. A later
+documentation-only synchronization commit does not constitute a second
+JavaScript release; record its exact installed SHA in the shared-hub receipt and
+action log while retaining `a265077` as the runtime implementation authority.
 
 ## 0.11.1 scope
 
