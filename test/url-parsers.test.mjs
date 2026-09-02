@@ -194,6 +194,20 @@ test("reader titles discard Discourse click telemetry and prefer source metadata
   );
 });
 
+test("resolved short links are omitted from card titles without changing source text", () => {
+  const parsed = parseBilibiliUrl(
+    "https://www.bilibili.com/video/BV1XntA6eEED?p=1"
+  );
+  const shortLabel = "https://b23.tv/cUbeWZt】";
+  const copiedTitle = `【你好陌生人，如果你刷到这个视频，请对自己说一句辛苦了】\u00a0${shortLabel}`;
+
+  assert.equal(
+    cleanProviderTitle(copiedTitle, parsed, shortLabel),
+    "【你好陌生人，如果你刷到这个视频，请对自己说一句辛苦了】"
+  );
+  assert.equal(copiedTitle.includes(shortLabel), true, "the source string is not mutated");
+});
+
 function makeCookedParagraphFixture({
   after = "",
   anchorClass = "",
@@ -1442,6 +1456,7 @@ test("collects mixed-text opaque short links only when the resolver is enabled",
     assert.equal(candidate.markerTarget, fixture.anchor);
     assert.equal(candidate.parsed, null);
     assert.equal(candidate.shortUrl, shortUrl);
+    assert.equal(candidate.metadataTextToOmit, `${shortUrl}】`);
     assert.equal(candidate.preserveSource, true);
   } finally {
     delete themeSettings.enable_short_link_resolution;

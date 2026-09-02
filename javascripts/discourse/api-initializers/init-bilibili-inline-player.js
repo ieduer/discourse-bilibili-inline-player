@@ -2784,7 +2784,7 @@ function normalizeTitleText(value) {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
 }
 
-function cleanProviderTitle(title, parsed) {
+function cleanProviderTitle(title, parsed, textToOmit = "") {
   let cleaned = normalizeTitleText(title);
 
   if (!cleaned) {
@@ -2794,6 +2794,12 @@ function cleanProviderTitle(title, parsed) {
   /* Discourse appends click telemetry to link aria-labels. It is not content
      metadata and must never become a card title or accessible region label. */
   cleaned = cleaned.replace(/\s+link clicked \d+ times?$/i, "");
+
+  const omitted = normalizeTitleText(textToOmit);
+
+  if (omitted) {
+    cleaned = normalizeTitleText(cleaned.replace(omitted, " "));
+  }
 
   if (parsed?.provider === "netease") {
     cleaned = cleaned.replace(/\s*-\s*网易云音乐\s*$/i, "");
@@ -2903,7 +2909,7 @@ function collectTextTitleCandidates(target, fallbackAnchor) {
   return candidates;
 }
 
-function extractTitle(target, fallbackAnchor, parsed) {
+function extractTitle(target, fallbackAnchor, parsed, textToOmit = "") {
   for (const candidate of collectTextTitleCandidates(target, fallbackAnchor)) {
     const structuredTitle = extractStructuredProviderTitle(candidate, parsed);
 
@@ -2911,7 +2917,7 @@ function extractTitle(target, fallbackAnchor, parsed) {
       return structuredTitle;
     }
 
-    const title = cleanProviderTitle(candidate, parsed);
+    const title = cleanProviderTitle(candidate, parsed, textToOmit);
 
     if (!title || title.length > 120) {
       continue;
@@ -3049,7 +3055,7 @@ function extractMarxistsCookedText(target) {
   return isGenericTitle(description) ? "" : description.slice(0, 400);
 }
 
-function buildMetadata(target, fallbackAnchor, parsed) {
+function buildMetadata(target, fallbackAnchor, parsed, textToOmit = "") {
   if (parsed.provider === "ebook") {
     const anchorTitle = normalizeTitleText(fallbackAnchor?.textContent || "");
 
@@ -3068,7 +3074,7 @@ function buildMetadata(target, fallbackAnchor, parsed) {
   if (parsed.provider === "marxists") {
     return {
       parsed,
-      title: extractTitle(target, fallbackAnchor, parsed),
+      title: extractTitle(target, fallbackAnchor, parsed, textToOmit),
       description: getMarxistsDescription(parsed),
       sourceText: extractMarxistsCookedText(target),
       poster: extractPoster(target),
@@ -3097,7 +3103,7 @@ function buildMetadata(target, fallbackAnchor, parsed) {
 
   return {
     parsed,
-    title: extractTitle(target, fallbackAnchor, parsed),
+    title: extractTitle(target, fallbackAnchor, parsed, textToOmit),
     description: "",
     poster: extractPoster(target),
     canonicalUrl: parsed.canonicalUrl,
@@ -5583,6 +5589,9 @@ function collectOneboxCandidates(element) {
       anchor,
       parsed,
       shortUrl,
+      metadataTextToOmit: shortUrl
+        ? normalizeTitleText(anchor?.textContent || shortUrl)
+        : "",
     });
   }
 
@@ -5644,6 +5653,9 @@ function collectStandaloneCandidates(element, existingTargets) {
       anchor,
       parsed,
       shortUrl,
+      metadataTextToOmit: shortUrl
+        ? normalizeTitleText(anchor.textContent || shortUrl)
+        : "",
       preserveSource:
         Boolean(shortUrl) || ["xiaohongshu", "wechat"].includes(parsed.provider),
     });
@@ -5811,6 +5823,9 @@ function collectVisibleUrlCandidates(element, existingTargets) {
       anchor,
       parsed: matched.parsed,
       shortUrl: matched.shortUrl,
+      metadataTextToOmit: matched.shortUrl
+        ? normalizeTitleText(anchor.textContent || matched.shortUrl)
+        : "",
       preserveSource: true,
       segmentIndex: matched.segmentIndex,
     });
@@ -5919,6 +5934,7 @@ function collectEmbedTextCandidates(element, existingTargets) {
       anchor: null,
       parsed,
       shortUrl,
+      metadataTextToOmit: shortUrl,
       preserveSource: true,
     });
   }
@@ -5949,7 +5965,8 @@ function replaceCandidate(candidate, insertionCursors = null) {
   const metadata = buildMetadata(
     candidate.metadataTarget || candidate.target,
     candidate.anchor,
-    candidate.parsed
+    candidate.parsed,
+    candidate.metadataTextToOmit
   );
   const replacement = buildWrapper(metadata);
   replacement.dataset.bilibiliInlinePlayer = "done";
