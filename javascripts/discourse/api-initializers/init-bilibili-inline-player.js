@@ -5461,13 +5461,41 @@ function collectStandaloneCandidates(element, existingTargets) {
   return results;
 }
 
-/* Paragraph-inline takeover is intentionally limited to one anchor whose
-   displayed text is the same supported URL as its href. This catches a URL on
-   any visual line while leaving titled prose links, navigation clusters,
-   code, block quotes, lists, media, PDFs, and every unsupported URL untouched. */
+function getParagraphVisualSegmentIndex(paragraph, anchor) {
+  let directChild = anchor;
+
+  while (directChild?.parentElement && directChild.parentElement !== paragraph) {
+    directChild = directChild.parentElement;
+  }
+
+  if (!directChild || directChild.parentElement !== paragraph) {
+    return -1;
+  }
+
+  let segmentIndex = 0;
+
+  for (const child of Array.from(paragraph.children || [])) {
+    if (child === directChild) {
+      return segmentIndex;
+    }
+
+    if (child.tagName === "BR") {
+      segmentIndex += 1;
+    }
+  }
+
+  return -1;
+}
+
+/* Paragraph-inline takeover is intentionally limited to one URL-labelled
+   anchor per BR-delimited visual segment. This supports multiple copied share
+   rows that Discourse cooks into one paragraph while leaving titled prose
+   links, same-line navigation clusters, code, block quotes, lists, media,
+   PDFs, and every unsupported URL untouched. */
 function getVisibleUrlAnchorTarget(anchor) {
   if (
     !anchor?.href ||
+    anchor.dataset?.bilibiliInlinePlayer ||
     anchor.closest("pre, code, li, blockquote, nav, aside.onebox, article.onebox, .bilibili-inline-player")
   ) {
     return null;
@@ -5483,21 +5511,30 @@ function getVisibleUrlAnchorTarget(anchor) {
     return null;
   }
 
-  const links = Array.from(paragraph.querySelectorAll("a[href]"));
+  const segmentIndex = getParagraphVisualSegmentIndex(paragraph, anchor);
+  const links = Array.from(paragraph.querySelectorAll("a[href]")).filter(
+    (link) => getParagraphVisualSegmentIndex(paragraph, link) === segmentIndex
+  );
 
-  if (links.length !== 1 || links[0] !== anchor) {
+  if (segmentIndex < 0 || links.length !== 1 || links[0] !== anchor) {
     return null;
   }
 
   const visibleText = normalizeTitleText(anchor.textContent || "")
     .replace(/\s+link clicked \d+ times?$/i, "");
-  const visibleUrls = extractUrlsFromText(visibleText);
+  const cleanedVisibleText = normalizeUrlLikeString(visibleText, {
+    trimTrailingPunctuation: true,
+  });
+  const visibleUrls = extractUrlsFromText(cleanedVisibleText);
 
   if (visibleUrls.length !== 1) {
     return null;
   }
 
-  const parsedHref = parseBilibiliUrl(anchor.href);
+  const rawHref = anchor.getAttribute?.("href") || anchor.href;
+  const parsedHref = parseBilibiliUrl(
+    normalizeUrlLikeString(rawHref, { trimTrailingPunctuation: true })
+  );
   const parsedVisible = parseBilibiliUrl(visibleUrls[0]);
 
   if (
@@ -5508,15 +5545,16 @@ function getVisibleUrlAnchorTarget(anchor) {
     return null;
   }
 
-  return normalizeTitleText(visibleText.replace(visibleUrls[0], ""))
+  return normalizeTitleText(cleanedVisibleText.replace(visibleUrls[0], ""))
     ? null
-    : { paragraph, parsed: parsedHref };
+    : { paragraph, parsed: parsedHref, segmentIndex };
 }
 
 function collectVisibleUrlCandidates(element, existingTargets) {
   const limit = Math.max(1, getIntegerSetting("max_embeds_per_post", 4));
   const results = [];
-  const seen = new Set(existingTargets);
+  const blockedTargets = new Set(existingTargets);
+  const seenAnchors = new Set();
 
   for (const anchor of element.querySelectorAll("p a[href]")) {
     if (results.length + existingTargets.length >= limit) {
@@ -5525,16 +5563,22 @@ function collectVisibleUrlCandidates(element, existingTargets) {
 
     const matched = getVisibleUrlAnchorTarget(anchor);
 
-    if (!matched || seen.has(matched.paragraph)) {
+    if (
+      !matched ||
+      blockedTargets.has(matched.paragraph) ||
+      seenAnchors.has(anchor)
+    ) {
       continue;
     }
 
-    seen.add(matched.paragraph);
+    seenAnchors.add(anchor);
     results.push({
       target: matched.paragraph,
+      markerTarget: anchor,
       anchor,
       parsed: matched.parsed,
       preserveSource: true,
+      segmentIndex: matched.segmentIndex,
     });
   }
 
@@ -5645,22 +5689,30 @@ function collectEmbedTextCandidates(element, existingTargets) {
   return results;
 }
 
-function placeCandidateReplacement(candidate, replacement) {
+function placeCandidateReplacement(candidate, replacement, insertionCursors = null) {
+  const markerTarget = candidate.markerTarget || candidate.target;
+
   if (candidate.preserveSource) {
+    markerTarget.dataset.bilibiliInlinePlayer = "done";
     candidate.target.dataset.bilibiliInlinePlayer = "done";
-    candidate.target.insertAdjacentElement("afterend", replacement);
+    const insertionTarget = insertionCursors?.get(candidate.target) || candidate.target;
+    insertionTarget.insertAdjacentElement("afterend", replacement);
+    insertionCursors?.set(candidate.target, replacement);
   } else {
     candidate.target.replaceWith(replacement);
   }
 }
 
-function replaceCandidate(candidate) {
+function replaceCandidate(candidate, insertionCursors = null) {
+  const markerTarget = candidate.markerTarget || candidate.target;
+
+  markerTarget.dataset.bilibiliInlinePlayer = "processing";
   candidate.target.dataset.bilibiliInlinePlayer = "processing";
   const metadata = buildMetadata(candidate.target, candidate.anchor, candidate.parsed);
   const replacement = buildWrapper(metadata);
   replacement.dataset.bilibiliInlinePlayer = "done";
 
-  placeCandidateReplacement(candidate, replacement);
+  placeCandidateReplacement(candidate, replacement, insertionCursors);
   maybeResolveMusicPreviewMetadata(replacement);
 }
 
@@ -5670,6 +5722,7 @@ export default apiInitializer((api) => {
   }
 
   api.decorateCookedElement((element) => {
+    const insertionCursors = new WeakMap();
     const oneboxCandidates = collectOneboxCandidates(element);
     const standaloneCandidates = collectStandaloneCandidates(
       element,
@@ -5715,7 +5768,7 @@ export default apiInitializer((api) => {
       ...iframeCandidates,
       ...embedTextCandidates,
     ]) {
-      replaceCandidate(candidate);
+      replaceCandidate(candidate, insertionCursors);
     }
   });
 });

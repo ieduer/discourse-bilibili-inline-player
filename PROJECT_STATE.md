@@ -2,6 +2,31 @@
 
 Last reviewed: 2026-08-29 (America/Los_Angeles)
 
+## 0.15.2 BR-delimited copied-share candidate
+
+- The candidate treats direct-child `<br>` elements in one cooked paragraph as
+  visual-segment boundaries. Each segment may contribute one URL-labelled,
+  locally supported anchor; multiple links in one segment remain rejected.
+- `candidate.target` remains the paragraph so downstream ebook, iframe, and raw
+  embed-text exclusion contracts do not change. A separate anchor marker gives
+  each card its own identity, while the existing paragraph marker remains the
+  re-decoration guard. Preserved-source cards use a moving insertion cursor so
+  multiple cards retain source order after the paragraph.
+- Each accepted visual segment consumes one `max_embeds_per_post` slot. Visible
+  anchor text and raw `href` receive the same bounded trailing-punctuation trim
+  only in this detector; the shared URL parser remains strict.
+- Local candidate evidence: 70/70 Node tests plus initializer syntax, JSON,
+  YAML, Foliate SHA-256, and diff checks pass. New tests cover separate BR
+  segments, same-segment multi-link rejection, card-budget counting, NBSP and
+  terminal Chinese punctuation, stable insertion order, and same-element
+  re-decoration without duplicate cards.
+- Production theme 119 remains unchanged at exact source `7ddffd5`, version
+  `0.15.1`. Browser acceptance, GitHub CI, guarded refresh, and production
+  readback are still required before this section may be marked accepted.
+- `CAPABILITY_FIT=no-new-capability`: this is a leaf-only cooked-DOM detector
+  correction. It adds no endpoint, Worker, binding, route, storage, identity,
+  data, cost, or CSP surface. Immediate rollback is theme source `7ddffd5`.
+
 ## 0.15.1 Douyin official-player portrait layout: accepted in production
 
 - Exact public-video identities are accepted from `douyin.com/video/<ID>`,

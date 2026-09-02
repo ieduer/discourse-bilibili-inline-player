@@ -7,6 +7,31 @@ This is the canonical operational procedure for the Extended Preview & Embed Sui
 action, and this file owns executable test, release, readback, restore, and rollback
 steps. Live Discourse and GitHub readback override this document when they disagree.
 
+## 0.15.2 BR-delimited copied-share candidate
+
+The candidate fixes copied share rows that Discourse cooks into one paragraph
+with `<br>` separators. Eligibility is evaluated per visual segment, not per
+paragraph: each segment must contain exactly one anchor whose visible label and
+`href` canonicalize to the same already-supported URL. The original paragraph
+stays visible, every accepted segment consumes one `max_embeds_per_post` slot,
+and generated cards are inserted after the paragraph in source order.
+
+The paragraph remains `candidate.target` for compatibility with downstream
+collector exclusion. Each accepted anchor is also marked, and the paragraph's
+existing processed marker remains in place, so a second decoration of the same
+element cannot duplicate a card. Code, lists, blockquotes, media, oneboxes,
+non-URL labels, PDFs, and multiple anchors within one visual segment remain
+untouched. Trailing punctuation is normalized only in this visible-link path.
+
+Local candidate gate: 70/70 tests plus JavaScript syntax, JSON, YAML, Foliate
+hash, and diff checks pass. Production is still `7ddffd5` / `0.15.1`; do not
+claim release until GitHub CI, guarded theme 119 refresh, exact database
+readback, and authenticated real-post positive/negative controls pass.
+
+`CAPABILITY_FIT=no-new-capability`. This is a leaf-only DOM detector change with
+no Worker, endpoint, route, binding, storage, identity, data, CSP, or provider
+contract change. Roll back theme 119 to exact source `7ddffd5`.
+
 ## Quick start
 
 - Owner: `suen`.

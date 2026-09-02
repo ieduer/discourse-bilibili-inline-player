@@ -194,6 +194,7 @@ function makeCookedParagraphFixture({
     },
   };
   const makeAnchor = (href, text) => ({
+    dataset: {},
     href,
     className: anchorClass,
     matches: (selector) =>
@@ -564,12 +565,15 @@ test("collects an auto-linkified Xiaohongshu URL inside copied share text", () =
     querySelectorAll: (selector) => (selector === "a[href]" ? [anchor] : []),
   };
   const anchor = {
+    dataset: {},
     href: "https://xhslink.cn/o/Fixture123",
+    parentElement: paragraph,
     textContent: "https://xhslink.cn/o/Fixture123",
     closest(selector) {
       return selector === "p" ? paragraph : null;
     },
   };
+  paragraph.children = [anchor];
   const cooked = {
     querySelectorAll: (selector) =>
       ["p > a[href]:only-child", "p a[href]"].includes(selector) ? [anchor] : [],
@@ -1227,6 +1231,154 @@ test("recognizes one visible supported URL at any position in a paragraph", () =
     assert.equal(candidate.parsed.canonicalUrl, parseBilibiliUrl(url).canonicalUrl, url);
     assert.equal(candidate.preserveSource, true, url);
   }
+});
+
+test("collects multiple URL-labelled anchors from separate BR visual segments", () => {
+  const firstUrl = "https://www.bilibili.com/video/BV1xx411c7mD";
+  const secondUrl = "https://www.bilibili.com/video/BV1xx411c7mE";
+  const paragraph = {
+    children: [],
+    dataset: {},
+    querySelector: () => null,
+    querySelectorAll: (selector) => (selector === "a[href]" ? [first, second] : []),
+  };
+  const makeAnchor = (href) => ({
+    dataset: {},
+    href,
+    parentElement: paragraph,
+    textContent: href,
+    closest(selector) {
+      return selector === "p" ? paragraph : null;
+    },
+  });
+  const first = makeAnchor(firstUrl);
+  const second = makeAnchor(secondUrl);
+  const lineBreak = { parentElement: paragraph, tagName: "BR" };
+  paragraph.children = [first, lineBreak, second];
+  const cooked = {
+    querySelectorAll: (selector) => (selector === "p a[href]" ? [first, second] : []),
+  };
+
+  const candidates = collectVisibleUrlCandidates(cooked, []);
+
+  assert.equal(candidates.length, 2);
+  assert.deepEqual(Array.from(candidates, (candidate) => candidate.segmentIndex), [0, 1]);
+  assert.ok(candidates.every((candidate) => candidate.target === paragraph));
+  assert.deepEqual(Array.from(candidates, (candidate) => candidate.markerTarget), [first, second]);
+});
+
+test("rejects multiple links in one visual segment but not separate share rows", () => {
+  const fixture = makeCookedParagraphFixture({
+    extraLinks: [
+      {
+        href: "https://www.bilibili.com/video/BV1xx411c7mE",
+        text: "https://www.bilibili.com/video/BV1xx411c7mE",
+      },
+    ],
+    url: "https://www.bilibili.com/video/BV1xx411c7mD",
+  });
+
+  assert.equal(collectVisibleUrlCandidates(fixture.cooked, []).length, 0);
+});
+
+test("counts BR-delimited share cards against max_embeds_per_post", () => {
+  const urls = [
+    "https://www.bilibili.com/video/BV1xx411c7mD",
+    "https://www.bilibili.com/video/BV1xx411c7mE",
+    "https://www.bilibili.com/video/BV1xx411c7mF",
+  ];
+  const paragraph = {
+    children: [],
+    dataset: {},
+    querySelector: () => null,
+    querySelectorAll: (selector) => (selector === "a[href]" ? anchors : []),
+  };
+  const anchors = urls.map((href) => ({
+    dataset: {},
+    href,
+    parentElement: paragraph,
+    textContent: href,
+    closest: (selector) => (selector === "p" ? paragraph : null),
+  }));
+  paragraph.children = [
+    anchors[0],
+    { parentElement: paragraph, tagName: "BR" },
+    anchors[1],
+    { parentElement: paragraph, tagName: "BR" },
+    anchors[2],
+  ];
+  const cooked = {
+    querySelectorAll: (selector) => (selector === "p a[href]" ? anchors : []),
+  };
+
+  themeSettings.max_embeds_per_post = 2;
+  assert.equal(collectVisibleUrlCandidates(cooked, []).length, 2);
+  delete themeSettings.max_embeds_per_post;
+});
+
+test("trims pasted URL punctuation only in the visible-link candidate path", () => {
+  const canonical = "https://www.bilibili.com/video/BV1xx411c7mD";
+  const fixture = makeCookedParagraphFixture({
+    anchorText: `${canonical}】`,
+    before: "【推荐视频】\u00a0",
+    url: `${canonical}】`,
+  });
+  fixture.anchor.getAttribute = (name) => (name === "href" ? `${canonical}】` : null);
+
+  const [candidate] = collectVisibleUrlCandidates(fixture.cooked, []);
+
+  assert.equal(candidate.parsed.canonicalUrl, canonical);
+  assert.equal(parseBilibiliUrl(`${canonical}】`), null);
+});
+
+test("preserves insertion order and prevents duplicate cards on re-decoration", () => {
+  const firstUrl = "https://www.bilibili.com/video/BV1xx411c7mD";
+  const secondUrl = "https://www.bilibili.com/video/BV1xx411c7mE";
+  const inserted = [];
+  const paragraph = {
+    children: [],
+    dataset: {},
+    insertAdjacentElement(_position, element) {
+      inserted.push(element.name);
+    },
+    querySelector: () => null,
+    querySelectorAll: (selector) => (selector === "a[href]" ? [first, second] : []),
+  };
+  const makeAnchor = (href) => ({
+    dataset: {},
+    href,
+    parentElement: paragraph,
+    textContent: href,
+    closest: (selector) => (selector === "p" ? paragraph : null),
+  });
+  const first = makeAnchor(firstUrl);
+  const second = makeAnchor(secondUrl);
+  paragraph.children = [
+    first,
+    { parentElement: paragraph, tagName: "BR" },
+    second,
+  ];
+  const cooked = {
+    querySelectorAll: (selector) => (selector === "p a[href]" ? [first, second] : []),
+  };
+  const candidates = collectVisibleUrlCandidates(cooked, []);
+  const cursors = new WeakMap();
+  const firstReplacement = {
+    name: "first",
+    insertAdjacentElement(_position, element) {
+      inserted.push(element.name);
+    },
+  };
+  const secondReplacement = { name: "second" };
+
+  placeCandidateReplacement(candidates[0], firstReplacement, cursors);
+  placeCandidateReplacement(candidates[1], secondReplacement, cursors);
+
+  assert.deepEqual(inserted, ["first", "second"]);
+  assert.equal(first.dataset.bilibiliInlinePlayer, "done");
+  assert.equal(second.dataset.bilibiliInlinePlayer, "done");
+  assert.equal(paragraph.dataset.bilibiliInlinePlayer, "done");
+  assert.equal(collectVisibleUrlCandidates(cooked, []).length, 0);
 });
 
 test("visible URL matching preserves code, navigation anchors, PDFs, and mismatches", () => {

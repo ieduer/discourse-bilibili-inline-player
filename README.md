@@ -147,14 +147,14 @@ For Xiaohongshu and RedNote, the official platform documentation reviewed on 202
 Still not supported:
 
 - opaque non-Xiaohongshu short-link tokens that cannot be resolved client-side before Discourse oneboxes them
-- paragraphs with multiple links, a non-URL link label, code, navigation anchors, lists, blockquotes, media, or an existing onebox; a visible supported URL elsewhere in an otherwise eligible paragraph is recognized
+- visual segments with multiple links, a non-URL link label, code, navigation anchors, lists, blockquotes, media, or an existing onebox; separate BR-delimited copied share rows in one cooked paragraph may each contain one visible supported URL and consume one embed from the per-post limit
 - favorites, collections, channels, playlists, watch-later, and other multi-item containers
 - DRM-encrypted EPUB/MOBI/AZW3 files
 - PDF, because the official Discourse PDF Previews component owns that format
 - the article body of a `marxists.org` page when `enable_expand_reader` is off or no reader endpoint is configured, because the archive forbids both framing and cross-origin reads
 - FB2 and CBZ until the forum enables those upload extensions and they receive independent acceptance
 
-Standalone supported URLs remain the simplest input. The component also recognizes an eligible paragraph whose only anchor visibly spells the supported URL, wherever that URL appears in the paragraph; it preserves the paragraph and inserts the card after it.
+Standalone supported URLs remain the simplest input. The component also recognizes eligible BR-delimited visual segments whose only anchor visibly spells the supported URL, wherever that URL appears in the segment. Multiple copied share rows cooked into one paragraph receive cards in source order, count individually against `max_embeds_per_post`, and preserve the complete original paragraph.
 
 Pasted Xiaohongshu share text, with either plain or auto-linkified share URLs, is a narrow exception: the original paragraph is preserved and the content card is inserted after it, so surrounding text is never discarded.
 
