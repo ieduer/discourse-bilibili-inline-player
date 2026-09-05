@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-09-01 (America/Los_Angeles)
 
-## 0.16.0 X (Twitter) post embeds: candidate
+## 0.16.0 X (Twitter) post embeds: accepted in production
 
 - Discourse core previews `x.com` status links only with paid Twitter API
   credentials, which this forum does not have, so those links currently stay
@@ -46,8 +46,37 @@ Last reviewed: 2026-09-01 (America/Los_Angeles)
 - `CAPABILITY_FIT=no-new-capability`: a leaf theme-component provider using X's
   public official player. No Cloudflare product, Worker, binding, route,
   storage, identity, cost model, forum core, or CSP change is involved.
-- Rollback anchor for this candidate is the clean pre-change commit
-  `242a2f87ffccc94be88eb7e59ca1e0e19eb79d41`.
+- Implementation `fb509f1dcc69ad4eafe5543e82dd8a553becfdde` passed hosted
+  Actions run `33944384786` with one real job and every step successful.
+- Guarded theme `119` refresh and an independent database readback proved exact
+  local/remote SHA parity at `fb509f1`, `commits_behind=0`, version `0.16.0`,
+  27 settings, `enable_x_inline_embed=true`, `x_embed_height=420`, unchanged
+  parents `[1, -1, 117, -2, 8, 14, 118]`, and no setting, field, or import error.
+- The forum has 718 existing posts containing an X status link, and every
+  sampled one cooks as a plain `a.onebox` anchor with zero onebox elements:
+  Discourse produces no preview for them, which is exactly the gap this release
+  fills. The most recent one asks `话说为什么x的链接没有预览`.
+- Authenticated browser acceptance on `13528/10` rendered three `x` cards, all
+  reporting `data-bilibili-x-embed="ready"`, each framing
+  `platform.twitter.com/embed/Tweet.html` with `dnt=true`, `lang=en` (the
+  forum's own interface locale), `theme=light` resolved from Discourse's
+  `--scheme-type`, `loading=lazy`, `referrerpolicy=no-referrer`, and the exact
+  sandbox. Every card kept `X 官方嵌入 · 保留原帖链接` and the `在 X 打开`
+  original link, and the page contained zero oneboxes to take over. Regression
+  controls: PDF route `5970/77` kept both PDF oneboxes with zero component
+  cards, and BDFZ route `13449` still rendered its one loaded `bdfz-post` frame.
+  No post, draft, or forum content was created or changed for acceptance.
+- Known cosmetic gap: the web process still serves the pre-release compiled
+  stylesheet `common_theme_119_8ff86b0c…`, so the X-specific rules are not live
+  yet even though the new stylesheet `…e311f11a…` compiled correctly at refresh
+  time and contains them. Cards still size and behave correctly through the
+  generic `--fixed` frame rules; only the X card's own background is missing, so
+  a narrow tweet shows the generic black frame backdrop beside it. This is the
+  same web-process stylesheet staleness recorded for `0.15.1`; the admin
+  `Update to latest` path rebuilt the asset then and is the fix now.
+- Rollback anchor for this release is the clean pre-change commit
+  `242a2f87ffccc94be88eb7e59ca1e0e19eb79d41` (`0.15.3`); immediate containment
+  without a rollback is `enable_x_inline_embed=false`.
 
 ## 0.15.3 opaque Bilibili short-link resolution: accepted in production
 
@@ -339,15 +368,16 @@ Last reviewed: 2026-09-01 (America/Los_Angeles)
 
 ## Accepted production state
 
-- Accepted runtime/theme release: `0.15.3`.
+- Accepted runtime/theme release: `0.16.0`.
 - Accepted implementation and JavaScript runtime source SHA:
-  `a265077319a492fefe3ca25ff8dc41d508dbae12`.
+  `fb509f1dcc69ad4eafe5543e82dd8a553becfdde`.
 - Production surface: Discourse remote theme component `119` on `forum.rdfzer.com`.
-- Accepted release readback: theme `119` was refreshed exactly to `a265077`; its
+- Accepted release readback: theme `119` was refreshed exactly to `fb509f1`; its
   `RemoteTheme.local_version` and `remote_version` both matched the full accepted
-  implementation SHA, `commits_behind=0`, `theme_version=0.15.3`, 25 settings,
-  effective `enable_short_link_resolution=true`, and `last_error_text=nil`.
-- GitHub Actions run `33599017104` completed successfully for the accepted
+  implementation SHA, `commits_behind=0`, `theme_version=0.16.0`, 27 settings,
+  effective `enable_short_link_resolution=true`, `enable_x_inline_embed=true`,
+  and `last_error_text=nil`.
+- GitHub Actions run `33944384786` completed successfully for the accepted
   implementation.
 - The component is enabled and attached to parent themes `[-2, -1, 1, 8, 14, 117, 118]`.
 - The effective production reader settings were `enable_expand_reader=true`, `expand_reader_endpoint=https://reader.bdfz.net/read`, and `expand_reader_height=560`. They were defaults, not database overrides.
@@ -356,9 +386,10 @@ Last reviewed: 2026-09-01 (America/Los_Angeles)
   `3edbcd17-da5e-4dc2-9de1-314609717bb7` preserved at 0%. Its custom-domain routing,
   allowlist, monitoring, and Cloudflare rollback are owned by
   `/Users/ylsuen/CF/services/expand-reader`, not by this repository.
-- Immediate containment is `enable_short_link_resolution=false`. Runtime-behavior
-  rollback reference is
-  `b3f9006a4d83bd74b1d8b76ca1f9e9edd2972b88` (`0.15.2`). Restore that tree
+- Immediate containment is `enable_x_inline_embed=false` for X and
+  `enable_short_link_resolution=false` for opaque Bilibili short links.
+  Runtime-behavior rollback reference is
+  `242a2f87ffccc94be88eb7e59ca1e0e19eb79d41` (`0.15.3`). Restore that tree
   through a reviewed revert commit on `main`; do not rewrite history or point
   the remote theme at an unreviewed detached revision.
 - Live state is authoritative over this file. Use the readback procedure in `docs/OPERATIONS.md` before any mutation.

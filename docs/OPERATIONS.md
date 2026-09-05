@@ -7,7 +7,7 @@ This is the canonical operational procedure for the Extended Preview & Embed Sui
 action, and this file owns executable test, release, readback, restore, and rollback
 steps. Live Discourse and GitHub readback override this document when they disagree.
 
-## 0.16.0 X (Twitter) post embeds: candidate
+## 0.16.0 X (Twitter) post embeds: accepted
 
 This release adds one provider, `x`, for exact public X post URLs and embeds them
 with X's own official player. It adds no endpoint, Worker, route, or storage.
@@ -32,6 +32,27 @@ Because X's current embed build never sends a resize report, frame height is the
 bounded `x_embed_height` setting (`240`–`1200`, default `420`); taller posts
 scroll inside the card. If a future X build sends `twttr.private.resize`, the
 reported height is applied within the same bounds.
+
+Accepted at implementation `fb509f1dcc69ad4eafe5543e82dd8a553becfdde` with
+Actions run `33944384786`, `84/84` local tests, exact theme readback at version
+`0.16.0` with 27 settings, and authenticated acceptance on `13528/10` plus the
+`5970/77` PDF and `13449` BDFZ regression controls.
+
+After a Rails-runner refresh the web process may keep serving the previous
+compiled theme stylesheet, exactly as recorded for `0.15.1`. Confirm the live
+asset before closing a release:
+
+```bash
+curl -sS -A '<BROWSER_UA>' https://forum.rdfzer.com/ \
+  | grep -o 'common_theme_119_[a-f0-9]*'
+curl -sS -A '<BROWSER_UA>' \
+  https://forum.rdfzer.com/stylesheets/common_theme_119_<DIGEST>.css \
+  | grep -c -- '--x .bilibili'
+```
+
+If the served digest predates the refresh, rebuild the asset through the
+standard Discourse admin `Update to latest` path for theme `119`. Do not edit
+the database or restart the app for it.
 
 ## 0.15.3 opaque Bilibili short-link resolution: accepted
 
@@ -117,9 +138,10 @@ contract change. Roll back theme 119 to exact source `7ddffd5`.
 - Release gate: clean exact source, tests, GitHub push, exact-SHA hosted-CI readback, guarded theme refresh, database readback, public health, and browser acceptance. A zero-step GitHub billing rejection may use only the bounded local-CI exception below; a real test failure may not.
 - Installed runtime at the 2026-08-26 preflight: `0.12.0`, exact SHA
   `d8c43282ba19e7a0f4191e457f3b8573f00f60d9`, with no import or field error.
-- Current accepted theme runtime is `0.15.3`, implementation SHA
-  `a265077319a492fefe3ca25ff8dc41d508dbae12`; immediate theme rollback is
-  `b3f9006a4d83bd74b1d8b76ca1f9e9edd2972b88` (`0.15.2`). Resolver containment is
+- Current accepted theme runtime is `0.16.0`, implementation SHA
+  `fb509f1dcc69ad4eafe5543e82dd8a553becfdde`; immediate theme rollback is
+  `242a2f87ffccc94be88eb7e59ca1e0e19eb79d41` (`0.15.3`). X containment is
+  `enable_x_inline_embed=false`; resolver containment is
   `enable_short_link_resolution=false`; the broader reader kill switch remains
   `enable_expand_reader=false`. Accepted reader topology is resolver version
   `392e13be-70f7-464c-9c09-34e1a139eff6@100%` plus preserved blocked Zhihu
