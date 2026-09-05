@@ -66,14 +66,15 @@ Last reviewed: 2026-09-01 (America/Los_Angeles)
   controls: PDF route `5970/77` kept both PDF oneboxes with zero component
   cards, and BDFZ route `13449` still rendered its one loaded `bdfz-post` frame.
   No post, draft, or forum content was created or changed for acceptance.
-- Known cosmetic gap: the web process still serves the pre-release compiled
-  stylesheet `common_theme_119_8ff86b0c…`, so the X-specific rules are not live
-  yet even though the new stylesheet `…e311f11a…` compiled correctly at refresh
-  time and contains them. Cards still size and behave correctly through the
-  generic `--fixed` frame rules; only the X card's own background is missing, so
-  a narrow tweet shows the generic black frame backdrop beside it. This is the
-  same web-process stylesheet staleness recorded for `0.15.1`; the admin
-  `Update to latest` path rebuilt the asset then and is the fix now.
+- The Rails-runner refresh again left the web process serving the previous
+  compiled stylesheet `common_theme_119_8ff86b0c…`, the same staleness recorded
+  for `0.15.1`, so X cards briefly used the generic black frame backdrop while
+  sizing and behavior were already correct. The site owner ran the standard
+  admin `Update to latest` path; the served asset is now
+  `common_theme_119_e311f11a…`, it contains every X rule, and a re-check on
+  `13528/3` showed two ready cards with a white `rgb(255, 255, 255)` frame
+  background at the expected 420-pixel height. No database edit or restart was
+  used.
 - Rollback anchor for this release is the clean pre-change commit
   `242a2f87ffccc94be88eb7e59ca1e0e19eb79d41` (`0.15.3`); immediate containment
   without a rollback is `enable_x_inline_embed=false`.

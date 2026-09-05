@@ -52,7 +52,9 @@ curl -sS -A '<BROWSER_UA>' \
 
 If the served digest predates the refresh, rebuild the asset through the
 standard Discourse admin `Update to latest` path for theme `119`. Do not edit
-the database or restart the app for it.
+the database or restart the app for it. This happened again during the `0.16.0`
+release and that path fixed it: the live asset moved from `…8ff86b0c…` to
+`…e311f11a…` and the X card background rendered correctly afterwards.
 
 ## 0.15.3 opaque Bilibili short-link resolution: accepted
 
