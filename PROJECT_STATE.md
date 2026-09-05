@@ -2,6 +2,53 @@
 
 Last reviewed: 2026-09-01 (America/Los_Angeles)
 
+## 0.16.0 X (Twitter) post embeds: candidate
+
+- Discourse core previews `x.com` status links only with paid Twitter API
+  credentials, which this forum does not have, so those links currently stay
+  unstyled URLs. The candidate fills exactly that gap with X's own official
+  embed player and defers to Discourse whenever an onebox for the same link
+  already exists.
+- Accepted identities are `x.com`/`twitter.com` (`www`/`mobile` included)
+  `/<handle>/status/<ID>`, `/<handle>/statuses/<ID>`, the `/photo/<n>` and
+  `/video/<n>` views of that post, and `/i/status/<ID>` or `/i/web/status/<ID>`.
+  Handles are `[A-Za-z0-9_]{1,15}` and never a reserved product path; IDs never
+  carry a leading zero. Profiles, search, broadcasts, intents, lookalike hosts,
+  `fxtwitter`/`vxtwitter`/`nitter` mirrors, `t.co`, credentials, and custom
+  ports are rejected. `?s=`/`?t=` share tokens are dropped, not forwarded.
+- Only `https://platform.twitter.com/embed/Tweet.html?id=<ID>&dnt=true` plus
+  theme, language, and a per-frame `embedId` is loaded: no scraping, no API
+  token, no resolver service, no mirror, and no new Worker or endpoint. The
+  frame is lazy, `no-referrer`, and sandboxed to `allow-scripts
+  allow-same-origin allow-popups allow-popups-to-escape-sandbox`. Live probing
+  proved `allow-same-origin` is required: without it the player reports
+  `no_results` for every post.
+- The player's `postMessage` reports are read only from the player origin and
+  only from that exact frame. `results`/`rendered` accept the embed,
+  `no_results` and a post-load readiness timeout both fall back to the source
+  card plus a short explanation, and a `resize` report, which X's current build
+  never sends, is clamped to the setting bounds. The frame height is therefore
+  the bounded `x_embed_height` setting, default `420` pixels.
+- Containment is `enable_x_inline_embed=false`, which keeps link-only source
+  cards. `x_embed_height` is bounded `240`–`1200`.
+- Local validation: `84/84` Node tests pass, including the exact accepted
+  grammar, twenty-one negative controls, official embed URL shape, `embedId`
+  grammar, language and color-scheme mapping, height clamping, kill-switch
+  behavior, onebox non-takeover, standalone and visible-URL collection, and
+  copied-text extraction. Initializer/test syntax, JSON, YAML, Foliate hash, and
+  diff checks pass.
+- Real-browser candidate probe against a static local fixture of the compiled
+  card rendered one auto-expanded official embed per link, `lang=zh-cn` from the
+  page language, `dnt=true`, distinct per-frame `embedId`s, the exact sandbox and
+  `no-referrer` attributes, the retained `在 X 打开` original link, and the
+  `no_results` fallback notice for a non-existent post. This does not replace
+  authenticated forum acceptance.
+- `CAPABILITY_FIT=no-new-capability`: a leaf theme-component provider using X's
+  public official player. No Cloudflare product, Worker, binding, route,
+  storage, identity, cost model, forum core, or CSP change is involved.
+- Rollback anchor for this candidate is the clean pre-change commit
+  `242a2f87ffccc94be88eb7e59ca1e0e19eb79d41`.
+
 ## 0.15.3 opaque Bilibili short-link resolution: accepted in production
 
 - The theme recognizes only exact HTTPS `b23.tv` and `bili2233.cn` paths whose

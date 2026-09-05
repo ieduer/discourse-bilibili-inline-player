@@ -14,6 +14,46 @@ const BDFZ_POST_HOSTS = new Set(["bdfz.net", "www.bdfz.net"]);
 const DOUYIN_HOSTS = new Set(["douyin.com", "www.douyin.com"]);
 const DOUYIN_SHARE_HOSTS = new Set(["iesdouyin.com", "www.iesdouyin.com"]);
 const DOUYIN_PLAYER_HOSTS = new Set(["open.douyin.com"]);
+const X_HOSTS = new Set([
+  "x.com",
+  "www.x.com",
+  "mobile.x.com",
+  "twitter.com",
+  "www.twitter.com",
+  "mobile.twitter.com",
+]);
+/* Path segments X reserves for its own product surfaces. They can never be a
+   handle, so a status URL below one of them is not a public post identity. */
+const X_RESERVED_HANDLES = new Set([
+  "i",
+  "intent",
+  "home",
+  "explore",
+  "search",
+  "hashtag",
+  "messages",
+  "notifications",
+  "settings",
+  "compose",
+  "share",
+  "login",
+  "signup",
+  "account",
+]);
+const X_EMBED_ORIGIN = "https://platform.twitter.com";
+const X_EMBED_PATH = "/embed/Tweet.html";
+const X_EMBED_MIN_HEIGHT = 240;
+const X_EMBED_MAX_HEIGHT = 1200;
+const DEFAULT_X_EMBED_HEIGHT = 420;
+/* The official player reports `results`, `rendered`, or `no_results` once it has
+   decided. Nothing arriving after the frame loaded means the browser could not
+   reach X at all, which is a source-card case, not an empty box. */
+const X_EMBED_READY_TIMEOUT_MS = 12000;
+const X_EMBED_LANGS = new Set([
+  "ar", "bn", "cs", "da", "de", "el", "en", "es", "fa", "fi", "fil", "fr", "he",
+  "hi", "hu", "id", "it", "ja", "ko", "msa", "nl", "no", "pl", "pt", "ro", "ru",
+  "sv", "th", "tr", "uk", "ur", "vi", "zh-cn", "zh-tw",
+]);
 const BDFZ_POST_AUTO_SCALE_MIN = 0.7;
 const BDFZ_POST_AUTO_SCALE_REFERENCE_WIDTH = 800;
 const DOUYIN_PLAYER_WIDTH = 324;
@@ -362,6 +402,9 @@ const DOUYIN_VIDEO_PATH_RE = /^\/video\/(\d{15,22})\/?$/;
 const DOUYIN_USER_PATH_RE = /^\/user\/([A-Za-z0-9._-]{8,256})\/?$/;
 const DOUYIN_SHARE_VIDEO_PATH_RE = /^\/share\/video\/(\d{15,22})\/?$/;
 const DOUYIN_PLAYER_PATH_RE = /^\/player\/video\/?$/;
+const X_STATUS_PATH_RE =
+  /^\/([A-Za-z0-9_]{1,15})\/status(?:es)?\/([1-9]\d{0,19})(?:\/(?:photo|video)\/[1-4])?\/?$/;
+const X_INTERNAL_STATUS_PATH_RE = /^\/i\/(?:web\/)?status\/([1-9]\d{0,19})\/?$/;
 const XIAOHONGSHU_NOTE_PATH_RE = /^\/(?:explore|discovery\/item)\/([0-9a-f]{24})\/?$/i;
 const REDNOTE_NOTE_PATH_RE = /^\/explore\/([0-9a-f]{24})\/?$/i;
 const XIAOHONGSHU_SHORT_PATH_RE = /^\/(?:a|m|o)\/([A-Za-z0-9_-]{4,})\/?$/i;
@@ -377,7 +420,7 @@ const XIAOHONGSHU_UNUSABLE_TITLE_RE =
 const TRAILING_URL_PUNCTUATION_RE = /[)\],.;!?，。；！？、）】》」』]+$/u;
 const IFRAME_SRC_RE = /<iframe\b[^>]*\bsrc=(["'])([^"']+)\1/gi;
 const URL_LIKE_RE =
-  /((?:https?:)?\/\/(?:player\.bilibili\.com\/player\.html|www\.bilibili\.com\/blackboard\/(?:live\/live-mobile-playerV3|live\/live-activity-player|webplayer\/mbplayer)\.html|(?:www\.|m\.)?bilibili\.com\/(?:s\/)?video\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/bangumi\/play\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/audio\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/read\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/opus\/[^\s"'<>]+|t\.bilibili\.com\/[^\s"'<>]+|live\.bilibili\.com\/[^\s"'<>]+|(?:www\.)?(?:b23\.tv|bili2233\.cn)\/[^\s"'<>]+|(?:www\.)?douyin\.com\/(?:video|user)\/[^\s"'<>]+|(?:www\.)?iesdouyin\.com\/share\/video\/[^\s"'<>]+|open\.douyin\.com\/player\/video\?[^\s"'<>]+|(?:y\.)?music\.163\.com\/[^\s"'<>]+|(?:i\.)?y\.qq\.com\/[^\s"'<>]+|(?:www\.)?zhihu\.com\/[^\s"'<>]+|zhuanlan\.zhihu\.com\/[^\s"'<>]+|mp\.weixin\.qq\.com\/[^\s"'<>]+|(?:www\.)?bdfz\.net\/posts\/[^\s"'<>]+|(?:www\.)?marxists\.org\/[^\s"'<>]+))/gi;
+  /((?:https?:)?\/\/(?:player\.bilibili\.com\/player\.html|www\.bilibili\.com\/blackboard\/(?:live\/live-mobile-playerV3|live\/live-activity-player|webplayer\/mbplayer)\.html|(?:www\.|m\.)?bilibili\.com\/(?:s\/)?video\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/bangumi\/play\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/audio\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/read\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/opus\/[^\s"'<>]+|t\.bilibili\.com\/[^\s"'<>]+|live\.bilibili\.com\/[^\s"'<>]+|(?:www\.)?(?:b23\.tv|bili2233\.cn)\/[^\s"'<>]+|(?:www\.)?douyin\.com\/(?:video|user)\/[^\s"'<>]+|(?:www\.)?iesdouyin\.com\/share\/video\/[^\s"'<>]+|open\.douyin\.com\/player\/video\?[^\s"'<>]+|(?:www\.|mobile\.)?(?:twitter|x)\.com\/[^\s"'<>]+|(?:y\.)?music\.163\.com\/[^\s"'<>]+|(?:i\.)?y\.qq\.com\/[^\s"'<>]+|(?:www\.)?zhihu\.com\/[^\s"'<>]+|zhuanlan\.zhihu\.com\/[^\s"'<>]+|mp\.weixin\.qq\.com\/[^\s"'<>]+|(?:www\.)?bdfz\.net\/posts\/[^\s"'<>]+|(?:www\.)?marxists\.org\/[^\s"'<>]+))/gi;
 const XIAOHONGSHU_URL_LIKE_RE =
   /(?:^|[\s(（\[【{《「『])((?:https?:\/\/)?(?:www\.)?(?:xiaohongshu\.com|rednote\.com|xhslink\.(?:com|cn))\/[^\s"'<>，。；！？、（）【】《》「」『』]+)/gi;
 const DEFAULT_ASPECT_RATIO = "16 / 9";
@@ -405,6 +448,10 @@ const qqMusicSongInfoCache = new Map();
 const themeModulePromises = new Map();
 const activeEbookReaders = new Map();
 let ebookCleanupObserver = null;
+let xEmbedCounter = 0;
+/* X validates `embedId` against this exact grammar and silently falls back to a
+   shared id when it does not match, which would break per-frame matching. */
+const X_EMBED_ID_RE = /^[a-zA-Z0-9-]+$/u;
 
 function getBooleanSetting(name, fallback) {
   const value = themeSettings[name];
@@ -681,6 +728,23 @@ function createParsedDouyin(videoId) {
     page: 1,
     rawId: String(videoId),
     canonicalUrl: `https://www.douyin.com/video/${videoId}`,
+  };
+}
+
+function createParsedX(tweetId, handle = "") {
+  const normalizedHandle = handle ? String(handle) : "";
+
+  return {
+    provider: "x",
+    kind: "x",
+    contentType: "post",
+    tweetId: String(tweetId),
+    handle: normalizedHandle,
+    page: 1,
+    rawId: String(tweetId),
+    canonicalUrl: normalizedHandle
+      ? `https://x.com/${normalizedHandle}/status/${tweetId}`
+      : `https://x.com/i/status/${tweetId}`,
   };
 }
 
@@ -1320,6 +1384,38 @@ function parseDouyinPageUrl(url) {
   return null;
 }
 
+function isSafeXSourceUrl(url) {
+  return (
+    ["http:", "https:"].includes(url.protocol) &&
+    !url.username &&
+    !url.password &&
+    (!url.port || url.port === "443")
+  );
+}
+
+/* Only a single public post identity is accepted. Share links routinely carry
+   `?s=` / `?t=` tracking parameters; they are dropped here and never forwarded
+   to X, because the canonical status URL is the whole identity. */
+function parseXPageUrl(url) {
+  if (!X_HOSTS.has(url.hostname.toLowerCase()) || !isSafeXSourceUrl(url)) {
+    return null;
+  }
+
+  const internalMatch = url.pathname.match(X_INTERNAL_STATUS_PATH_RE);
+
+  if (internalMatch) {
+    return createParsedX(internalMatch[1]);
+  }
+
+  const statusMatch = url.pathname.match(X_STATUS_PATH_RE);
+
+  if (!statusMatch || X_RESERVED_HANDLES.has(statusMatch[1].toLowerCase())) {
+    return null;
+  }
+
+  return createParsedX(statusMatch[2], statusMatch[1]);
+}
+
 function parseXiaohongshuPageUrl(url) {
   const hostname = url.hostname.toLowerCase();
 
@@ -1782,6 +1878,7 @@ function parseBilibiliUrl(href) {
     parseWeChatPageUrl(url) ||
     parseBdfzPostUrl(url) ||
     parseDouyinPageUrl(url) ||
+    parseXPageUrl(url) ||
     parseXiaohongshuPageUrl(url) ||
     parseXiaohongshuShortUrl(url) ||
     parseMarxistsUrl(url)
@@ -1789,6 +1886,13 @@ function parseBilibiliUrl(href) {
 }
 
 function buildIframeUrl(parsed) {
+  if (parsed.kind === "x") {
+    return buildXEmbedUrl(parsed, {
+      theme: detectXEmbedTheme(),
+      lang: detectXEmbedLang(),
+    });
+  }
+
   if (parsed.kind === "douyin") {
     return buildDouyinIframeUrl(parsed, getBooleanSetting("autoplay_on_click", true));
   }
@@ -1850,6 +1954,10 @@ function buildIframeUrl(parsed) {
 }
 
 function buildNoAutoplayIframeUrl(parsed) {
+  if (parsed.kind === "x") {
+    return buildIframeUrl(parsed);
+  }
+
   if (parsed.kind === "douyin") {
     return buildDouyinIframeUrl(parsed, false);
   }
@@ -1993,6 +2101,129 @@ function buildDouyinIframeUrl(parsed, autoplay) {
   return `https://open.douyin.com/player/video?${params.toString()}`;
 }
 
+/* X's official embed page is the only player used here: no scraping, no API
+   token, no third-party mirror. `dnt=true` keeps the frame in Do Not Track
+   mode, and the identifier is the only thing sent. */
+function buildXEmbedUrl(parsed, options = {}) {
+  const { embedId = "", theme = "light", lang = "en" } = options;
+  const params = new URLSearchParams({
+    id: String(parsed.tweetId),
+    dnt: "true",
+    theme: theme === "dark" ? "dark" : "light",
+    lang: getXEmbedLang(lang),
+  });
+
+  if (X_EMBED_ID_RE.test(embedId)) {
+    params.set("embedId", embedId);
+  }
+
+  return `${X_EMBED_ORIGIN}${X_EMBED_PATH}?${params.toString()}`;
+}
+
+function getXEmbedLang(value) {
+  const raw = String(value || "").trim().toLowerCase().replace(/_/gu, "-");
+
+  if (!raw) {
+    return "en";
+  }
+
+  if (/^zh(?:-|$)/u.test(raw)) {
+    return /(?:^|-)(?:hant|tw|hk|mo)(?:-|$)/u.test(raw) ? "zh-tw" : "zh-cn";
+  }
+
+  if (X_EMBED_LANGS.has(raw)) {
+    return raw;
+  }
+
+  const base = raw.split("-")[0];
+
+  return X_EMBED_LANGS.has(base) ? base : "en";
+}
+
+function detectXEmbedLang() {
+  return getXEmbedLang(globalThis.document?.documentElement?.lang || "");
+}
+
+function parseCssColorLuminance(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  const rgbMatch = raw.match(/^rgba?\(\s*(\d{1,3})[\s,]+(\d{1,3})[\s,]+(\d{1,3})/u);
+  const hexMatch = raw.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/u);
+  let channels = null;
+
+  if (rgbMatch) {
+    channels = [rgbMatch[1], rgbMatch[2], rgbMatch[3]].map(Number);
+  } else if (hexMatch) {
+    const hex =
+      hexMatch[1].length === 3
+        ? hexMatch[1].replace(/./gu, (character) => character + character)
+        : hexMatch[1];
+
+    channels = [0, 2, 4].map((offset) =>
+      Number.parseInt(hex.slice(offset, offset + 2), 16)
+    );
+  }
+
+  if (
+    !channels ||
+    channels.some(
+      (channel) => !Number.isFinite(channel) || channel < 0 || channel > 255
+    )
+  ) {
+    return null;
+  }
+
+  const [red, green, blue] = channels.map((channel) => channel / 255);
+
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+/* Discourse color schemes publish `--scheme-type`; older or custom schemes may
+   not, so the rendered page background is the second opinion. */
+function detectXEmbedTheme() {
+  const doc = globalThis.document;
+  const root = doc?.documentElement;
+
+  if (root && typeof globalThis.getComputedStyle === "function") {
+    try {
+      const schemeType = globalThis
+        .getComputedStyle(root)
+        .getPropertyValue("--scheme-type")
+        .trim()
+        .toLowerCase();
+
+      if (schemeType === "dark" || schemeType === "light") {
+        return schemeType;
+      }
+
+      const luminance = parseCssColorLuminance(
+        globalThis.getComputedStyle(doc.body || root).backgroundColor
+      );
+
+      if (luminance !== null) {
+        return luminance < 0.45 ? "dark" : "light";
+      }
+    } catch {
+      /* Fall through to the media query below. */
+    }
+  }
+
+  try {
+    if (globalThis.matchMedia?.("(prefers-color-scheme: dark)")?.matches) {
+      return "dark";
+    }
+  } catch {
+    /* Keep the light default. */
+  }
+
+  return "light";
+}
+
+function createXEmbedId() {
+  xEmbedCounter += 1;
+
+  return `bdfz-x-${Date.now().toString(36)}-${xEmbedCounter}`;
+}
+
 function parseFirstSupportedUrl(...hrefs) {
   for (const href of hrefs) {
     if (!href) {
@@ -2059,6 +2290,8 @@ function getMetaLine(parsed) {
       return "BDFZ 博文全文";
     case "douyin":
       return "抖音视频";
+    case "x":
+      return "X 帖子";
     case "xiaohongshu":
       return getXiaohongshuMetaLine(parsed);
     case "marxists":
@@ -2170,6 +2403,7 @@ function getPreviewStatText(parsed, viewCount = null) {
     case "wechat":
     case "bdfz-post":
     case "douyin":
+    case "x":
     case "xiaohongshu":
     case "marxists":
       return getMetaLine(parsed);
@@ -2261,6 +2495,8 @@ function getFallbackTitle(parsed) {
       return "BDFZ 博文";
     case "douyin":
       return `抖音视频 ${parsed.videoId}`;
+    case "x":
+      return parsed.handle ? `@${parsed.handle} 的 X 帖子` : `X 帖子 ${parsed.tweetId}`;
     case "xiaohongshu":
       return getXiaohongshuMetaLine(parsed);
     case "marxists":
@@ -2345,6 +2581,10 @@ function isKnownInlineKind(parsed) {
     return true;
   }
 
+  if (parsed.kind === "x") {
+    return getBooleanSetting("enable_x_inline_embed", true);
+  }
+
   if (parsed.kind === "marxists") {
     return isMarxistsInlineMedia(parsed);
   }
@@ -2377,6 +2617,10 @@ function getInitialButtonLabel(parsed) {
     return "展开正文";
   }
 
+  if (parsed.provider === "x" && isKnownInlineKind(parsed)) {
+    return "展开帖子";
+  }
+
   if (isMarxistsInlineMedia(parsed)) {
     return parsed.contentType === "video" ? "播放影像" : "播放录音";
   }
@@ -2390,6 +2634,7 @@ function shouldShowDirectSourceLink(parsed) {
     parsed?.provider === "wechat" ||
     parsed?.provider === "bdfz-post" ||
     parsed?.provider === "douyin" ||
+    parsed?.provider === "x" ||
     parsed?.provider === "ebook" ||
     parsed?.provider === "marxists" ||
     getBooleanSetting("show_open_link", true)
@@ -2436,6 +2681,10 @@ function getFooterMeta(parsed) {
         : "bdfz.net 原文链接";
     case "douyin":
       return "抖音开放平台播放器 · 保留原视频链接";
+    case "x":
+      return getBooleanSetting("enable_x_inline_embed", true)
+        ? "X 官方嵌入 · 保留原帖链接"
+        : "X 原帖链接";
     case "xiaohongshu":
       if (parsed.brand === "rednote") {
         return "RedNote 原文卡片";
@@ -2503,6 +2752,10 @@ function getOpenLabel(parsed) {
     return "在抖音打开";
   }
 
+  if (parsed.provider === "x") {
+    return "在 X 打开";
+  }
+
   if (parsed.provider === "marxists") {
     return parsed.contentType === "download" ? "下载原文件" : "在马克思主义文库打开";
   }
@@ -2537,6 +2790,10 @@ function getEmbedTitle(parsed) {
 
   if (parsed.provider === "douyin") {
     return "Douyin player";
+  }
+
+  if (parsed.provider === "x") {
+    return "X post";
   }
 
   if (parsed.provider === "marxists") {
@@ -3289,6 +3546,7 @@ function getPreviewAspectRatio(parsed) {
       return parsed.contentType === "video" ? "16 / 9" : "auto";
     case "zhihu":
     case "bdfz-post":
+    case "x":
     case "xiaohongshu":
     case "ebook":
       return "auto";
@@ -3298,6 +3556,15 @@ function getPreviewAspectRatio(parsed) {
 }
 
 function getLoadedFrameHeight(parsed) {
+  if (parsed.kind === "x") {
+    return getBoundedIntegerSetting(
+      "x_embed_height",
+      DEFAULT_X_EMBED_HEIGHT,
+      X_EMBED_MIN_HEIGHT,
+      X_EMBED_MAX_HEIGHT
+    );
+  }
+
   if (parsed.kind === "bdfz-post") {
     return getBoundedIntegerSetting("bdfz_post_embed_height", 900, 480, 1600);
   }
@@ -3558,6 +3825,27 @@ function primeEmbedState(wrapper) {
     state.standardIframeUrl = state.iframeUrl;
     state.noAutoplayIframeUrl = buildNoAutoplayIframeUrl(state.parsed);
     state.externalOnly = false;
+    state.resolvePromise = Promise.resolve(state.parsed);
+    return;
+  }
+
+  if (state.parsed.kind === "x") {
+    if (getBooleanSetting("enable_x_inline_embed", true)) {
+      state.xEmbedId = createXEmbedId();
+      state.iframeUrl = buildXEmbedUrl(state.parsed, {
+        embedId: state.xEmbedId,
+        theme: detectXEmbedTheme(),
+        lang: detectXEmbedLang(),
+      });
+      state.standardIframeUrl = state.iframeUrl;
+      state.noAutoplayIframeUrl = "";
+      state.externalOnly = false;
+    } else {
+      state.iframeUrl = null;
+      state.externalOnly = true;
+      setButtonLabel(wrapper, getOpenLabel(state.parsed));
+    }
+
     state.resolvePromise = Promise.resolve(state.parsed);
     return;
   }
@@ -4993,6 +5281,137 @@ function attachDouyinPlayerScale(wrapper, frameWrap) {
   }
 }
 
+function clampXEmbedHeight(height) {
+  const value = Number.parseInt(height, 10);
+
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+
+  return Math.min(X_EMBED_MAX_HEIGHT, Math.max(X_EMBED_MIN_HEIGHT, value));
+}
+
+/* Fail open: an X post that cannot be embedded keeps its card footer and the
+   original link instead of leaving an empty frame in the post. */
+function renderXEmbedUnavailable(wrapper, reason) {
+  const state = wrapperState.get(wrapper);
+
+  if (!state?.parsed || wrapper.dataset.bilibiliXEmbed === "unavailable") {
+    return;
+  }
+
+  wrapper.dataset.bilibiliXEmbed = "unavailable";
+  wrapper.querySelector(".bilibili-inline-player__frame-wrap")?.remove();
+
+  const footerContent = wrapper.querySelector(".bilibili-inline-player__footer-content");
+
+  if (!footerContent || footerContent.querySelector(".bilibili-inline-player__notice--x")) {
+    return;
+  }
+
+  footerContent.appendChild(
+    createElement(
+      "div",
+      "bilibili-inline-player__notice bilibili-inline-player__notice--x",
+      reason === "no_results"
+        ? "这条 X 帖子已被删除、设为私密或不允许嵌入，请打开原帖确认。"
+        : "X 官方嵌入未能在当前网络环境加载，请打开原帖查看。"
+    )
+  );
+}
+
+/* X's official player talks to its host page over `window.postMessage`. Only
+   messages from the player origin and from this exact frame are read, and the
+   only things acted on are its own ready, empty-result, and resize reports. */
+function attachXEmbedBridge(wrapper, frameWrap, iframe, embedId = "") {
+  if (typeof window?.addEventListener !== "function") {
+    return;
+  }
+
+  let settled = false;
+  let timeoutId = 0;
+
+  const finish = () => {
+    if (settled) {
+      return;
+    }
+
+    settled = true;
+    window.clearTimeout(timeoutId);
+    window.removeEventListener("message", handleMessage);
+  };
+
+  const armReadyTimeout = () => {
+    if (settled) {
+      return;
+    }
+
+    window.clearTimeout(timeoutId);
+    timeoutId = window.setTimeout(() => {
+      if (settled) {
+        return;
+      }
+
+      finish();
+
+      if (wrapper.isConnected) {
+        renderXEmbedUnavailable(wrapper, "timeout");
+      }
+    }, X_EMBED_READY_TIMEOUT_MS);
+  };
+
+  const handleMessage = (event) => {
+    if (
+      settled ||
+      event.origin !== X_EMBED_ORIGIN ||
+      event.source !== iframe.contentWindow
+    ) {
+      return;
+    }
+
+    const payload = event.data?.["twttr.embed"];
+    const method = typeof payload?.method === "string" ? payload.method : "";
+
+    if (!method || (embedId && payload.id && payload.id !== embedId)) {
+      return;
+    }
+
+    if (method === "twttr.private.resize") {
+      const height = clampXEmbedHeight(payload.params?.[0]?.height);
+
+      if (height) {
+        frameWrap.style.setProperty("--bili-frame-height", `${height}px`);
+      }
+
+      return;
+    }
+
+    if (method === "twttr.private.no_results") {
+      finish();
+      renderXEmbedUnavailable(wrapper, "no_results");
+      return;
+    }
+
+    if (method === "twttr.private.initialized") {
+      /* The player answered, so the network is fine; give it a fresh window to
+         finish rendering the post itself. */
+      armReadyTimeout();
+      return;
+    }
+
+    if (method === "twttr.private.results" || method === "twttr.private.rendered") {
+      finish();
+      wrapper.dataset.bilibiliXEmbed = "ready";
+    }
+  };
+
+  window.addEventListener("message", handleMessage);
+
+  /* The frame is lazy, so the countdown starts only once it has actually
+     loaded; an off-screen post must never be declared unavailable. */
+  iframe.addEventListener("load", armReadyTimeout, { once: true });
+}
+
 function attachBdfzPostToggle(wrapper, frameWrap, footer) {
   const actions = footer.querySelector(".bilibili-inline-player__footer-actions");
 
@@ -5067,6 +5486,15 @@ function renderLoadedPlayer(wrapper, iframeUrl, { allowAutoplay = false } = {}) 
     iframe.sandbox = "allow-popups allow-popups-to-escape-sandbox";
   }
 
+  /* The official X player needs its own scripts and origin to reach X's public
+     syndication data; without `allow-same-origin` it always reports no_results.
+     It never needs forms, top-level navigation, or the forum referrer. */
+  if (state.parsed.provider === "x") {
+    iframe.referrerPolicy = "no-referrer";
+    iframe.sandbox =
+      "allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox";
+  }
+
   frameWrap.appendChild(iframe);
 
   wrapper.classList.remove("bilibili-inline-player--compact-audio");
@@ -5082,6 +5510,8 @@ function renderLoadedPlayer(wrapper, iframeUrl, { allowAutoplay = false } = {}) 
     attachBdfzPostAutoScale(wrapper, frameWrap);
   } else if (state.parsed.provider === "douyin") {
     attachDouyinPlayerScale(wrapper, frameWrap);
+  } else if (state.parsed.provider === "x") {
+    attachXEmbedBridge(wrapper, frameWrap, iframe, state.xEmbedId || "");
   }
 
   updateRetryButtonLabel(wrapper);
@@ -5581,6 +6011,13 @@ function collectOneboxCandidates(element) {
     const shortUrl = parsed ? "" : getResolvableBilibiliShortUrl(...sourceUrls);
 
     if (!parsed && !shortUrl) {
+      continue;
+    }
+
+    /* An existing onebox means Discourse already previewed the X post itself,
+       so this component stays out of that format. Links Discourse could not
+       onebox are still handled by the plain-link collectors below. */
+    if (parsed?.provider === "x") {
       continue;
     }
 

@@ -15,7 +15,9 @@ const executableSource = initializerSource
 globalThis.__themeParserTestApi = {
   buildIframeUrl,
   buildNoAutoplayIframeUrl,
+  buildXEmbedUrl,
   buildXiaohongshuPreviewText,
+  clampXEmbedHeight,
   cleanProviderTitle,
   cloneParagraphVisualSegment,
   collectEbookAttachmentCandidates,
@@ -42,6 +44,8 @@ globalThis.__themeParserTestApi = {
   getShortLinkResolutionCacheKey,
   getWeChatArchiveCacheKey,
   getWeChatIngestEndpoint,
+  getXEmbedLang,
+  parseCssColorLuminance,
   getScopedReaderFragment,
   supportsExpandReader,
   supportsWeChatArchive,
@@ -105,7 +109,9 @@ vm.runInNewContext(executableSource, context, {
 const {
   buildIframeUrl,
   buildNoAutoplayIframeUrl,
+  buildXEmbedUrl,
   buildXiaohongshuPreviewText,
+  clampXEmbedHeight,
   cleanProviderTitle,
   cloneParagraphVisualSegment,
   collectEbookAttachmentCandidates,
@@ -132,6 +138,8 @@ const {
   getShortLinkResolutionCacheKey,
   getWeChatArchiveCacheKey,
   getWeChatIngestEndpoint,
+  getXEmbedLang,
+  parseCssColorLuminance,
   getScopedReaderFragment,
   supportsExpandReader,
   supportsWeChatArchive,
@@ -1288,6 +1296,7 @@ test("recognizes one visible supported URL at any position in a paragraph", () =
     "https://bdfz.net/posts/180-qishike/",
     "https://www.marxists.org/archive/marx/works/1848/communist-manifesto/ch01.htm",
     "https://www.zhihu.com/question/123456",
+    "https://x.com/rdfzer/status/1234567890123456789",
   ]) {
     const fixture = makeCookedParagraphFixture({ before: "来源：\n第二行：", url });
     const [candidate] = collectVisibleUrlCandidates(fixture.cooked, []);
@@ -2263,4 +2272,203 @@ test("reader images are same-source HTTPS, lazy, and referrer-free", () => {
   const tracker = makeAttributeElement({ src: "https://tracker.example/pixel.gif" });
   assert.equal(hardenReaderImage(tracker, source), false);
   assert.equal(tracker.removed, true);
+});
+
+test("parses exact X post forms and embeds X's own official player", () => {
+  const canonical = "https://x.com/BDFZer/status/1234567890123456789";
+  const parsed = parseBilibiliUrl(canonical);
+
+  assert.equal(parsed.provider, "x");
+  assert.equal(parsed.kind, "x");
+  assert.equal(parsed.contentType, "post");
+  assert.equal(parsed.tweetId, "1234567890123456789");
+  assert.equal(parsed.handle, "BDFZer");
+  assert.equal(parsed.canonicalUrl, canonical);
+
+  for (const source of [
+    "https://twitter.com/BDFZer/status/1234567890123456789",
+    "https://www.twitter.com/BDFZer/status/1234567890123456789",
+    "https://mobile.x.com/BDFZer/status/1234567890123456789/",
+    "https://x.com/BDFZer/statuses/1234567890123456789",
+    "https://x.com/BDFZer/status/1234567890123456789/photo/1",
+    "https://x.com/BDFZer/status/1234567890123456789/video/2",
+    "https://x.com/BDFZer/status/1234567890123456789?s=46&t=Ab-1_cD",
+    "http://twitter.com/BDFZer/status/1234567890123456789#m",
+  ]) {
+    assert.equal(parseBilibiliUrl(source).canonicalUrl, canonical, source);
+  }
+
+  for (const source of [
+    "https://x.com/i/status/1234567890123456789",
+    "https://twitter.com/i/web/status/1234567890123456789",
+  ]) {
+    assert.equal(
+      parseBilibiliUrl(source).canonicalUrl,
+      "https://x.com/i/status/1234567890123456789",
+      source
+    );
+    assert.equal(parseBilibiliUrl(source).handle, "", source);
+  }
+
+  assert.equal(
+    buildIframeUrl(parsed),
+    "https://platform.twitter.com/embed/Tweet.html?id=1234567890123456789&dnt=true&theme=light&lang=en"
+  );
+  assert.equal(buildNoAutoplayIframeUrl(parsed), buildIframeUrl(parsed));
+  assert.equal(
+    buildXEmbedUrl(parsed, { embedId: "bdfz-x-abc-1", theme: "dark", lang: "zh_CN" }),
+    "https://platform.twitter.com/embed/Tweet.html?id=1234567890123456789&dnt=true&theme=dark&lang=zh-cn&embedId=bdfz-x-abc-1"
+  );
+  assert.equal(
+    buildXEmbedUrl(parsed, { embedId: "not valid!", theme: "sepia", lang: "" }),
+    "https://platform.twitter.com/embed/Tweet.html?id=1234567890123456789&dnt=true&theme=light&lang=en"
+  );
+
+  assert.equal(getMetaLine(parsed), "X 帖子");
+  assert.equal(getFallbackTitle(parsed), "@BDFZer 的 X 帖子");
+  assert.equal(
+    getFallbackTitle(parseBilibiliUrl("https://x.com/i/status/1234567890123456789")),
+    "X 帖子 1234567890123456789"
+  );
+  assert.equal(getInitialButtonLabel(parsed), "展开帖子");
+  assert.equal(getOpenLabel(parsed), "在 X 打开");
+  assert.equal(getFooterMeta(parsed), "X 官方嵌入 · 保留原帖链接");
+  assert.equal(getPreviewAspectRatio(parsed), "auto");
+  assert.equal(getLoadedFrameHeight(parsed), 420);
+  assert.equal(isKnownInlineKind(parsed), true);
+  assert.equal(shouldAutoExpandEmbed(parsed), true);
+
+  context.settings.show_open_link = false;
+  assert.equal(shouldShowDirectSourceLink(parsed), true);
+  delete context.settings.show_open_link;
+
+  themeSettings.x_embed_height = 5000;
+  assert.equal(getLoadedFrameHeight(parsed), 1200);
+  themeSettings.x_embed_height = 10;
+  assert.equal(getLoadedFrameHeight(parsed), 240);
+  delete themeSettings.x_embed_height;
+
+  const wrapper = {};
+  const state = { parsed, environmentRisk: { level: "none" } };
+  wrapperState.set(wrapper, state);
+  primeEmbedState(wrapper);
+
+  const embedUrl = new URL(state.iframeUrl);
+  assert.equal(embedUrl.origin + embedUrl.pathname, "https://platform.twitter.com/embed/Tweet.html");
+  assert.equal(embedUrl.searchParams.get("id"), "1234567890123456789");
+  assert.equal(embedUrl.searchParams.get("dnt"), "true");
+  assert.match(embedUrl.searchParams.get("embedId"), /^[a-zA-Z0-9-]+$/u);
+  assert.equal(state.standardIframeUrl, state.iframeUrl);
+  assert.equal(state.noAutoplayIframeUrl, "");
+  assert.equal(state.externalOnly, false);
+
+  themeSettings.enable_x_inline_embed = false;
+  assert.equal(isKnownInlineKind(parsed), false);
+  assert.equal(shouldAutoExpandEmbed(parsed), false);
+  assert.equal(getFooterMeta(parsed), "X 原帖链接");
+  assert.equal(getInitialButtonLabel(parsed), "在 X 打开");
+
+  const offWrapper = { querySelector: () => null };
+  const offState = { parsed, environmentRisk: { level: "none" } };
+  wrapperState.set(offWrapper, offState);
+  primeEmbedState(offWrapper);
+  assert.equal(offState.iframeUrl, null);
+  assert.equal(offState.externalOnly, true);
+  delete themeSettings.enable_x_inline_embed;
+
+  assert.match(
+    initializerSource,
+    /allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox/u
+  );
+  assert.match(
+    initializerSource,
+    /attachXEmbedBridge\(wrapper, frameWrap, iframe, state\.xEmbedId \|\| ""\)/u
+  );
+});
+
+test("rejects X URLs that are not one exact public post", () => {
+  for (const source of [
+    "https://x.com/BDFZer",
+    "https://x.com/BDFZer/status/",
+    "https://x.com/BDFZer/status/0123456789",
+    "https://x.com/BDFZer/status/12345678901234567890123",
+    "https://x.com/BDFZer/status/12345abc",
+    "https://x.com/BDFZer/status/1234567890123456789/likes",
+    "https://x.com/BDFZer/status/1234567890123456789/photo/9",
+    "https://x.com/i/broadcasts/1234567890123456789",
+    "https://x.com/intent/status/1234567890123456789",
+    "https://x.com/search?q=status%2F1234567890123456789",
+    "https://x.com/hashtag/status/1234567890123456789",
+    "https://x.com/BDFZerBDFZerBDFZer/status/1234567890123456789",
+    "https://x.com.evil.example/BDFZer/status/1234567890123456789",
+    "https://twitter.com.evil.example/BDFZer/status/1234567890123456789",
+    "https://fxtwitter.com/BDFZer/status/1234567890123456789",
+    "https://vxtwitter.com/BDFZer/status/1234567890123456789",
+    "https://nitter.net/BDFZer/status/1234567890123456789",
+    "https://user:pass@x.com/BDFZer/status/1234567890123456789",
+    "https://x.com:444/BDFZer/status/1234567890123456789",
+    "ftp://x.com/BDFZer/status/1234567890123456789",
+    "https://platform.twitter.com/embed/Tweet.html?id=1234567890123456789",
+  ]) {
+    assert.equal(parseBilibiliUrl(source), null, source);
+  }
+});
+
+test("X embed language, theme, and height helpers stay bounded", () => {
+  for (const [input, expected] of [
+    ["", "en"],
+    ["zh-CN", "zh-cn"],
+    ["zh_CN", "zh-cn"],
+    ["zh", "zh-cn"],
+    ["zh-Hans-CN", "zh-cn"],
+    ["zh-TW", "zh-tw"],
+    ["zh-Hant-HK", "zh-tw"],
+    ["ja", "ja"],
+    ["pt-BR", "pt"],
+    ["klingon", "en"],
+    ["<script>", "en"],
+  ]) {
+    assert.equal(getXEmbedLang(input), expected, input);
+  }
+
+  assert.equal(parseCssColorLuminance("rgb(255, 255, 255)"), 1);
+  assert.equal(parseCssColorLuminance("rgb(0 0 0)"), 0);
+  assert.equal(parseCssColorLuminance("#fff"), 1);
+  assert.ok(parseCssColorLuminance("rgba(23, 24, 28, 0.9)") < 0.45);
+  assert.equal(parseCssColorLuminance("color-mix(in srgb, red, blue)"), null);
+  assert.equal(parseCssColorLuminance("rgb(300, 0, 0)"), null);
+  assert.equal(parseCssColorLuminance(""), null);
+
+  assert.equal(clampXEmbedHeight(600), 600);
+  assert.equal(clampXEmbedHeight(10), 240);
+  assert.equal(clampXEmbedHeight(9000), 1200);
+  assert.equal(clampXEmbedHeight("480px"), 480);
+  assert.equal(clampXEmbedHeight("tall"), 0);
+  assert.equal(clampXEmbedHeight(-5), 0);
+});
+
+test("X posts use the plain-link collectors and leave a real Discourse onebox alone", () => {
+  const canonical = "https://x.com/BDFZer/status/1234567890123456789";
+
+  const onebox = makeCookedOneboxFixture(canonical);
+  assert.equal(collectOneboxCandidates(onebox.cooked).length, 0);
+
+  const standalone = makeCookedParagraphFixture({ url: canonical });
+  const [candidate] = collectStandaloneCandidates(standalone.cooked, []);
+  assert.equal(candidate.parsed.provider, "x");
+  assert.equal(candidate.target, standalone.paragraph);
+  assert.ok(!candidate.preserveSource);
+
+  const quoted = makeCookedParagraphFixture({
+    before: "这条帖子值得一读：",
+    url: `${canonical}?s=46&t=Ab-1_cD`,
+  });
+  const [visible] = collectVisibleUrlCandidates(quoted.cooked, []);
+  assert.equal(visible.parsed.canonicalUrl, canonical);
+  assert.equal(visible.preserveSource, true);
+
+  assert.deepEqual(
+    Array.from(extractUrlsFromText(`原帖在这里 ${canonical} 大家看看`)),
+    [canonical]
+  );
 });

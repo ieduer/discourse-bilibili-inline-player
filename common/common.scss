@@ -198,6 +198,40 @@
   background: #fbfaf5;
 }
 
+/* ── X (Twitter) posts ── */
+
+.bilibili-inline-player--x .bilibili-inline-player__media {
+  min-height: 6rem;
+  background:
+    radial-gradient(circle at 22% 20%, rgb(255 255 255 / 0.14), transparent 36%),
+    linear-gradient(135deg, #000 0%, #16181c 52%, #000 100%);
+}
+
+.bilibili-inline-player--x .bilibili-inline-player__play {
+  background: rgb(255 255 255 / 0.96);
+  color: #0f1419;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.34);
+}
+
+.bilibili-inline-player--x .bilibili-inline-player__play:hover,
+.bilibili-inline-player--x .bilibili-inline-player__play:focus-visible {
+  background: #fff;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.42);
+}
+
+.bilibili-inline-player--x .bilibili-inline-player__frame-wrap--fixed {
+  height: min(74vh, var(--bili-frame-height, 420px));
+  min-height: 240px;
+  overflow: hidden;
+  background: var(--secondary, #fff);
+}
+
+.bilibili-inline-player--x .bilibili-inline-player__frame {
+  width: 100%;
+  height: 100%;
+  background: var(--secondary, #fff);
+}
+
 /* ── EPUB / MOBI / AZW3 local reader ── */
 
 .bilibili-inline-player--ebook .bilibili-inline-player__media {
@@ -984,6 +1018,11 @@
   .bilibili-inline-player--bdfz-post .bilibili-inline-player__frame-wrap--fixed {
     height: 70vh;
     min-height: 440px;
+  }
+
+  .bilibili-inline-player--x .bilibili-inline-player__frame-wrap--fixed {
+    height: min(70vh, var(--bili-frame-height, 420px));
+    min-height: 240px;
   }
 
   .bilibili-inline-player__play {

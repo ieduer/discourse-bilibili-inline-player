@@ -7,6 +7,32 @@ This is the canonical operational procedure for the Extended Preview & Embed Sui
 action, and this file owns executable test, release, readback, restore, and rollback
 steps. Live Discourse and GitHub readback override this document when they disagree.
 
+## 0.16.0 X (Twitter) post embeds: candidate
+
+This release adds one provider, `x`, for exact public X post URLs and embeds them
+with X's own official player. It adds no endpoint, Worker, route, or storage.
+
+Accepted forms are `x.com`/`twitter.com` (`www`/`mobile` included)
+`/<handle>/status/<ID>`, `/<handle>/statuses/<ID>`, those forms' `/photo/<n>` and
+`/video/<n>` views, and `/i/status/<ID>` or `/i/web/status/<ID>`. Everything else
+on those hosts, every mirror host, `t.co`, credentials, and custom ports are
+rejected. Share tracking parameters are dropped rather than forwarded.
+
+The frame loads only
+`https://platform.twitter.com/embed/Tweet.html?id=<ID>&dnt=true&theme=<light|dark>&lang=<locale>&embedId=<per-frame id>`.
+It is lazy, `no-referrer`, and sandboxed to `allow-scripts allow-same-origin
+allow-popups allow-popups-to-escape-sandbox`; `allow-same-origin` is required by
+the official player and must not be removed. The component reads `postMessage`
+reports only from the player origin and only from that exact frame. Deleted,
+protected, or non-embeddable posts (`no_results`) and an unreachable X (no report
+within `12s` of frame load) both fall back to the source card with the original
+link. Containment is `enable_x_inline_embed=false`.
+
+Because X's current embed build never sends a resize report, frame height is the
+bounded `x_embed_height` setting (`240`–`1200`, default `420`); taller posts
+scroll inside the card. If a future X build sends `twttr.private.resize`, the
+reported height is applied within the same bounds.
+
 ## 0.15.3 opaque Bilibili short-link resolution: accepted
 
 This release adds only exact HTTPS `b23.tv` and `bili2233.cn` opaque paths
@@ -258,6 +284,7 @@ Before any mutation, also read:
 | `wx.bdfz.net` | existing Worker route, archive API, and script-free article pages | external runtime | immutable Worker version rollback; preserve R2 objects |
 | `bdfz.net/posts/<article>/` | public, server-rendered source page framed directly by the theme | external public source | source link fallback; feature kill switch |
 | `open.douyin.com/player/video` | official public Douyin iframe player; exact numeric video ID only | external public player | canonical `www.douyin.com/video/<ID>` fallback; revert theme commit |
+| `platform.twitter.com/embed/Tweet.html` | X's official public post embed; exact numeric post ID only | external public player | source card plus canonical `x.com/<handle>/status/<ID>` link; `enable_x_inline_embed=false` |
 | Tests | `test/url-parsers.test.mjs` | source | Git |
 
 There are no external local build inputs, database exports, generated releases, or
@@ -314,6 +341,12 @@ WeChat settings:
 - `enable_wechat_inline`: immediate WeChat containment switch; default `true`.
 - `wechat_ingest_endpoint`: must be exactly `https://wx.bdfz.net/api/ingest`.
 - `wechat_embed_height`: bounded `360`–`1400`, default `720` pixels.
+
+X settings:
+
+- `enable_x_inline_embed`: immediate X containment switch; default `true`.
+  Disabled keeps a link-only source card.
+- `x_embed_height`: bounded `240`–`1200`, default `420` pixels.
 
 BDFZ post settings:
 
@@ -557,7 +590,18 @@ reload as needed and verify:
     The wrapper reports automatic scale mode; resizing the post recomputes a
     70%–100% scale and preserves the same iframe, while disabling the setting
     restores exactly 100%.
-12. Start the canonical BDFZ style regression from
+12. An X post link that Discourse left as a plain URL produces exactly one `x`
+    wrapper whose frame is
+    `https://platform.twitter.com/embed/Tweet.html?id=<ID>&dnt=true...`, lazy,
+    `no-referrer`, and sandboxed with `allow-scripts allow-same-origin
+    allow-popups allow-popups-to-escape-sandbox`, and the rendered post is
+    visible with `data-bilibili-x-embed="ready"`. The footer keeps `在 X 打开`
+    pointing at the canonical `https://x.com/<handle>/status/<ID>` URL. A
+    deleted or non-existent post ID leaves no frame, shows the fallback notice,
+    and keeps that link. If Discourse itself produced an onebox for an X link,
+    the component must produce zero wrappers for it. Confirm whether X links on
+    this forum currently cook as plain anchors before reading this control.
+13. Start the canonical BDFZ style regression from
     `https://forum.rdfzer.com/t/topic/13449/7`, follow the topic to the embedded
     first post, and verify `180-qishike` uses the BDFZ font, background, body,
     heading, image, and spacing rules. Browser-default blue links on an otherwise

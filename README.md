@@ -1,6 +1,6 @@
 # Extended Preview & Embed Suite for Discourse
 
-A Discourse theme component that fills preview and embed gaps left by Discourse core and official Discourse components. It currently adds bilibili, Douyin, NetEase Cloud Music, QQ Music, WeChat public articles, BDFZ posts, Zhihu, Xiaohongshu/RedNote, plus inline EPUB, MOBI, and AZW3 reading without requiring a container rebuild.
+A Discourse theme component that fills preview and embed gaps left by Discourse core and official Discourse components. It currently adds bilibili, Douyin, X (Twitter), NetEase Cloud Music, QQ Music, WeChat public articles, BDFZ posts, Zhihu, Xiaohongshu/RedNote, plus inline EPUB, MOBI, and AZW3 reading without requiring a container rebuild.
 
 ## Ownership boundary
 
@@ -33,6 +33,14 @@ Every safe inline player and reader is expanded by default. Automatic media expa
 Douyin video links use Douyin Open Platform's official iframe player directly. Exact `/video/<ID>`, `/user/<SEC_UID>?modal_id=<ID>`, historical `iesdouyin.com/share/video/<ID>`, and official player URLs are recognized without scraping, signatures, cookies, media downloads, or a resolver service. Opaque `v.douyin.com` short links and image-note URLs remain untouched.
 
 The official Douyin player uses a fixed `324 × 672` portrait canvas. The component centers that native canvas in the cooked post and preserves its full height instead of cropping it into a `16:9` frame; on viewports narrower than 324 CSS pixels, the iframe scales down proportionally without adding horizontal page overflow.
+
+X posts (`x.com`, `twitter.com`) use X's own official embed player at `platform.twitter.com/embed/Tweet.html`. Discourse core previews these links only with paid Twitter API credentials, so without them a status link stays an unstyled URL; this component fills exactly that gap and steps aside whenever Discourse itself produced an onebox for the same link.
+
+- Only one exact public post identity is accepted: `/<handle>/status/<ID>`, the legacy `/statuses/<ID>` form, the `/photo/<n>` and `/video/<n>` views of that same post, and `x.com/i/status/<ID>` or `/i/web/status/<ID>`. Profiles, timelines, search, broadcasts, intents, reserved product paths, lookalike hosts, third-party mirrors such as `fxtwitter`/`vxtwitter`/`nitter`, credentials, and custom ports are all rejected.
+- `?s=`/`?t=` share-tracking parameters are dropped rather than forwarded; the canonical `https://x.com/<handle>/status/<ID>` URL is the whole identity sent to X.
+- The frame is lazy, `no-referrer`, and sandboxed to `allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox`. The official player needs its own origin to read X's public syndication data; without it every post reports an empty result.
+- The embed runs in Do Not Track mode (`dnt=true`), follows the forum's light or dark color scheme, and uses the forum's own display language.
+- The player reports its outcome over `postMessage`. Only messages from `https://platform.twitter.com` sent by that exact frame are read, and only its ready, empty-result, and resize reports are acted on. A deleted, protected, or non-embeddable post and an unreachable X (for example a blocked network) both fall back to the source card with a short explanation and the original link. Because X's current build never sends a resize report, the frame height is the bounded `x_embed_height` administrator setting and taller posts scroll inside the card.
 
 Marxists Internet Archive (`marxists.org`):
 
@@ -190,6 +198,7 @@ The component does not modify Discourse core and does not require a rebuild.
 
 - Player: `https://player.bilibili.com/player.html`
 - Douyin official player: `https://open.douyin.com/player/video`
+- X official post embed: `https://platform.twitter.com/embed/Tweet.html`
 - Video metadata: `https://api.bilibili.com/x/web-interface/view`
 - Bangumi metadata page source: `https://api.bilibili.com/pgc/view/web/season`
 - Live activity player: `https://www.bilibili.com/blackboard/live/live-activity-player.html`
@@ -236,6 +245,8 @@ No rebuild is required.
 - `enable_bdfz_posts_inline`
 - `enable_bdfz_post_auto_scale`
 - `bdfz_post_embed_height`
+- `enable_x_inline_embed`
+- `x_embed_height`
 - `wechat_ingest_endpoint`
 - `wechat_embed_height`
 - `expand_reader_endpoint`

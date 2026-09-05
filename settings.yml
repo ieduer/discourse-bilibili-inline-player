@@ -96,6 +96,18 @@ bdfz_post_embed_height:
   max: 1600
   description: Desktop height in pixels of the default-open bdfz.net article frame; mobile uses a viewport-relative height.
 
+enable_x_inline_embed:
+  default: true
+  type: bool
+  description: Show x.com and twitter.com posts inline with X's own official embed player. Disable to keep link-only source cards.
+
+x_embed_height:
+  default: 420
+  type: integer
+  min: 240
+  max: 1200
+  description: Height in pixels of an inline X post before the embedded post scrolls internally.
+
 wechat_ingest_endpoint:
   default: "https://wx.bdfz.net/api/ingest"
   type: string
