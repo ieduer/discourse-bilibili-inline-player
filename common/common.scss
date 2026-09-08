@@ -232,6 +232,41 @@
   background: var(--secondary, #fff);
 }
 
+/* ── Instagram posts ── */
+
+.bilibili-inline-player--instagram .bilibili-inline-player__media {
+  min-height: 6rem;
+  background:
+    radial-gradient(circle at 70% 80%, rgb(252 175 69 / 0.28), transparent 42%),
+    radial-gradient(circle at 20% 30%, rgb(188 42 141 / 0.32), transparent 44%),
+    linear-gradient(135deg, #405de6 0%, #833ab4 30%, #c13584 50%, #e1306c 70%, #fd1d1d 85%, #f56040 95%, #fcaf45 100%);
+}
+
+.bilibili-inline-player--instagram .bilibili-inline-player__play {
+  background: rgb(255 255 255 / 0.96);
+  color: #c13584;
+  box-shadow: 0 6px 18px rgb(193 53 132 / 0.3);
+}
+
+.bilibili-inline-player--instagram .bilibili-inline-player__play:hover,
+.bilibili-inline-player--instagram .bilibili-inline-player__play:focus-visible {
+  background: #fff;
+  box-shadow: 0 10px 24px rgb(193 53 132 / 0.38);
+}
+
+.bilibili-inline-player--instagram .bilibili-inline-player__frame-wrap--fixed {
+  height: min(74vh, var(--bili-frame-height, 640px));
+  min-height: 400px;
+  overflow: hidden;
+  background: var(--secondary, #fff);
+}
+
+.bilibili-inline-player--instagram .bilibili-inline-player__frame {
+  width: 100%;
+  height: 100%;
+  background: var(--secondary, #fff);
+}
+
 /* ── EPUB / MOBI / AZW3 local reader ── */
 
 .bilibili-inline-player--ebook .bilibili-inline-player__media {
@@ -1023,6 +1058,11 @@
   .bilibili-inline-player--x .bilibili-inline-player__frame-wrap--fixed {
     height: min(70vh, var(--bili-frame-height, 420px));
     min-height: 240px;
+  }
+
+  .bilibili-inline-player--instagram .bilibili-inline-player__frame-wrap--fixed {
+    height: min(72vh, var(--bili-frame-height, 640px));
+    min-height: 360px;
   }
 
   .bilibili-inline-player__play {

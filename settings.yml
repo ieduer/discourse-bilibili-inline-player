@@ -108,6 +108,18 @@ x_embed_height:
   max: 1200
   description: Height in pixels of an inline X post before the embedded post scrolls internally.
 
+enable_instagram_inline_embed:
+  default: true
+  type: bool
+  description: Show instagram.com posts and reels inline with Instagram's embed player. Disable to keep link-only source cards.
+
+instagram_embed_height:
+  default: 640
+  type: integer
+  min: 400
+  max: 1200
+  description: Height in pixels of an inline Instagram post before the embedded content scrolls internally.
+
 wechat_ingest_endpoint:
   default: "https://wx.bdfz.net/api/ingest"
   type: string

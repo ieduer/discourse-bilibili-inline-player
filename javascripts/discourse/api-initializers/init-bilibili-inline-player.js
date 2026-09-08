@@ -54,6 +54,10 @@ const X_EMBED_LANGS = new Set([
   "hi", "hu", "id", "it", "ja", "ko", "msa", "nl", "no", "pl", "pt", "ro", "ru",
   "sv", "th", "tr", "uk", "ur", "vi", "zh-cn", "zh-tw",
 ]);
+const INSTAGRAM_HOSTS = new Set(["instagram.com", "www.instagram.com"]);
+const INSTAGRAM_EMBED_MIN_HEIGHT = 400;
+const INSTAGRAM_EMBED_MAX_HEIGHT = 1200;
+const DEFAULT_INSTAGRAM_EMBED_HEIGHT = 640;
 const BDFZ_POST_AUTO_SCALE_MIN = 0.7;
 const BDFZ_POST_AUTO_SCALE_REFERENCE_WIDTH = 800;
 const DOUYIN_PLAYER_WIDTH = 324;
@@ -405,6 +409,7 @@ const DOUYIN_PLAYER_PATH_RE = /^\/player\/video\/?$/;
 const X_STATUS_PATH_RE =
   /^\/([A-Za-z0-9_]{1,15})\/status(?:es)?\/([1-9]\d{0,19})(?:\/(?:photo|video)\/[1-4])?\/?$/;
 const X_INTERNAL_STATUS_PATH_RE = /^\/i\/(?:web\/)?status\/([1-9]\d{0,19})\/?$/;
+const INSTAGRAM_POST_PATH_RE = /^\/(?:p|reel|tv)\/([A-Za-z0-9_-]{6,64})(?:\/.*)?$/;
 const XIAOHONGSHU_NOTE_PATH_RE = /^\/(?:explore|discovery\/item)\/([0-9a-f]{24})\/?$/i;
 const REDNOTE_NOTE_PATH_RE = /^\/explore\/([0-9a-f]{24})\/?$/i;
 const XIAOHONGSHU_SHORT_PATH_RE = /^\/(?:a|m|o)\/([A-Za-z0-9_-]{4,})\/?$/i;
@@ -420,7 +425,7 @@ const XIAOHONGSHU_UNUSABLE_TITLE_RE =
 const TRAILING_URL_PUNCTUATION_RE = /[)\],.;!?，。；！？、）】》」』]+$/u;
 const IFRAME_SRC_RE = /<iframe\b[^>]*\bsrc=(["'])([^"']+)\1/gi;
 const URL_LIKE_RE =
-  /((?:https?:)?\/\/(?:player\.bilibili\.com\/player\.html|www\.bilibili\.com\/blackboard\/(?:live\/live-mobile-playerV3|live\/live-activity-player|webplayer\/mbplayer)\.html|(?:www\.|m\.)?bilibili\.com\/(?:s\/)?video\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/bangumi\/play\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/audio\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/read\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/opus\/[^\s"'<>]+|t\.bilibili\.com\/[^\s"'<>]+|live\.bilibili\.com\/[^\s"'<>]+|(?:www\.)?(?:b23\.tv|bili2233\.cn)\/[^\s"'<>]+|(?:www\.)?douyin\.com\/(?:video|user)\/[^\s"'<>]+|(?:www\.)?iesdouyin\.com\/share\/video\/[^\s"'<>]+|open\.douyin\.com\/player\/video\?[^\s"'<>]+|(?:www\.|mobile\.)?(?:twitter|x)\.com\/[^\s"'<>]+|(?:y\.)?music\.163\.com\/[^\s"'<>]+|(?:i\.)?y\.qq\.com\/[^\s"'<>]+|(?:www\.)?zhihu\.com\/[^\s"'<>]+|zhuanlan\.zhihu\.com\/[^\s"'<>]+|mp\.weixin\.qq\.com\/[^\s"'<>]+|(?:www\.)?bdfz\.net\/posts\/[^\s"'<>]+|(?:www\.)?marxists\.org\/[^\s"'<>]+))/gi;
+  /((?:https?:)?\/\/(?:player\.bilibili\.com\/player\.html|www\.bilibili\.com\/blackboard\/(?:live\/live-mobile-playerV3|live\/live-activity-player|webplayer\/mbplayer)\.html|(?:www\.|m\.)?bilibili\.com\/(?:s\/)?video\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/bangumi\/play\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/audio\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/read\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/opus\/[^\s"'<>]+|t\.bilibili\.com\/[^\s"'<>]+|live\.bilibili\.com\/[^\s"'<>]+|(?:www\.)?(?:b23\.tv|bili2233\.cn)\/[^\s"'<>]+|(?:www\.)?douyin\.com\/(?:video|user)\/[^\s"'<>]+|(?:www\.)?iesdouyin\.com\/share\/video\/[^\s"'<>]+|open\.douyin\.com\/player\/video\?[^\s"'<>]+|(?:www\.|mobile\.)?(?:twitter|x)\.com\/[^\s"'<>]+|(?:www\.)?instagram\.com\/(?:p|reel|tv)\/[^\s"'<>]+|(?:y\.)?music\.163\.com\/[^\s"'<>]+|(?:i\.)?y\.qq\.com\/[^\s"'<>]+|(?:www\.)?zhihu\.com\/[^\s"'<>]+|zhuanlan\.zhihu\.com\/[^\s"'<>]+|mp\.weixin\.qq\.com\/[^\s"'<>]+|(?:www\.)?bdfz\.net\/posts\/[^\s"'<>]+|(?:www\.)?marxists\.org\/[^\s"'<>]+))/gi;
 const XIAOHONGSHU_URL_LIKE_RE =
   /(?:^|[\s(（\[【{《「『])((?:https?:\/\/)?(?:www\.)?(?:xiaohongshu\.com|rednote\.com|xhslink\.(?:com|cn))\/[^\s"'<>，。；！？、（）【】《》「」『』]+)/gi;
 const DEFAULT_ASPECT_RATIO = "16 / 9";
@@ -745,6 +750,21 @@ function createParsedX(tweetId, handle = "") {
     canonicalUrl: normalizedHandle
       ? `https://x.com/${normalizedHandle}/status/${tweetId}`
       : `https://x.com/i/status/${tweetId}`,
+  };
+}
+
+function createParsedInstagram(shortcode, contentType = "post") {
+  const normalizedType = contentType === "reel" ? "reel" : "post";
+  const pathPrefix = normalizedType === "reel" ? "reel" : "p";
+
+  return {
+    provider: "instagram",
+    kind: "instagram",
+    contentType: normalizedType,
+    shortcode: String(shortcode),
+    page: 1,
+    rawId: String(shortcode),
+    canonicalUrl: `https://www.instagram.com/${pathPrefix}/${shortcode}/`,
   };
 }
 
@@ -1416,6 +1436,33 @@ function parseXPageUrl(url) {
   return createParsedX(statusMatch[2], statusMatch[1]);
 }
 
+function isSafeInstagramSourceUrl(url) {
+  return (
+    ["http:", "https:"].includes(url.protocol) &&
+    !url.username &&
+    !url.password &&
+    (!url.port || url.port === "443")
+  );
+}
+
+function parseInstagramPageUrl(url) {
+  if (!INSTAGRAM_HOSTS.has(url.hostname.toLowerCase()) || !isSafeInstagramSourceUrl(url)) {
+    return null;
+  }
+
+  const match = url.pathname.match(INSTAGRAM_POST_PATH_RE);
+
+  if (!match) {
+    return null;
+  }
+
+  const segments = url.pathname.split("/").filter(Boolean);
+  const typeSegment = segments[0]?.toLowerCase();
+  const contentType = typeSegment === "reel" ? "reel" : "post";
+
+  return createParsedInstagram(match[1], contentType);
+}
+
 function parseXiaohongshuPageUrl(url) {
   const hostname = url.hostname.toLowerCase();
 
@@ -1879,6 +1926,7 @@ function parseBilibiliUrl(href) {
     parseBdfzPostUrl(url) ||
     parseDouyinPageUrl(url) ||
     parseXPageUrl(url) ||
+    parseInstagramPageUrl(url) ||
     parseXiaohongshuPageUrl(url) ||
     parseXiaohongshuShortUrl(url) ||
     parseMarxistsUrl(url)
@@ -1891,6 +1939,10 @@ function buildIframeUrl(parsed) {
       theme: detectXEmbedTheme(),
       lang: detectXEmbedLang(),
     });
+  }
+
+  if (parsed.kind === "instagram") {
+    return buildInstagramEmbedUrl(parsed);
   }
 
   if (parsed.kind === "douyin") {
@@ -1955,6 +2007,10 @@ function buildIframeUrl(parsed) {
 
 function buildNoAutoplayIframeUrl(parsed) {
   if (parsed.kind === "x") {
+    return buildIframeUrl(parsed);
+  }
+
+  if (parsed.kind === "instagram") {
     return buildIframeUrl(parsed);
   }
 
@@ -2118,6 +2174,11 @@ function buildXEmbedUrl(parsed, options = {}) {
   }
 
   return `${X_EMBED_ORIGIN}${X_EMBED_PATH}?${params.toString()}`;
+}
+
+function buildInstagramEmbedUrl(parsed) {
+  const pathPrefix = parsed.contentType === "reel" ? "reel" : "p";
+  return `https://www.instagram.com/${pathPrefix}/${parsed.shortcode}/embed/`;
 }
 
 function getXEmbedLang(value) {
@@ -2292,6 +2353,8 @@ function getMetaLine(parsed) {
       return "抖音视频";
     case "x":
       return "X 帖子";
+    case "instagram":
+      return parsed.contentType === "reel" ? "Instagram Reel" : "Instagram 帖子";
     case "xiaohongshu":
       return getXiaohongshuMetaLine(parsed);
     case "marxists":
@@ -2404,6 +2467,7 @@ function getPreviewStatText(parsed, viewCount = null) {
     case "bdfz-post":
     case "douyin":
     case "x":
+    case "instagram":
     case "xiaohongshu":
     case "marxists":
       return getMetaLine(parsed);
@@ -2497,6 +2561,8 @@ function getFallbackTitle(parsed) {
       return `抖音视频 ${parsed.videoId}`;
     case "x":
       return parsed.handle ? `@${parsed.handle} 的 X 帖子` : `X 帖子 ${parsed.tweetId}`;
+    case "instagram":
+      return `Instagram ${parsed.contentType === "reel" ? "Reel" : "帖子"} ${parsed.shortcode}`;
     case "xiaohongshu":
       return getXiaohongshuMetaLine(parsed);
     case "marxists":
@@ -2585,6 +2651,10 @@ function isKnownInlineKind(parsed) {
     return getBooleanSetting("enable_x_inline_embed", true);
   }
 
+  if (parsed.kind === "instagram") {
+    return getBooleanSetting("enable_instagram_inline_embed", true);
+  }
+
   if (parsed.kind === "marxists") {
     return isMarxistsInlineMedia(parsed);
   }
@@ -2621,6 +2691,10 @@ function getInitialButtonLabel(parsed) {
     return "展开帖子";
   }
 
+  if (parsed.provider === "instagram" && isKnownInlineKind(parsed)) {
+    return "展开帖子";
+  }
+
   if (isMarxistsInlineMedia(parsed)) {
     return parsed.contentType === "video" ? "播放影像" : "播放录音";
   }
@@ -2635,6 +2709,7 @@ function shouldShowDirectSourceLink(parsed) {
     parsed?.provider === "bdfz-post" ||
     parsed?.provider === "douyin" ||
     parsed?.provider === "x" ||
+    parsed?.provider === "instagram" ||
     parsed?.provider === "ebook" ||
     parsed?.provider === "marxists" ||
     getBooleanSetting("show_open_link", true)
@@ -2685,6 +2760,10 @@ function getFooterMeta(parsed) {
       return getBooleanSetting("enable_x_inline_embed", true)
         ? "X 官方嵌入 · 保留原帖链接"
         : "X 原帖链接";
+    case "instagram":
+      return getBooleanSetting("enable_instagram_inline_embed", true)
+        ? "Instagram 官方嵌入 · 保留原帖链接"
+        : "Instagram 原帖链接";
     case "xiaohongshu":
       if (parsed.brand === "rednote") {
         return "RedNote 原文卡片";
@@ -2756,6 +2835,10 @@ function getOpenLabel(parsed) {
     return "在 X 打开";
   }
 
+  if (parsed.provider === "instagram") {
+    return "在 Instagram 打开";
+  }
+
   if (parsed.provider === "marxists") {
     return parsed.contentType === "download" ? "下载原文件" : "在马克思主义文库打开";
   }
@@ -2794,6 +2877,10 @@ function getEmbedTitle(parsed) {
 
   if (parsed.provider === "x") {
     return "X post";
+  }
+
+  if (parsed.provider === "instagram") {
+    return "Instagram embed";
   }
 
   if (parsed.provider === "marxists") {
@@ -2997,6 +3084,10 @@ function getPlaceholderLabel(parsedOrProvider) {
 
   if (provider === "qqmusic") {
     return "QQ Music";
+  }
+
+  if (provider === "instagram") {
+    return "Instagram";
   }
 
   return provider === "netease" ? "NetEase Cloud Music" : "bilibili";
@@ -3547,6 +3638,7 @@ function getPreviewAspectRatio(parsed) {
     case "zhihu":
     case "bdfz-post":
     case "x":
+    case "instagram":
     case "xiaohongshu":
     case "ebook":
       return "auto";
@@ -3562,6 +3654,15 @@ function getLoadedFrameHeight(parsed) {
       DEFAULT_X_EMBED_HEIGHT,
       X_EMBED_MIN_HEIGHT,
       X_EMBED_MAX_HEIGHT
+    );
+  }
+
+  if (parsed.kind === "instagram") {
+    return getBoundedIntegerSetting(
+      "instagram_embed_height",
+      DEFAULT_INSTAGRAM_EMBED_HEIGHT,
+      INSTAGRAM_EMBED_MIN_HEIGHT,
+      INSTAGRAM_EMBED_MAX_HEIGHT
     );
   }
 
@@ -3837,6 +3938,22 @@ function primeEmbedState(wrapper) {
         theme: detectXEmbedTheme(),
         lang: detectXEmbedLang(),
       });
+      state.standardIframeUrl = state.iframeUrl;
+      state.noAutoplayIframeUrl = "";
+      state.externalOnly = false;
+    } else {
+      state.iframeUrl = null;
+      state.externalOnly = true;
+      setButtonLabel(wrapper, getOpenLabel(state.parsed));
+    }
+
+    state.resolvePromise = Promise.resolve(state.parsed);
+    return;
+  }
+
+  if (state.parsed.kind === "instagram") {
+    if (getBooleanSetting("enable_instagram_inline_embed", true)) {
+      state.iframeUrl = buildInstagramEmbedUrl(state.parsed);
       state.standardIframeUrl = state.iframeUrl;
       state.noAutoplayIframeUrl = "";
       state.externalOnly = false;
@@ -5490,6 +5607,12 @@ function renderLoadedPlayer(wrapper, iframeUrl, { allowAutoplay = false } = {}) 
      syndication data; without `allow-same-origin` it always reports no_results.
      It never needs forms, top-level navigation, or the forum referrer. */
   if (state.parsed.provider === "x") {
+    iframe.referrerPolicy = "no-referrer";
+    iframe.sandbox =
+      "allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox";
+  }
+
+  if (state.parsed.provider === "instagram") {
     iframe.referrerPolicy = "no-referrer";
     iframe.sandbox =
       "allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox";

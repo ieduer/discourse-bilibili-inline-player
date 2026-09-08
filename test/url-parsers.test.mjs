@@ -14,6 +14,7 @@ const executableSource = initializerSource
   .concat(`
 globalThis.__themeParserTestApi = {
   buildIframeUrl,
+  buildInstagramEmbedUrl,
   buildNoAutoplayIframeUrl,
   buildXEmbedUrl,
   buildXiaohongshuPreviewText,
@@ -108,6 +109,7 @@ vm.runInNewContext(executableSource, context, {
 
 const {
   buildIframeUrl,
+  buildInstagramEmbedUrl,
   buildNoAutoplayIframeUrl,
   buildXEmbedUrl,
   buildXiaohongshuPreviewText,
@@ -2472,3 +2474,143 @@ test("X posts use the plain-link collectors and leave a real Discourse onebox al
     [canonical]
   );
 });
+
+test("parses exact Instagram post, reel, and tv forms and builds embed URL", () => {
+  const canonicalPost = "https://www.instagram.com/p/DFxyz123_-/";
+  const parsedPost = parseBilibiliUrl(canonicalPost);
+
+  assert.equal(parsedPost.provider, "instagram");
+  assert.equal(parsedPost.kind, "instagram");
+  assert.equal(parsedPost.contentType, "post");
+  assert.equal(parsedPost.shortcode, "DFxyz123_-");
+  assert.equal(parsedPost.canonicalUrl, canonicalPost);
+
+  for (const source of [
+    "https://instagram.com/p/DFxyz123_-/",
+    "http://www.instagram.com/p/DFxyz123_-/",
+    "https://www.instagram.com/p/DFxyz123_-",
+    "https://www.instagram.com/p/DFxyz123_-/?utm_source=ig_web_copy_link",
+  ]) {
+    assert.equal(parseBilibiliUrl(source).canonicalUrl, canonicalPost, source);
+  }
+
+  const canonicalReel = "https://www.instagram.com/reel/DFxyz123_-/";
+  const parsedReel = parseBilibiliUrl(canonicalReel);
+  assert.equal(parsedReel.provider, "instagram");
+  assert.equal(parsedReel.kind, "instagram");
+  assert.equal(parsedReel.contentType, "reel");
+  assert.equal(parsedReel.shortcode, "DFxyz123_-");
+  assert.equal(parsedReel.canonicalUrl, canonicalReel);
+
+  for (const source of [
+    "https://instagram.com/reel/DFxyz123_-/",
+    "https://www.instagram.com/reel/DFxyz123_-",
+    "https://www.instagram.com/reel/DFxyz123_-/?igsh=abc123xyz",
+  ]) {
+    assert.equal(parseBilibiliUrl(source).canonicalUrl, canonicalReel, source);
+  }
+
+  const tvUrl = "https://www.instagram.com/tv/DFxyz123_-/";
+  const parsedTv = parseBilibiliUrl(tvUrl);
+  assert.equal(parsedTv.provider, "instagram");
+  assert.equal(parsedTv.contentType, "post");
+  assert.equal(parsedTv.canonicalUrl, canonicalPost);
+
+  assert.equal(
+    buildIframeUrl(parsedPost),
+    "https://www.instagram.com/p/DFxyz123_-/embed/"
+  );
+  assert.equal(
+    buildIframeUrl(parsedReel),
+    "https://www.instagram.com/reel/DFxyz123_-/embed/"
+  );
+  assert.equal(buildNoAutoplayIframeUrl(parsedPost), buildIframeUrl(parsedPost));
+
+  assert.equal(getMetaLine(parsedPost), "Instagram 帖子");
+  assert.equal(getMetaLine(parsedReel), "Instagram Reel");
+  assert.equal(getFallbackTitle(parsedPost), "Instagram 帖子 DFxyz123_-");
+  assert.equal(getFallbackTitle(parsedReel), "Instagram Reel DFxyz123_-");
+  assert.equal(getInitialButtonLabel(parsedPost), "展开帖子");
+  assert.equal(getOpenLabel(parsedPost), "在 Instagram 打开");
+  assert.equal(getFooterMeta(parsedPost), "Instagram 官方嵌入 · 保留原帖链接");
+  assert.equal(getPreviewAspectRatio(parsedPost), "auto");
+  assert.equal(getLoadedFrameHeight(parsedPost), 640);
+  assert.equal(isKnownInlineKind(parsedPost), true);
+  assert.equal(shouldAutoExpandEmbed(parsedPost), true);
+
+  context.settings.show_open_link = false;
+  assert.equal(shouldShowDirectSourceLink(parsedPost), true);
+  delete context.settings.show_open_link;
+
+  themeSettings.instagram_embed_height = 5000;
+  assert.equal(getLoadedFrameHeight(parsedPost), 1200);
+  themeSettings.instagram_embed_height = 10;
+  assert.equal(getLoadedFrameHeight(parsedPost), 400);
+  delete themeSettings.instagram_embed_height;
+
+  const wrapper = {};
+  const state = { parsed: parsedPost, environmentRisk: { level: "none" } };
+  wrapperState.set(wrapper, state);
+  primeEmbedState(wrapper);
+
+  assert.equal(state.iframeUrl, "https://www.instagram.com/p/DFxyz123_-/embed/");
+  assert.equal(state.standardIframeUrl, state.iframeUrl);
+  assert.equal(state.noAutoplayIframeUrl, "");
+  assert.equal(state.externalOnly, false);
+
+  themeSettings.enable_instagram_inline_embed = false;
+  assert.equal(isKnownInlineKind(parsedPost), false);
+  assert.equal(shouldAutoExpandEmbed(parsedPost), false);
+  assert.equal(getFooterMeta(parsedPost), "Instagram 原帖链接");
+  assert.equal(getInitialButtonLabel(parsedPost), "在 Instagram 打开");
+
+  const offWrapper = { querySelector: () => null };
+  const offState = { parsed: parsedPost, environmentRisk: { level: "none" } };
+  wrapperState.set(offWrapper, offState);
+  primeEmbedState(offWrapper);
+  assert.equal(offState.iframeUrl, null);
+  assert.equal(offState.externalOnly, true);
+  delete themeSettings.enable_instagram_inline_embed;
+});
+
+test("rejects Instagram URLs that are not exact post identities", () => {
+  for (const source of [
+    "https://www.instagram.com/",
+    "https://www.instagram.com/explore/",
+    "https://www.instagram.com/stories/username/123456789/",
+    "https://www.instagram.com/username/",
+    "https://www.instagram.com/p/",
+    "https://www.instagram.com/reel/",
+    "https://www.instagram.com/p/123",
+    "https://instagram.com.evil.example/p/DFxyz123_-/",
+    "https://user:pass@instagram.com/p/DFxyz123_-/",
+    "https://instagram.com:444/p/DFxyz123_-/",
+    "ftp://instagram.com/p/DFxyz123_-/",
+  ]) {
+    assert.equal(parseBilibiliUrl(source), null, source);
+  }
+});
+
+test("Instagram posts use the plain-link collectors and extract URLs properly", () => {
+  const canonical = "https://www.instagram.com/p/DFxyz123_-/";
+
+  const standalone = makeCookedParagraphFixture({ url: canonical });
+  const [candidate] = collectStandaloneCandidates(standalone.cooked, []);
+  assert.equal(candidate.parsed.provider, "instagram");
+  assert.equal(candidate.target, standalone.paragraph);
+  assert.ok(!candidate.preserveSource);
+
+  const quoted = makeCookedParagraphFixture({
+    before: "推荐这篇 Instagram 帖子：",
+    url: `${canonical}?utm_source=ig_web_copy_link`,
+  });
+  const [visible] = collectVisibleUrlCandidates(quoted.cooked, []);
+  assert.equal(visible.parsed.canonicalUrl, canonical);
+  assert.equal(visible.preserveSource, true);
+
+  assert.deepEqual(
+    Array.from(extractUrlsFromText(`这是原帖 ${canonical} 看看吧`)),
+    [canonical]
+  );
+});
+

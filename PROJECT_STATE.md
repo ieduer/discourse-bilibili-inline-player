@@ -1,6 +1,23 @@
 # Project state
 
-Last reviewed: 2026-09-01 (America/Los_Angeles)
+Last reviewed: 2026-09-08 (America/Los_Angeles)
+
+## 0.17.0 Instagram post and reel embeds: implemented and tested
+
+- Discourse core does not render inline embed players for public Instagram posts
+  and reels. This release adds inline playback and card takeover using Instagram's
+  official embed player (`https://www.instagram.com/{p|reel}/{shortcode}/embed/`).
+- Accepted identities are `instagram.com` and `www.instagram.com` URLs with
+  `/p/<shortcode>/`, `/reel/<shortcode>/`, and legacy `/tv/<shortcode>/`.
+  Shortcodes are `[A-Za-z0-9_-]{6,64}`. Unsafe protocols, user credentials,
+  custom ports, profile links, stories, and explore pages are rejected.
+- Embed frames use `loading="lazy"`, `referrerPolicy="no-referrer"`, and are
+  sandboxed with `allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox`.
+- Containment settings: `enable_instagram_inline_embed=true` (kill-switch to
+  revert to link-only cards) and `instagram_embed_height=640` (bounded 400–1200).
+- Local validation: 87/87 tests pass in `test/url-parsers.test.mjs`, covering
+  post/reel/tv parsing, canonicalization, tracking parameter stripping, negative
+  controls, settings hooks, and plain-link collectors.
 
 ## 0.16.0 X (Twitter) post embeds: accepted in production
 

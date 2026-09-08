@@ -1,6 +1,6 @@
 # Extended Preview & Embed Suite for Discourse
 
-A Discourse theme component that fills preview and embed gaps left by Discourse core and official Discourse components. It currently adds bilibili, Douyin, X (Twitter), NetEase Cloud Music, QQ Music, WeChat public articles, BDFZ posts, Zhihu, Xiaohongshu/RedNote, plus inline EPUB, MOBI, and AZW3 reading without requiring a container rebuild.
+A Discourse theme component that fills preview and embed gaps left by Discourse core and official Discourse components. It currently adds bilibili, Douyin, X (Twitter), Instagram, NetEase Cloud Music, QQ Music, WeChat public articles, BDFZ posts, Zhihu, Xiaohongshu/RedNote, plus inline EPUB, MOBI, and AZW3 reading without requiring a container rebuild.
 
 ## Ownership boundary
 
@@ -77,6 +77,9 @@ Inline playback:
 - `https://www.douyin.com/user/<sec_uid>?modal_id=<video_id>`
 - `https://www.iesdouyin.com/share/video/<video_id>/`
 - `https://open.douyin.com/player/video?vid=<video_id>&autoplay=0`
+- `https://www.instagram.com/p/<shortcode>/`
+- `https://www.instagram.com/reel/<shortcode>/`
+- `https://www.instagram.com/tv/<shortcode>/`
 - `https://music.163.com/song?id=...`
 - `https://music.163.com/playlist?id=...`
 - `https://music.163.com/album?id=...`
