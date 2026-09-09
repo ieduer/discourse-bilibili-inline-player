@@ -1,6 +1,24 @@
 # Project state
 
-Last reviewed: 2026-09-08 (America/Los_Angeles)
+Last reviewed: 2026-09-09 (America/Los_Angeles)
+
+## 0.17.1 BDFZ post visualizations and script sandbox: implemented and tested
+
+- BDFZ blog posts may contain interactive visual charts (such as ECharts via the
+  Hugo shortcode `echart`, e.g. `https://bdfz.net/posts/195-hs/`) and KaTeX math formulas.
+  Previously the `bdfz-post` embed iframe sandbox was restricted to
+  `allow-popups allow-popups-to-escape-sandbox` without script execution, leaving
+  chart containers blank in embedded forum posts.
+- This release adds `allow-scripts` to the `bdfz-post` iframe sandbox:
+  `allow-scripts allow-popups allow-popups-to-escape-sandbox`.
+- Security boundary: `allow-same-origin` strictly remains omitted. The embedded
+  document executes in an opaque unique origin (`origin: null`). It cannot access
+  parent window / forum (`forum.rdfzer.com`) cookies, localStorage, session state,
+  or DOM, and cannot access `bdfz.net` credentials or cookies. Forms and top-level
+  navigation remain blocked.
+- Validation: 87/87 tests pass in `test/url-parsers.test.mjs`. Chrome verification
+  confirmed 6/6 ECharts containers on `bdfz.net/posts/195-hs/` initialize and render
+  `<canvas>` elements under `allow-scripts` with `origin: null`.
 
 ## 0.17.0 Instagram post and reel embeds: implemented and tested
 

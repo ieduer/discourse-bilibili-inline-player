@@ -608,7 +608,8 @@ reload as needed and verify:
 11. An existing cooked post containing one exact BDFZ article URL produces one
     `bdfz-post` wrapper and a visible default-open iframe at the normalized
     `https://bdfz.net/posts/<article>/` URL. The frame is lazy, `no-referrer`, and
-    sandboxed without scripts/forms/same-origin privileges. Its toggle starts at
+    sandboxed with `allow-scripts allow-popups allow-popups-to-escape-sandbox` (without
+    forms, top-level navigation, or same-origin privileges to keep the frame in an opaque origin). Its toggle starts at
     `收起正文` with `aria-expanded=true`, hides the frame and changes to `展开正文`,
     then restores the same frame without losing the permanent original link.
     The wrapper reports automatic scale mode; resizing the post recomputes a

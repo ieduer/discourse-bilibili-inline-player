@@ -82,7 +82,7 @@ enable_wechat_inline:
 enable_bdfz_posts_inline:
   default: true
   type: bool
-  description: Show exact bdfz.net/posts/<article>/ pages inline by default in a script-free frame, with explicit collapse and expand controls plus a permanent original link.
+  description: Show exact bdfz.net/posts/<article>/ pages inline by default in an isolated sandboxed frame, with explicit collapse and expand controls plus a permanent original link.
 
 enable_bdfz_post_auto_scale:
   default: true

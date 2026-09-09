@@ -5600,7 +5600,8 @@ function renderLoadedPlayer(wrapper, iframeUrl, { allowAutoplay = false } = {}) 
 
   if (state.parsed.provider === "bdfz-post") {
     iframe.referrerPolicy = "no-referrer";
-    iframe.sandbox = "allow-popups allow-popups-to-escape-sandbox";
+    iframe.sandbox =
+      "allow-scripts allow-popups allow-popups-to-escape-sandbox";
   }
 
   /* The official X player needs its own scripts and origin to reach X's public

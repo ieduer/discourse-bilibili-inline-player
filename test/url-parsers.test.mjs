@@ -995,7 +995,7 @@ test("bdfz.net article frames expose an accessible default-open collapse control
   assert.equal(attributes.get("aria-expanded"), "false");
   assert.match(
     initializerSource,
-    /iframe\.sandbox = "allow-popups allow-popups-to-escape-sandbox";/u
+    /iframe\.sandbox =\s*"allow-scripts allow-popups allow-popups-to-escape-sandbox";/u
   );
   assert.match(initializerSource, /attachBdfzPostToggle\(wrapper, frameWrap, footer\)/u);
 });
