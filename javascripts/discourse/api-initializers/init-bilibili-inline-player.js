@@ -425,7 +425,7 @@ const XIAOHONGSHU_UNUSABLE_TITLE_RE =
 const TRAILING_URL_PUNCTUATION_RE = /[)\],.;!?，。；！？、）】》」』]+$/u;
 const IFRAME_SRC_RE = /<iframe\b[^>]*\bsrc=(["'])([^"']+)\1/gi;
 const URL_LIKE_RE =
-  /((?:https?:)?\/\/(?:player\.bilibili\.com\/player\.html|www\.bilibili\.com\/blackboard\/(?:live\/live-mobile-playerV3|live\/live-activity-player|webplayer\/mbplayer)\.html|(?:www\.|m\.)?bilibili\.com\/(?:s\/)?video\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/bangumi\/play\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/audio\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/read\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/opus\/[^\s"'<>]+|t\.bilibili\.com\/[^\s"'<>]+|live\.bilibili\.com\/[^\s"'<>]+|(?:www\.)?(?:b23\.tv|bili2233\.cn)\/[^\s"'<>]+|(?:www\.)?douyin\.com\/(?:video|user)\/[^\s"'<>]+|(?:www\.)?iesdouyin\.com\/share\/video\/[^\s"'<>]+|open\.douyin\.com\/player\/video\?[^\s"'<>]+|(?:www\.|mobile\.)?(?:twitter|x)\.com\/[^\s"'<>]+|(?:www\.)?instagram\.com\/(?:p|reel|tv)\/[^\s"'<>]+|(?:y\.)?music\.163\.com\/[^\s"'<>]+|(?:i\.)?y\.qq\.com\/[^\s"'<>]+|(?:www\.)?zhihu\.com\/[^\s"'<>]+|zhuanlan\.zhihu\.com\/[^\s"'<>]+|mp\.weixin\.qq\.com\/[^\s"'<>]+|(?:www\.)?bdfz\.net\/posts\/[^\s"'<>]+|(?:www\.)?marxists\.org\/[^\s"'<>]+))/gi;
+  /((?:https?:)?\/\/(?:player\.bilibili\.com\/player\.html|www\.bilibili\.com\/blackboard\/(?:live\/live-mobile-playerV3|live\/live-activity-player|webplayer\/mbplayer)\.html|(?:www\.|m\.)?bilibili\.com\/(?:s\/)?video\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/bangumi\/play\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/audio\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/read\/[^\s"'<>]+|(?:www\.|m\.)?bilibili\.com\/opus\/[^\s"'<>]+|t\.bilibili\.com\/[^\s"'<>]+|live\.bilibili\.com\/[^\s"'<>]+|(?:www\.)?(?:b23\.tv|bili2233\.cn)\/[^\s"'<>]+|(?:www\.)?douyin\.com\/(?:video|user)\/[^\s"'<>]+|(?:www\.)?iesdouyin\.com\/share\/video\/[^\s"'<>]+|open\.douyin\.com\/player\/video\?[^\s"'<>]+|(?:www\.|mobile\.)?(?:twitter|x)\.com\/[^\s"'<>]+|(?:www\.)?instagram\.com\/(?:p|reel|tv)\/[^\s"'<>]+|(?:y\.)?music\.163\.com\/[^\s"'<>]+|(?:i\.)?y\.qq\.com\/[^\s"'<>]+|(?:www\.)?zhihu\.com\/[^\s"'<>]+|zhuanlan\.zhihu\.com\/[^\s"'<>]+|mp\.weixin\.qq\.com\/[^\s"'<>]+|(?:www\.)?bdfz\.net\/posts\/[^\s"'<>]+|[a-z0-9-]+\.rdfz\.net\/p\/[^\s"'<>]+|(?:www\.)?marxists\.org\/[^\s"'<>]+))/gi;
 const XIAOHONGSHU_URL_LIKE_RE =
   /(?:^|[\s(（\[【{《「『])((?:https?:\/\/)?(?:www\.)?(?:xiaohongshu\.com|rednote\.com|xhslink\.(?:com|cn))\/[^\s"'<>，。；！？、（）【】《》「」『』]+)/gi;
 const DEFAULT_ASPECT_RATIO = "16 / 9";
@@ -1333,6 +1333,115 @@ function parseBdfzPostUrl(url) {
   };
 }
 
+/* rdfz.net student blogs. Every student blog is `<handle>.rdfz.net` and every
+   article is `/p/<slug>`. That platform answers with `X-Frame-Options: DENY`,
+   `frame-ancestors 'none'`, and no CORS header, so the browser can neither frame
+   nor read one; the article and the replies under it therefore arrive from the
+   operator-run expand-reader service, which returns them as two separate
+   regions so the replies can be rendered as replies. Membership is decided by
+   the platform's own handle and slug grammar rather than by a host list,
+   because each new blog is a new hostname. */
+const RDFZ_BLOG_ZONE_SUFFIX = ".rdfz.net";
+/* Names on that shared zone that are never a student blog: the platform's own
+   control plane and interstitial host, and the neighbouring projects its
+   wildcard route deliberately excludes. All of them are also reserved by the
+   platform, so excluding them here cannot orphan a real blog. */
+const RDFZ_BLOG_EXCLUDED_HANDLES = new Set([
+  "www", "blog", "go", "recite", "s", "api", "admin", "console",
+]);
+/* An article's images are subresources this forum page will request: the
+   article's own host serves `/media/<id>`, and these two are the only other
+   sources that platform's own page policy allows. */
+const RDFZ_BLOG_IMAGE_HOSTS = new Set(["blog.rdfz.net", "img.bdfz.net"]);
+
+/* The platform's handle grammar: 3-30 characters, lowercase alphanumerics and
+   hyphens, no leading, trailing, or doubled hyphen, never all digits, at least
+   three letters. */
+function isRdfzBlogHandle(value) {
+  const handle = String(value || "");
+
+  if (handle.length < 3 || handle.length > 30 || handle.includes("--")) {
+    return false;
+  }
+
+  if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(handle) || /^[0-9]+$/.test(handle)) {
+    return false;
+  }
+
+  return (handle.match(/[a-z]/g) || []).length >= 3;
+}
+
+/* The platform's slug grammar: one segment of lowercase ASCII, digits, hyphens,
+   or CJK, at most 60 code points, never starting or ending with a hyphen.
+   Chinese slugs travel percent-encoded, so the decoded form is what matches. */
+function isRdfzBlogSlug(value) {
+  const slug = String(value || "");
+
+  if (slug.startsWith("-") || slug.endsWith("-")) {
+    return false;
+  }
+
+  const length = [...slug].length;
+
+  if (length < 1 || length > 60) {
+    return false;
+  }
+
+  return /^[a-z0-9一-鿿㐀-䶿-]+$/u.test(slug);
+}
+
+function parseRdfzBlogUrl(url) {
+  const hostname = url.hostname.toLowerCase();
+
+  if (
+    !hostname.endsWith(RDFZ_BLOG_ZONE_SUFFIX) ||
+    !["http:", "https:"].includes(url.protocol) ||
+    url.username ||
+    url.password ||
+    (url.port && url.port !== "80" && url.port !== "443")
+  ) {
+    return null;
+  }
+
+  const handle = hostname.slice(0, -RDFZ_BLOG_ZONE_SUFFIX.length);
+
+  if (!isRdfzBlogHandle(handle) || RDFZ_BLOG_EXCLUDED_HANDLES.has(handle)) {
+    return null;
+  }
+
+  const segments = url.pathname.split("/");
+
+  /* Exactly `/p/<slug>`: no trailing slash, no deeper path, no empty segment. */
+  if (segments.length !== 3 || segments[0] !== "" || segments[1] !== "p" || !segments[2]) {
+    return null;
+  }
+
+  const slug = decodeUrlSegment(segments[2]);
+
+  if (!isRdfzBlogSlug(slug)) {
+    return null;
+  }
+
+  const canonical = new URL(url.toString());
+
+  canonical.protocol = "https:";
+  canonical.port = "";
+  canonical.pathname = `/p/${encodeURIComponent(slug)}`;
+  canonical.search = "";
+  canonical.hash = "";
+
+  return {
+    provider: "rdfz-blog",
+    kind: "rdfz-blog",
+    contentType: "article",
+    handle,
+    slug,
+    page: 1,
+    rawId: slug,
+    canonicalUrl: canonical.toString(),
+  };
+}
+
 function isSafeXiaohongshuSourceUrl(url) {
   return (
     url.protocol === "https:" &&
@@ -1775,7 +1884,10 @@ function isMarxistsReadingCard(parsed) {
 }
 
 function isReaderCard(parsed) {
-  return isMarxistsReadingCard(parsed) || ["zhihu", "wechat"].includes(parsed?.kind);
+  return (
+    isMarxistsReadingCard(parsed) ||
+    ["zhihu", "wechat", "rdfz-blog"].includes(parsed?.kind)
+  );
 }
 
 function getMarxistsMetaLine(parsed) {
@@ -1929,6 +2041,7 @@ function parseBilibiliUrl(href) {
     parseInstagramPageUrl(url) ||
     parseXiaohongshuPageUrl(url) ||
     parseXiaohongshuShortUrl(url) ||
+    parseRdfzBlogUrl(url) ||
     parseMarxistsUrl(url)
   );
 }
@@ -2349,6 +2462,8 @@ function getMetaLine(parsed) {
       return "微信公号全文";
     case "bdfz-post":
       return "BDFZ 博文全文";
+    case "rdfz-blog":
+      return `学生博客 · ${parsed.handle}.rdfz.net`;
     case "douyin":
       return "抖音视频";
     case "x":
@@ -2465,6 +2580,7 @@ function getPreviewStatText(parsed, viewCount = null) {
     case "zhihu":
     case "wechat":
     case "bdfz-post":
+    case "rdfz-blog":
     case "douyin":
     case "x":
     case "instagram":
@@ -2557,6 +2673,8 @@ function getFallbackTitle(parsed) {
       return "微信公号文章";
     case "bdfz-post":
       return "BDFZ 博文";
+    case "rdfz-blog":
+      return `${parsed.handle} 的博客文章`;
     case "douyin":
       return `抖音视频 ${parsed.videoId}`;
     case "x":
@@ -2707,6 +2825,7 @@ function shouldShowDirectSourceLink(parsed) {
     parsed?.provider === "xiaohongshu" ||
     parsed?.provider === "wechat" ||
     parsed?.provider === "bdfz-post" ||
+    parsed?.provider === "rdfz-blog" ||
     parsed?.provider === "douyin" ||
     parsed?.provider === "x" ||
     parsed?.provider === "instagram" ||
@@ -2754,6 +2873,10 @@ function getFooterMeta(parsed) {
       return getBooleanSetting("enable_bdfz_posts_inline", true)
         ? "bdfz.net 原文 · 默认展开，可随时收起"
         : "bdfz.net 原文链接";
+    case "rdfz-blog":
+      return supportsExpandReader(parsed)
+        ? "全文与回复经 BDFZ 阅读服务展开 · 该站禁止页面被外部内嵌"
+        : "学生博客原文卡片 · 该站禁止页面被外部内嵌";
     case "douyin":
       return "抖音开放平台播放器 · 保留原视频链接";
     case "x":
@@ -2827,6 +2950,10 @@ function getOpenLabel(parsed) {
     return "在 bdfz.net 打开原文";
   }
 
+  if (parsed.provider === "rdfz-blog") {
+    return `在 ${parsed.handle}.rdfz.net 打开原文`;
+  }
+
   if (parsed.provider === "douyin") {
     return "在抖音打开";
   }
@@ -2869,6 +2996,10 @@ function getEmbedTitle(parsed) {
 
   if (parsed.provider === "bdfz-post") {
     return "BDFZ post";
+  }
+
+  if (parsed.provider === "rdfz-blog") {
+    return "rdfz.net student blog post";
   }
 
   if (parsed.provider === "douyin") {
@@ -3080,6 +3211,10 @@ function getPlaceholderLabel(parsedOrProvider) {
 
   if (provider === "marxists") {
     return "马克思主义文库";
+  }
+
+  if (provider === "rdfz-blog") {
+    return "学生博客";
   }
 
   if (provider === "qqmusic") {
@@ -3433,6 +3568,21 @@ function buildMetadata(target, fallbackAnchor, parsed, textToOmit = "") {
     };
   }
 
+  if (parsed.provider === "rdfz-blog") {
+    /* Until the reader answers, the blog's own hostname is the only byline this
+       forum page can honestly show. */
+    return {
+      parsed,
+      title: extractTitle(target, fallbackAnchor, parsed, textToOmit),
+      description: `${parsed.handle}.rdfz.net`,
+      poster: "",
+      canonicalUrl: parsed.canonicalUrl,
+      metaLine: getMetaLine(parsed),
+      viewCount: null,
+      environmentRisk: { level: "none", message: "" },
+    };
+  }
+
   if (parsed.provider === "xiaohongshu") {
     const context = extractXiaohongshuShareContext(target);
     const cooked = extractXiaohongshuCookedMetadata(target, fallbackAnchor, parsed);
@@ -3637,6 +3787,7 @@ function getPreviewAspectRatio(parsed) {
       return parsed.contentType === "video" ? "16 / 9" : "auto";
     case "zhihu":
     case "bdfz-post":
+    case "rdfz-blog":
     case "x":
     case "instagram":
     case "xiaohongshu":
@@ -3751,7 +3902,9 @@ function buildReadingCard(wrapper, metadata) {
         ? "正在读取知乎摘要…"
         : metadata.parsed.provider === "wechat"
           ? "正在转换并展开微信全文…"
-          : "正在展开原文…"
+          : metadata.parsed.provider === "rdfz-blog"
+            ? "正在展开全文与回复…"
+            : "正在展开原文…"
     );
 
     status.setAttribute("role", "status");
@@ -4030,6 +4183,23 @@ function primeEmbedState(wrapper) {
     }
 
     state.resolvePromise = Promise.resolve(state.parsed);
+    return;
+  }
+
+  if (state.parsed.kind === "rdfz-blog") {
+    /* The platform refuses framing outright, so there is no iframe to build:
+       the pane is filled by the reader service, and the card keeps the original
+       link whether or not that succeeds. */
+    state.iframeUrl = null;
+    state.standardIframeUrl = "";
+    state.noAutoplayIframeUrl = "";
+    state.externalOnly = !supportsExpandReader(state.parsed);
+    state.resolvePromise = Promise.resolve(state.parsed);
+
+    if (state.externalOnly) {
+      setButtonLabel(wrapper, getOpenLabel(state.parsed));
+    }
+
     return;
   }
 
@@ -4765,6 +4935,7 @@ async function fetchBilibiliShortLinkResolution(shortUrl) {
 function supportsExpandReader(parsed) {
   const supportedSource =
     (parsed?.kind === "marxists" && parsed.contentType === "document") ||
+    (parsed?.kind === "rdfz-blog" && getBooleanSetting("enable_rdfz_blog_inline", true)) ||
     (parsed?.kind === "zhihu" && getBooleanSetting("enable_zhihu_summary", true));
 
   return Boolean(
@@ -4929,7 +5100,14 @@ function sanitizeReaderImageUrl(value, sourceUrl) {
       return "";
     }
 
-    const allowedHosts = MARXISTS_HOSTS.has(sourceHost) ? MARXISTS_HOSTS : new Set([sourceHost]);
+    /* A student blog serves its own `/media/<id>`; the platform's control plane
+       and the fleet image bucket are the only other sources its own page policy
+       allows. Every other source stays on its own host. */
+    const allowedHosts = MARXISTS_HOSTS.has(sourceHost)
+      ? MARXISTS_HOSTS
+      : sourceHost.endsWith(RDFZ_BLOG_ZONE_SUFFIX)
+        ? new Set([sourceHost, ...RDFZ_BLOG_IMAGE_HOSTS])
+        : new Set([sourceHost]);
 
     if (
       !["http:", "https:"].includes(imageUrl.protocol) ||
@@ -5045,14 +5223,106 @@ function sanitizeReaderFragment(html, sourceUrl, idPrefix) {
   return root;
 }
 
+/* Replies arrive from the reader as their own sanitized region, because class
+   attributes never survive the allowlist and a single blob would reach the forum
+   structurally anonymous. The structure is re-applied here so a reply reads as a
+   reply. */
+function buildRdfzBlogComments(view, sourceUrl, idPrefix) {
+  if (!getBooleanSetting("enable_rdfz_blog_comments", true)) {
+    return null;
+  }
+
+  const section = createElement("section", "bilibili-inline-player__reader-comments");
+  const count = Number.isInteger(view.commentCount) && view.commentCount > 0 ? view.commentCount : 0;
+
+  section.appendChild(
+    createElement(
+      "h4",
+      "bilibili-inline-player__reader-comments-title",
+      count ? `回复 ${count}` : "回复"
+    )
+  );
+
+  if (view.commentsClosed) {
+    section.appendChild(
+      createElement(
+        "p",
+        "bilibili-inline-player__reader-comments-note",
+        normalizeTitleText(view.commentsNote) || "作者已关闭这篇文章的回复。"
+      )
+    );
+    return section;
+  }
+
+  const fragment =
+    count && typeof view.commentsHtml === "string" && view.commentsHtml
+      ? sanitizeReaderFragment(view.commentsHtml, sourceUrl, `${idPrefix}reply-`)
+      : null;
+  const list = fragment?.querySelector("ol, ul");
+
+  if (!list || !list.querySelector("li")) {
+    section.appendChild(
+      createElement(
+        "p",
+        "bilibili-inline-player__reader-comments-note",
+        "还没有回复。"
+      )
+    );
+    return section;
+  }
+
+  list.className = "bilibili-inline-player__reader-comment-list";
+
+  for (const item of Array.from(list.children)) {
+    if (item.tagName.toLowerCase() !== "li") {
+      item.remove();
+      continue;
+    }
+
+    item.className = "bilibili-inline-player__reader-comment";
+
+    const byline = item.firstElementChild;
+
+    /* The platform prints one byline paragraph, author and time, above each
+       reply body. */
+    if (byline?.tagName.toLowerCase() === "p" && byline.querySelector("time")) {
+      byline.className = "bilibili-inline-player__reader-comment-meta";
+    }
+  }
+
+  section.appendChild(list);
+  return section;
+}
+
+function getReaderPaneLabel(parsed, isZhihuSummary, title) {
+  const subject = title || (isZhihuSummary ? "知乎" : parsed?.provider === "rdfz-blog" ? "学生博客" : "马克思主义文库");
+
+  if (isZhihuSummary) {
+    return `${subject}摘要`;
+  }
+
+  return parsed?.provider === "rdfz-blog" ? `${subject}原文与回复` : `${subject}原文`;
+}
+
 function buildReaderPane(wrapper, view, resolvedTitle = "") {
   const state = wrapperState.get(wrapper);
   const sourceUrl = state?.parsed?.canonicalUrl || "";
   const isZhihuSummary = state?.parsed?.provider === "zhihu";
+  const isStudentBlog = state?.parsed?.provider === "rdfz-blog";
   const idPrefix = `bili-reader-${++readerFragmentSequence}-`;
   const fragment = sanitizeReaderFragment(view.html, sourceUrl, idPrefix);
+  const comments = isStudentBlog ? buildRdfzBlogComments(view, sourceUrl, idPrefix) : null;
 
-  if (!fragment || !normalizeTitleText(fragment.textContent || "")) {
+  /* A student blog post can legitimately be one photograph, or a short note
+     whose replies are the substance; those must not be mistaken for an empty
+     reading view. */
+  const hasReadableArticle = Boolean(
+    fragment &&
+      (normalizeTitleText(fragment.textContent || "") ||
+        (isStudentBlog && fragment.querySelector("img")))
+  );
+
+  if (!fragment || (!hasReadableArticle && !comments)) {
     return null;
   }
 
@@ -5063,13 +5333,20 @@ function buildReaderPane(wrapper, view, resolvedTitle = "") {
   pane.setAttribute("role", "region");
   pane.setAttribute(
     "aria-label",
-    `${resolvedTitle || wrapper.dataset.bilibiliTitle || (isZhihuSummary ? "知乎" : "马克思主义文库")}${
-      isZhihuSummary ? "摘要" : "原文"
-    }`
+    getReaderPaneLabel(
+      state?.parsed,
+      isZhihuSummary,
+      resolvedTitle || wrapper.dataset.bilibiliTitle
+    )
   );
   article.lang = view.lang || "";
   article.append(...Array.from(fragment.childNodes));
   pane.appendChild(article);
+
+  if (comments) {
+    pane.appendChild(comments);
+  }
+
   pane.style.setProperty(
     "--bili-reader-height",
     `${getBoundedIntegerSetting("expand_reader_height", DEFAULT_READER_PANE_HEIGHT, 240, 1200)}px`
@@ -5088,6 +5365,36 @@ function buildReaderPane(wrapper, view, resolvedTitle = "") {
   }
 
   return pane;
+}
+
+/* The card is built before the reader answers, so its byline starts as the
+   blog's hostname; replace it with the line the platform itself prints under
+   the title once the article is here. */
+function updateRdfzBlogByline(wrapper, view) {
+  const text = [normalizeTitleText(view?.author || ""), normalizeTitleText(view?.metaText || "")]
+    .filter(Boolean)
+    .join(" · ")
+    .slice(0, 360);
+
+  if (!text) {
+    return;
+  }
+
+  const existing = wrapper.querySelector(".bilibili-inline-player__reading-byline");
+
+  if (existing) {
+    existing.textContent = text;
+    return;
+  }
+
+  const byline = createElement("div", "bilibili-inline-player__reading-byline", text);
+  const title = wrapper.querySelector(".bilibili-inline-player__reading-title");
+
+  if (title) {
+    title.insertAdjacentElement("afterend", byline);
+  } else {
+    wrapper.querySelector(".bilibili-inline-player__reading-body")?.appendChild(byline);
+  }
 }
 
 function buildWeChatArchivePane(wrapper, archive) {
@@ -5182,9 +5489,28 @@ async function expandWeChatArchive(wrapper) {
   }
 }
 
+function getUrlHostname(value) {
+  try {
+    return new URL(String(value || "")).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
 function isMatchingReaderView(view, parsed) {
   if (!view?.ok || typeof view.html !== "string" || !parsed?.canonicalUrl) {
     return false;
+  }
+
+  if (parsed.provider === "rdfz-blog") {
+    /* One article on one blog: a view for any other identity is discarded and
+       the card falls back to its source link. */
+    return (
+      view.provider === "rdfz-blog" &&
+      String(view.handle || "") === parsed.handle &&
+      String(view.slug || "") === parsed.slug &&
+      getUrlHostname(view.url) === getUrlHostname(parsed.canonicalUrl)
+    );
   }
 
   if (parsed.provider !== "zhihu") {
@@ -5247,7 +5573,9 @@ async function expandThroughReader(wrapper) {
     if (status) {
       status.textContent = state.parsed.provider === "zhihu"
         ? "知乎摘要暂时无法读取，请使用下方链接打开原文。"
-        : "原文暂时无法展开，请使用下方链接打开原站。";
+        : state.parsed.provider === "rdfz-blog"
+          ? "全文暂时无法展开，请使用下方链接打开这篇博客。"
+          : "原文暂时无法展开，请使用下方链接打开原站。";
       status.classList.add("bilibili-inline-player__reading-status--error");
     }
     return;
@@ -5262,6 +5590,10 @@ async function expandThroughReader(wrapper) {
     if (heading) {
       heading.textContent = resolvedTitle;
     }
+  }
+
+  if (state.parsed.provider === "rdfz-blog") {
+    updateRdfzBlogByline(wrapper, view);
   }
 
   status?.remove();

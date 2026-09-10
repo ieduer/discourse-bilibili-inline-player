@@ -74,6 +74,16 @@ enable_zhihu_summary:
   type: bool
   description: Read an exact question, answer, or article match from Zhihu's official search API through expand-reader and show only its bounded summary. Disable to keep link-only source cards.
 
+enable_rdfz_blog_inline:
+  default: true
+  type: bool
+  description: Expand rdfz.net student blog articles (<handle>.rdfz.net/p/<slug>) inline through the shared BDFZ expand-reader service. That platform refuses framing and cross-origin reads, so disabling this leaves link-only source cards.
+
+enable_rdfz_blog_comments:
+  default: true
+  type: bool
+  description: Show the replies published under a student blog article beneath its expanded text. Disable to expand the article only. The reply form itself always stays on the blog.
+
 enable_wechat_inline:
   default: true
   type: bool

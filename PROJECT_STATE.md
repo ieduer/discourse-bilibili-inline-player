@@ -1,6 +1,43 @@
 # Project state
 
-Last reviewed: 2026-09-09 (America/Los_Angeles)
+Last reviewed: 2026-09-10 (America/Los_Angeles)
+
+## 0.18.0 rdfz.net student blog articles and their replies: implemented and tested
+
+- A link to the school's own student blog platform (`<handle>.rdfz.net/p/<slug>`)
+  stayed a bare link in a forum thread. Those pages answer with
+  `X-Frame-Options: DENY`, `frame-ancestors 'none'`, and no CORS header —
+  verified against `serin.rdfz.net` and `suen.rdfz.net` on 2026-09-10 — so the
+  browser can neither frame nor read one. The only sanctioned path is the
+  operator's `expand-reader` service, per the 2026-08-22 decision.
+- This release adds provider `rdfz-blog`. The article opens by default with no
+  click step, and the replies published under it are rendered below it as
+  replies, each with its author, that author's blog link, and its timestamp.
+  Reply state is reported honestly: a count, `还没有回复。`, or the author's own
+  closed-replies notice. The reply box itself stays on the blog; it is a
+  cross-origin form that cannot work in a forum page.
+- Identity comes from the blog platform's own handle and slug grammar rather
+  than a host list, because every blog is a new hostname. `rdfz.net` is a shared
+  zone, so `www`, the `blog` control plane, `go`, `recite`, `s`, `api`, `admin`,
+  and `console` are excluded by name, and blog homes, archives, tag pages,
+  feeds, and media objects are outside the accepted path.
+- The service returns the article and the replies as two separately sanitized
+  regions; both are re-sanitized locally against the existing reader allowlist
+  before they touch the DOM. Article images may resolve only to the article's own
+  host, `blog.rdfz.net`, or `img.bdfz.net`. A view whose provider, handle, slug,
+  or host does not match the link is discarded, and every failure falls back to
+  the source card with the original link.
+- Containment settings: `enable_rdfz_blog_inline` (kill switch back to link-only
+  cards) and `enable_rdfz_blog_comments` (article without replies). The source
+  link is always shown for this provider regardless of `show_open_link`.
+- Local validation: 93/93 tests pass in `test/url-parsers.test.mjs`, covering the
+  handle and slug grammar, canonicalization from share and `http` forms, the
+  shared-zone and non-article negative controls, settings hooks, reader-view
+  identity matching, the image host boundary, and the plain-text URL collector.
+- Depends on `expand-reader` 0.4.0, which is implemented and tested but not yet
+  deployed. Until that release reaches production, `reader.bdfz.net` answers
+  `host_not_allowed` for these URLs and the component fails open to a source
+  card, which is the intended degraded behavior.
 
 ## 0.17.1 BDFZ post visualizations and script sandbox: implemented and tested
 

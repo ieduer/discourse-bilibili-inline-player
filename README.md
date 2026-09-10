@@ -42,6 +42,16 @@ X posts (`x.com`, `twitter.com`) use X's own official embed player at `platform.
 - The embed runs in Do Not Track mode (`dnt=true`), follows the forum's light or dark color scheme, and uses the forum's own display language.
 - The player reports its outcome over `postMessage`. Only messages from `https://platform.twitter.com` sent by that exact frame are read, and only its ready, empty-result, and resize reports are acted on. A deleted, protected, or non-embeddable post and an unreachable X (for example a blocked network) both fall back to the source card with a short explanation and the original link. Because X's current build never sends a resize report, the frame height is the bounded `x_embed_height` administrator setting and taller posts scroll inside the card.
 
+rdfz.net student blogs (`<handle>.rdfz.net/p/<slug>`):
+
+That platform answers with `X-Frame-Options: DENY`, `frame-ancestors 'none'`, and no CORS header, so a forum page can neither frame nor read one of its articles — a shared link would otherwise stay a bare link. Articles therefore expand through the shared expand-reader service, which returns the article and the replies published under it as two separately sanitized regions.
+
+- The article opens by default, with no cover button and no click step, and the replies are rendered below it as replies: each with its author, that author's blog link, and its timestamp.
+- Reply state is reported honestly: a count when there are replies, `还没有回复。` when there are none, and the author's own notice when replies are closed. The reply box itself always stays on the blog; it is a cross-origin form that could not work here, so it is dropped rather than shown as dead furniture.
+- Identity is decided by that platform's own handle and slug grammar, not by a host list, because every blog is a new hostname. `rdfz.net` is a shared zone, so `recite`, `s`, `www`, the `blog` control plane, `go`, `api`, `admin`, and `console` are excluded by name, and blog homes, archives, tag pages, feeds, and media objects are outside the accepted path.
+- Article images are limited to the article's own host plus `blog.rdfz.net` and `img.bdfz.net`. Every failure — an unreachable platform, a deleted post, a page on that zone that is not an article — falls back to the source card with the original link.
+- `enable_rdfz_blog_inline` turns the expansion off and leaves link-only cards; `enable_rdfz_blog_comments` keeps the article but hides the replies.
+
 Marxists Internet Archive (`marxists.org`):
 
 - documents under `/archive/`, `/reference/`, `/history/`, `/subject/`, `/glossary/`, `/ebooks/`, `/audiobooks/`, and every language section including `/chinese/`
@@ -54,7 +64,7 @@ Archive audio and video play inline in a native media element, expanded on load 
 
 Some sources refuse to be framed **and** refuse cross-origin reads, which leaves a client-side component with nothing but a link. For those, the component calls a reading-view service the forum operator runs — [`expand-reader`](https://github.com/ieduer/expand-reader) — which fetches the page server-side and returns an already-sanitized reading fragment. The component re-sanitizes that fragment against its own allowlist before it touches the DOM, and any failure falls back silently to the URL-derived source card.
 
-This is the single sanctioned path for content that cannot be expanded directly. It is configured with `enable_expand_reader`, provider-specific `enable_zhihu_summary`, `expand_reader_endpoint`, and `expand_reader_height`. The endpoint must be HTTPS and must be a service the operator controls. Marxists pages use the service's direct-read allowlist; Zhihu never joins that fetch allowlist and instead uses only the fixed official search API for an exact-ID summary. The independent, default-off `enable_short_link_resolution` switch derives `/resolve` on the same endpoint origin for exact opaque `b23.tv` and `bili2233.cn` video shares. The client accepts a result only after the returned canonical URL passes the existing local Bilibili parser again.
+This is the single sanctioned path for content that cannot be expanded directly. It is configured with `enable_expand_reader`, provider-specific `enable_zhihu_summary`, `enable_rdfz_blog_inline`, `enable_rdfz_blog_comments`, `expand_reader_endpoint`, and `expand_reader_height`. The endpoint must be HTTPS and must be a service the operator controls. Marxists pages use the service's direct-read allowlist; rdfz.net student blog articles are admitted there by the blog platform's own handle and slug grammar and are returned as an article region plus a replies region; Zhihu never joins that fetch allowlist and instead uses only the fixed official search API for an exact-ID summary. The independent, default-off `enable_short_link_resolution` switch derives `/resolve` on the same endpoint origin for exact opaque `b23.tv` and `bili2233.cn` video shares. The client accepts a result only after the returned canonical URL passes the existing local Bilibili parser again.
 
 Inline playback:
 
@@ -244,6 +254,8 @@ No rebuild is required.
 - `enable_expand_reader`
 - `enable_short_link_resolution` (default `false`; independent circuit breaker)
 - `enable_zhihu_summary`
+- `enable_rdfz_blog_inline`
+- `enable_rdfz_blog_comments`
 - `enable_wechat_inline`
 - `enable_bdfz_posts_inline`
 - `enable_bdfz_post_auto_scale`

@@ -2614,3 +2614,163 @@ test("Instagram posts use the plain-link collectors and extract URLs properly", 
   );
 });
 
+
+test("rdfz.net student blog articles are admitted by the platform's own grammar", () => {
+  const parsed = parseBilibiliUrl("https://serin.rdfz.net/p/%E6%9C%AA%E5%91%BD%E5%90%8D-2");
+
+  assert.equal(parsed.provider, "rdfz-blog");
+  assert.equal(parsed.kind, "rdfz-blog");
+  assert.equal(parsed.handle, "serin");
+  assert.equal(parsed.slug, "未命名-2");
+  assert.equal(parsed.canonicalUrl, "https://serin.rdfz.net/p/%E6%9C%AA%E5%91%BD%E5%90%8D-2");
+
+  /* Share links arrive with the slug already readable, over http, or carrying
+     tracking; one article has one canonical identity. */
+  assert.equal(
+    parseBilibiliUrl("http://serin.rdfz.net/p/未命名-2?from=chat#comments").canonicalUrl,
+    "https://serin.rdfz.net/p/%E6%9C%AA%E5%91%BD%E5%90%8D-2"
+  );
+  assert.equal(
+    parseBilibiliUrl("https://suen.rdfz.net/p/gimme-gimme-gimme").canonicalUrl,
+    "https://suen.rdfz.net/p/gimme-gimme-gimme"
+  );
+});
+
+test("only an exact student-blog article on that shared zone is taken over", () => {
+  /* rdfz.net is a shared zone: these neighbours are other projects, and the
+     platform's own control plane is not a blog either. */
+  for (const host of ["recite", "s", "www", "blog", "go", "api", "admin", "console"]) {
+    assert.equal(parseBilibiliUrl(`https://${host}.rdfz.net/p/x`), null, host);
+  }
+
+  assert.equal(parseBilibiliUrl("https://rdfz.net/p/x"), null, "the apex is not a blog");
+  assert.equal(parseBilibiliUrl("https://serin.rdfz.net/"), null, "blog home");
+  assert.equal(parseBilibiliUrl("https://serin.rdfz.net/archive"), null, "archive index");
+  assert.equal(parseBilibiliUrl("https://serin.rdfz.net/feed.xml"), null, "feed");
+  assert.equal(parseBilibiliUrl("https://serin.rdfz.net/p/"), null, "no slug");
+  assert.equal(parseBilibiliUrl("https://serin.rdfz.net/p/a/b"), null, "deeper path");
+  assert.equal(parseBilibiliUrl("https://serin.rdfz.net/p/hello/"), null, "trailing slash");
+  assert.equal(parseBilibiliUrl("https://serin.rdfz.net/media/med_abc"), null, "media object");
+  assert.equal(parseBilibiliUrl("https://serin.rdfz.net.evil.example/p/x"), null, "lookalike host");
+  assert.equal(parseBilibiliUrl("https://user:pw@serin.rdfz.net/p/x"), null, "credentials");
+  assert.equal(parseBilibiliUrl("https://serin.rdfz.net:8443/p/x"), null, "custom port");
+
+  /* Handle grammar: three to thirty characters, at least three letters, no
+     leading, trailing, or doubled hyphen, never all digits. */
+  assert.equal(parseBilibiliUrl("https://ab.rdfz.net/p/x"), null);
+  assert.equal(parseBilibiliUrl("https://se--rin.rdfz.net/p/x"), null);
+  assert.equal(parseBilibiliUrl("https://xn--fiqs8s.rdfz.net/p/x"), null);
+  assert.equal(parseBilibiliUrl("https://12345.rdfz.net/p/x"), null);
+  assert.equal(parseBilibiliUrl("https://a1b.rdfz.net/p/x"), null);
+  assert.notEqual(parseBilibiliUrl("https://a-b-c.rdfz.net/p/x"), null);
+
+  /* Slug grammar: lowercase ASCII, digits, hyphen, or CJK, at most 60 code
+     points, never starting or ending with a hyphen. */
+  assert.equal(parseBilibiliUrl("https://serin.rdfz.net/p/-lead"), null);
+  assert.equal(parseBilibiliUrl("https://serin.rdfz.net/p/trail-"), null);
+  assert.equal(parseBilibiliUrl("https://serin.rdfz.net/p/Upper"), null);
+  assert.equal(parseBilibiliUrl("https://serin.rdfz.net/p/with%20space"), null);
+  assert.equal(parseBilibiliUrl(`https://serin.rdfz.net/p/${"字".repeat(61)}`), null);
+  assert.notEqual(parseBilibiliUrl(`https://serin.rdfz.net/p/${"字".repeat(60)}`), null);
+});
+
+test("a student blog article expands as text plus replies, and stays a link when disabled", () => {
+  const parsed = parseBilibiliUrl("https://serin.rdfz.net/p/hello-world");
+
+  assert.equal(supportsExpandReader(parsed), true);
+  assert.equal(getMetaLine(parsed), "学生博客 · serin.rdfz.net");
+  assert.equal(getFallbackTitle(parsed), "serin 的博客文章");
+  assert.equal(getOpenLabel(parsed), "在 serin.rdfz.net 打开原文");
+  assert.equal(getPreviewAspectRatio(parsed), "auto");
+  assert.equal(
+    getFooterMeta(parsed),
+    "全文与回复经 BDFZ 阅读服务展开 · 该站禁止页面被外部内嵌"
+  );
+
+  /* The blog can never be framed, so there is no inline player to open and the
+     source link is always kept. */
+  assert.equal(isKnownInlineKind(parsed), false);
+  assert.equal(shouldAutoExpandEmbed(parsed), false);
+  assert.equal(shouldShowDirectSourceLink(parsed), true);
+
+  themeSettings.enable_rdfz_blog_inline = false;
+  assert.equal(supportsExpandReader(parsed), false);
+  assert.equal(
+    getFooterMeta(parsed),
+    "学生博客原文卡片 · 该站禁止页面被外部内嵌"
+  );
+  delete themeSettings.enable_rdfz_blog_inline;
+
+  themeSettings.show_open_link = false;
+  assert.equal(shouldShowDirectSourceLink(parsed), true, "the source link is never dropped");
+  delete themeSettings.show_open_link;
+});
+
+test("a reader view for another article or another blog is discarded", () => {
+  const parsed = parseBilibiliUrl("https://serin.rdfz.net/p/hello-world");
+  const view = {
+    ok: true,
+    provider: "rdfz-blog",
+    handle: "serin",
+    slug: "hello-world",
+    url: "https://serin.rdfz.net/p/hello-world",
+    html: "<p>正文</p>",
+    commentsHtml: "<ol><li><p>回覆</p></li></ol>",
+    commentCount: 1,
+  };
+
+  assert.equal(isMatchingReaderView(view, parsed), true);
+  assert.equal(isMatchingReaderView({ ...view, slug: "other-post" }, parsed), false);
+  assert.equal(isMatchingReaderView({ ...view, handle: "suen" }, parsed), false);
+  assert.equal(isMatchingReaderView({ ...view, provider: "marxists" }, parsed), false);
+  assert.equal(
+    isMatchingReaderView({ ...view, url: "https://suen.rdfz.net/p/hello-world" }, parsed),
+    false
+  );
+  assert.equal(isMatchingReaderView({ ...view, ok: false }, parsed), false);
+  assert.equal(isMatchingReaderView(null, parsed), false);
+});
+
+test("images in an expanded article stay on the blog and the platform's own sources", () => {
+  const source = "https://serin.rdfz.net/p/hello-world";
+
+  assert.equal(
+    sanitizeReaderImageUrl("https://serin.rdfz.net/media/med_abc", source),
+    "https://serin.rdfz.net/media/med_abc"
+  );
+  assert.equal(
+    sanitizeReaderImageUrl("https://img.bdfz.net/cover.webp", source),
+    "https://img.bdfz.net/cover.webp"
+  );
+  assert.equal(
+    sanitizeReaderImageUrl("https://blog.rdfz.net/media/med_abc", source),
+    "https://blog.rdfz.net/media/med_abc"
+  );
+
+  for (const unsafeSource of [
+    "https://other.rdfz.net/media/med_abc",
+    "https://www.marxists.org/image.png",
+    "https://example.com/image.png",
+    "https://user:pw@serin.rdfz.net/media/med_abc",
+    "data:image/png;base64,AAAA",
+    "javascript:alert(1)",
+  ]) {
+    assert.equal(sanitizeReaderImageUrl(unsafeSource, source), "", unsafeSource);
+  }
+
+  /* The widened set belongs to that platform only. */
+  assert.equal(
+    sanitizeReaderImageUrl("https://img.bdfz.net/cover.webp", "https://www.marxists.org/x.htm"),
+    ""
+  );
+});
+
+test("a student blog link written as plain text is picked up in a paragraph", () => {
+  const url = "https://serin.rdfz.net/p/%E6%9C%AA%E5%91%BD%E5%90%8D-2";
+  const context = makeCookedParagraphFixture({ before: "看看这篇：", url });
+  const candidates = collectVisibleUrlCandidates(context.cooked, []);
+
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].parsed.provider, "rdfz-blog");
+  assert.equal(candidates[0].parsed.slug, "未命名-2");
+});
