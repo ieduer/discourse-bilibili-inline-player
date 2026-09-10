@@ -4507,6 +4507,7 @@ const SHORT_LINK_RESOLUTION_CACHE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_WECHAT_INGEST_ENDPOINT = "https://wx.bdfz.net/api/ingest";
 const DEFAULT_READER_ENDPOINT = "https://reader.bdfz.net/read";
 const DEFAULT_READER_PANE_HEIGHT = 560;
+const DEFAULT_RDFZ_BLOG_COMMENTS_HEIGHT = 360;
 const readerViewCache = new Map();
 const wechatArchiveCache = new Map();
 const shortLinkResolutionCache = new Map();
@@ -5342,11 +5343,6 @@ function buildReaderPane(wrapper, view, resolvedTitle = "") {
   article.lang = view.lang || "";
   article.append(...Array.from(fragment.childNodes));
   pane.appendChild(article);
-
-  if (comments) {
-    pane.appendChild(comments);
-  }
-
   pane.style.setProperty(
     "--bili-reader-height",
     `${getBoundedIntegerSetting("expand_reader_height", DEFAULT_READER_PANE_HEIGHT, 240, 1200)}px`
@@ -5364,7 +5360,25 @@ function buildReaderPane(wrapper, view, resolvedTitle = "") {
     );
   }
 
-  return pane;
+  if (!comments) {
+    return pane;
+  }
+
+  /* The replies sit beside the article's scroll box rather than inside it. A
+     post long enough to fill the box would otherwise push them below an
+     internal fold that gives the reader no sign there is anything under it —
+     which is exactly how the first live thread hid its only reply. */
+  const stack = createElement("div", "bilibili-inline-player__reader-stack");
+
+  comments.tabIndex = 0;
+  comments.setAttribute("aria-label", `${resolvedTitle || wrapper.dataset.bilibiliTitle || "这篇博客"}的回复`);
+  comments.style.setProperty(
+    "--bili-reader-comments-height",
+    `${getBoundedIntegerSetting("rdfz_blog_comments_height", DEFAULT_RDFZ_BLOG_COMMENTS_HEIGHT, 160, 900)}px`
+  );
+  stack.append(pane, comments);
+
+  return stack;
 }
 
 /* The card is built before the reader answers, so its byline starts as the

@@ -595,9 +595,19 @@
   color: #1d5563;
 }
 
+/* The replies are a sibling of the article's scroll box, never a child of it:
+   inside, a long post pushes them under an internal fold with no visible cue. */
+.bilibili-inline-player__reader-stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .bilibili-inline-player__reader-comments {
-  margin: 1.25rem 0 0.5rem;
-  padding-top: 0.9rem;
+  max-height: min(46vh, var(--bili-reader-comments-height, 360px));
+  padding: 0.9rem 1.15rem 0.7rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border-top: 1px solid var(--bili-card-border);
 }
 

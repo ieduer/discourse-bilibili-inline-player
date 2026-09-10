@@ -84,6 +84,13 @@ enable_rdfz_blog_comments:
   type: bool
   description: Show the replies published under a student blog article beneath its expanded text. Disable to expand the article only. The reply form itself always stays on the blog.
 
+rdfz_blog_comments_height:
+  default: 360
+  type: integer
+  min: 160
+  max: 900
+  description: Height in pixels of the reply list under an expanded student blog article before the replies scroll on their own. The replies always sit beside the article's scroll box, never inside it.
+
 enable_wechat_inline:
   default: true
   type: bool

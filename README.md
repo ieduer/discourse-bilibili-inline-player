@@ -46,7 +46,7 @@ rdfz.net student blogs (`<handle>.rdfz.net/p/<slug>`):
 
 That platform answers with `X-Frame-Options: DENY`, `frame-ancestors 'none'`, and no CORS header, so a forum page can neither frame nor read one of its articles — a shared link would otherwise stay a bare link. Articles therefore expand through the shared expand-reader service, which returns the article and the replies published under it as two separately sanitized regions.
 
-- The article opens by default, with no cover button and no click step, and the replies are rendered below it as replies: each with its author, that author's blog link, and its timestamp.
+- The article opens by default, with no cover button and no click step, and the replies are rendered below it as replies: each with its author, that author's blog link, and its timestamp. The reply list is a sibling of the article's scroll box, never inside it, so a long article cannot push the replies under an internal fold; it has its own bounded height (`rdfz_blog_comments_height`).
 - Reply state is reported honestly: a count when there are replies, `还没有回复。` when there are none, and the author's own notice when replies are closed. The reply box itself always stays on the blog; it is a cross-origin form that could not work here, so it is dropped rather than shown as dead furniture.
 - Identity is decided by that platform's own handle and slug grammar, not by a host list, because every blog is a new hostname. `rdfz.net` is a shared zone, so `recite`, `s`, `www`, the `blog` control plane, `go`, `api`, `admin`, and `console` are excluded by name, and blog homes, archives, tag pages, feeds, and media objects are outside the accepted path.
 - Article images are limited to the article's own host plus `blog.rdfz.net` and `img.bdfz.net`. Every failure — an unreachable platform, a deleted post, a page on that zone that is not an article — falls back to the source card with the original link.
@@ -256,6 +256,7 @@ No rebuild is required.
 - `enable_zhihu_summary`
 - `enable_rdfz_blog_inline`
 - `enable_rdfz_blog_comments`
+- `rdfz_blog_comments_height`
 - `enable_wechat_inline`
 - `enable_bdfz_posts_inline`
 - `enable_bdfz_post_auto_scale`

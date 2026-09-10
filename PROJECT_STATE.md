@@ -2,6 +2,22 @@
 
 Last reviewed: 2026-09-10 (America/Los_Angeles)
 
+## 0.18.1 Replies were rendered but unreachable: fixed
+
+- The first live thread (`forum.rdfzer.com/t/serin/13648`) showed the article
+  and no sign of its one reply. The reply was in the DOM and correct; it sat
+  921px down inside a 566px reader pane whose `overflow-y: auto` gave the reader
+  nothing to indicate there was anything below. Any article long enough to fill
+  the pane hid every reply under it.
+- The replies now render as a sibling of the article's scroll box rather than
+  inside it: the article keeps `expand_reader_height`, and the reply list gets
+  its own bounded, always-visible block below it with the new
+  `rdfz_blog_comments_height` setting (default 360, bounded 160-900).
+- Verified against the live reader payload for that exact article: the pane
+  still scrolls at 566px, the `回复 1` heading and the reply begin immediately
+  below it inside the card, with no scrolling of the article box required.
+  Re-checked with the seven-reply article as well. 93/93 tests pass.
+
 ## 0.18.0 rdfz.net student blog articles and their replies: implemented and tested
 
 - A link to the school's own student blog platform (`<handle>.rdfz.net/p/<slug>`)
