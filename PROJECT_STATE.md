@@ -34,10 +34,17 @@ Last reviewed: 2026-09-10 (America/Los_Angeles)
   handle and slug grammar, canonicalization from share and `http` forms, the
   shared-zone and non-article negative controls, settings hooks, reader-view
   identity matching, the image host boundary, and the plain-text URL collector.
-- Depends on `expand-reader` 0.4.0, which is implemented and tested but not yet
-  deployed. Until that release reaches production, `reader.bdfz.net` answers
-  `host_not_allowed` for these URLs and the component fails open to a source
-  card, which is the intended degraded behavior.
+- Depends on `expand-reader` 0.4.0, which was accepted in production on
+  2026-09-10 (immutable version `5e3b157b-b5e3-467c-b3fc-38553b0703e8` at 100%,
+  built on the accepted resolver source rather than on that repository's `main`).
+  A real-host read of `suen.rdfz.net/p/圖圖` through `reader.bdfz.net` with the
+  exact forum Origin returns the article and its seven replies.
+- **Theme 119 has not been refreshed to this release.** The forum still runs
+  0.17.1, so nothing changes there until an administrator updates the component
+  to `main`. Refresh, then read back `RemoteTheme.local_version`,
+  `remote_version`, `theme_version`, and `last_error_text`, and smoke-test a
+  student blog link with replies, one without, an excluded-handle link such as
+  `recite.rdfz.net`, and one existing provider as a regression control.
 
 ## 0.17.1 BDFZ post visualizations and script sandbox: implemented and tested
 
