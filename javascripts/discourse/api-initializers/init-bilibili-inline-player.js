@@ -2081,9 +2081,7 @@ function buildIframeUrl(parsed) {
       params.set("seasonId", String(parsed.seasonId));
     }
 
-    if (getBooleanSetting("autoplay_on_click", true)) {
-      params.set("autoplay", "1");
-    }
+    params.set("autoplay", getBooleanSetting("autoplay_on_click", true) ? "1" : "0");
 
     return `https://player.bilibili.com/player.html?${params.toString()}`;
   }
@@ -2099,9 +2097,7 @@ function buildIframeUrl(parsed) {
     high_quality: "1",
   });
 
-  if (getBooleanSetting("autoplay_on_click", true)) {
-    params.set("autoplay", "1");
-  }
+  params.set("autoplay", getBooleanSetting("autoplay_on_click", true) ? "1" : "0");
 
   if (parsed.bvid) {
     params.set("bvid", parsed.bvid);
@@ -2140,7 +2136,7 @@ function buildNoAutoplayIframeUrl(parsed) {
   }
 
   if (parsed.kind === "bangumi") {
-    const params = new URLSearchParams();
+    const params = new URLSearchParams({ autoplay: "0" });
 
     if (parsed.episodeId) {
       params.set("episodeId", String(parsed.episodeId));
@@ -2160,6 +2156,7 @@ function buildNoAutoplayIframeUrl(parsed) {
   }
 
   const params = new URLSearchParams({
+    autoplay: "0",
     isOutside: "true",
     page: String(parsed.page),
     as_wide: "1",
@@ -2745,7 +2742,13 @@ function shouldAutoExpandXiaohongshu(parsed) {
 }
 
 function shouldAutoExpandEmbed(parsed) {
-  return getBooleanSetting("auto_expand_embeds", true) && isKnownInlineKind(parsed);
+  // Bilibili players (including live) can start themselves on load. Keep the
+  // cover button until explicit activation, regardless of auto_expand_embeds.
+  return (
+    parsed?.provider !== "bilibili" &&
+    getBooleanSetting("auto_expand_embeds", true) &&
+    isKnownInlineKind(parsed)
+  );
 }
 
 function isKnownInlineKind(parsed) {
@@ -4296,7 +4299,11 @@ function primeEmbedState(wrapper) {
 async function autoExpandWrapper(wrapper) {
   const state = wrapperState.get(wrapper);
 
-  if (!state?.parsed || wrapper.dataset.bilibiliLoaded === "1") {
+  if (
+    !state?.parsed ||
+    !shouldAutoExpandEmbed(state.parsed) ||
+    wrapper.dataset.bilibiliLoaded === "1"
+  ) {
     return;
   }
 
@@ -4378,6 +4385,10 @@ function retryWithoutAutoplay(wrapper) {
   }
 
   state.autoplayDisabled = true;
+  const iframe = wrapper.querySelector(".bilibili-inline-player__frame");
+  if (iframe) {
+    iframe.allow = "fullscreen; picture-in-picture";
+  }
   swapIframeSource(wrapper, state.noAutoplayIframeUrl);
   updateRetryButtonLabel(wrapper);
   updateFooterMeta(wrapper);

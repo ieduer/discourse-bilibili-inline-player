@@ -434,7 +434,7 @@ test("safe inline providers default to expanded without forcing source cards", (
   const zhihu = parseBilibiliUrl("https://www.zhihu.com/question/123456");
 
   assert.equal(shouldAutoExpandEmbed(ebook), true);
-  assert.equal(shouldAutoExpandEmbed(video), true);
+  assert.equal(shouldAutoExpandEmbed(video), false);
   assert.equal(shouldAutoExpandEmbed(zhihu), false);
 
   context.settings.auto_expand_embeds = false;

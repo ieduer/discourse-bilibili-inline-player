@@ -16,7 +16,7 @@ Before work, read `PROJECT_STATE.md` for the accepted version and `docs/OPERATIO
 
 Keep the component fail-open: unsupported or failed URLs must leave the original cooked content or original source link available. Preserve `max_embeds_per_post`, bound attachment size, and do not add unbounded client fetches.
 
-Safe inline players and readers are visible by default through `auto_expand_embeds`. Automatic expansion must never force media autoplay; click activation may continue to follow `autoplay_on_click`. Zhihu uses only the bounded official-search summary contract when `enable_zhihu_summary` is enabled; source-only or failed content remains a card.
+Eligible inline players and readers are visible by default through `auto_expand_embeds`. Bilibili video, bangumi, and live players must always require explicit play-button activation before an iframe is created, regardless of that setting. Automatic expansion must never force media autoplay; click activation may continue to follow `autoplay_on_click`. Bilibili video and bangumi non-autoplay URLs must explicitly set `autoplay=0`. Zhihu uses only the bounded official-search summary contract when `enable_zhihu_summary` is enabled; source-only or failed content remains a card.
 
 ## Change boundaries
 

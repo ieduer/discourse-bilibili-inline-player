@@ -7,6 +7,36 @@ This is the canonical operational procedure for the Extended Preview & Embed Sui
 action, and this file owns executable test, release, readback, restore, and rollback
 steps. Live Discourse and GitHub readback override this document when they disagree.
 
+## 0.18.2 Bilibili click-only source update (2026-09-25)
+
+Publication scope is the canonical GitHub `main` branch only. The user owns the
+manual forum refresh; do not change theme 119, server configuration, Workers,
+or forum posts for this task. The observed starting local and remote source is
+`110d8c218a9d94ea8771d84ac110fcae6456c7c1`; retain it as the rollback anchor.
+No live theme version was read or changed in this source-only task.
+
+Bilibili video, bangumi and live cards must have zero player iframes until their
+play button is activated, with either value of `auto_expand_embeds`. Video and
+bangumi non-autoplay URLs explicitly carry `autoplay=0`, including when
+`autoplay_on_click=false`; the recovery retry also removes autoplay permission.
+Keep the source link, page/episode identity and single-frame repeated-click guard.
+No metadata/resolver service or other provider contract changes are included.
+
+Local verification: all 102 tests pass (93 existing plus nine behavioral playback
+regressions), JavaScript syntax/JSON/YAML/diff checks pass, and the Foliate hash
+remains the pinned value below. The new regressions fail against the baseline
+source: premature iframe creation and missing explicit autoplay opt-out are
+observed. These are isolated DOM tests, not a live browser/forum playback claim.
+GitHub SHA and workflow results are recorded in the task action log after push.
+
+After the user's manual update, the focused acceptance check is to open a post
+with Bilibili video/bangumi/live cards: no player frame or playback before click;
+click once to play; verify `autoplay_on_click=false` and the footer retry on a
+video; verify a normal reader still opens as before. No forum update is performed
+as part of this repository change. If rollback is needed, use a normal revert of
+this fix on `main` and manually refresh the component after its checks, preserving
+any subsequent accepted commits.
+
 ## 0.16.0 X (Twitter) post embeds: accepted
 
 This release adds one provider, `x`, for exact public X post URLs and embeds them

@@ -6,12 +6,12 @@ enabled:
 autoplay_on_click:
   default: true
   type: bool
-  description: Add autoplay=1 when the user clicks the cover card.
+  description: Request playback after the user clicks the cover card. Bilibili video and bangumi players explicitly use autoplay=0 when disabled.
 
 auto_expand_embeds:
   default: true
   type: bool
-  description: Show every safe inline player or reader immediately. Automatic expansion always uses a non-autoplay media URL; disable to restore click-to-expand cards.
+  description: Show eligible inline players and readers immediately. Bilibili always requires a click before loading its player. Other automatic media embeds use non-autoplay URLs where available; disable to restore click-to-expand cards.
 
 max_embeds_per_post:
   default: 4

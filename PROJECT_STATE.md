@@ -1,6 +1,27 @@
 # Project state
 
-Last reviewed: 2026-09-10 (America/Los_Angeles)
+Last reviewed: 2026-09-25 (America/Los_Angeles)
+
+## 0.18.2 Bilibili playback requires a click
+
+- Bilibili video, bangumi, and live players now stay behind their play button,
+  regardless of `auto_expand_embeds`. Both scheduling and automatic activation
+  enforce this boundary, so this component creates no Bilibili player iframe
+  before a user activates the button. Other providers retain their expansion
+  behavior, and original source links remain available.
+- Root cause: automatic expansion inserted Bilibili frames on post decoration,
+  and the supposed non-autoplay video/bangumi URLs omitted `autoplay` instead
+  of setting `autoplay=0`. Live expansion also fell back to the normal player URL.
+- Video/bangumi with `autoplay_on_click=false` and the recovery retry now send
+  explicit `autoplay=0`. Retry removes autoplay permission before reloading.
+  Avoiding unrequested player loads also reduces background iframe work.
+- Validation: 102/102 Node tests pass, including nine new behavioral regression
+  tests using the actual card/click/iframe code with a minimal DOM and isolated
+  metadata requests. The same nine tests fail against the previous source.
+  Required syntax, JSON, YAML, diff and pinned Foliate hash checks pass.
+- Scope: GitHub component update only. The user will update the forum manually;
+  this task neither refreshes theme 119 nor claims live forum acceptance.
+- Baseline/rollback source: `110d8c218a9d94ea8771d84ac110fcae6456c7c1` (0.18.1).
 
 ## 0.18.1 Replies were rendered but unreachable: fixed
 
