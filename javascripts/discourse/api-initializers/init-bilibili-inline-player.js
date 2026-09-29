@@ -380,6 +380,13 @@ const EBOOK_MIME_TYPES = {
 const VIDEO_PATH_RE = /^\/(?:s\/)?video\/(BV[0-9A-Za-z]+|av\d+)\/?$/i;
 const SHORT_VIDEO_PATH_RE = /^\/(?:video\/)?(BV[0-9A-Za-z]+|av\d+)(?:\/p(\d+))?\/?$/i;
 const RESOLVABLE_SHORT_VIDEO_PATH_RE = /^\/([A-Za-z0-9]{5,12})\/?$/;
+/* Opaque share hosts the operator's `/resolve` contract accepts, each bound to
+   the one provider its resolution may return. */
+const RESOLVABLE_SHORT_HOST_PROVIDERS = new Map([
+  ["b23.tv", "bilibili"],
+  ["bili2233.cn", "bilibili"],
+  ["163cn.tv", "netease"],
+]);
 const BANGUMI_PATH_RE = /^\/bangumi\/play\/(ep|ss)(\d+)\/?$/i;
 const AUDIO_PATH_RE = /^\/audio\/(au|am)(\d+)\/?$/i;
 const ARTICLE_PATH_RE = /^\/read\/cv(\d+)\/?$/i;
@@ -903,7 +910,7 @@ function parseResolvableBilibiliShortUrl(href) {
   const raw = normalizeUrlLikeString(href);
   let url;
 
-  if (!/^https:\/\/(?:b23\.tv|bili2233\.cn)\/[A-Za-z0-9]{5,12}\/?$/.test(raw)) {
+  if (!/^https:\/\/(?:b23\.tv|bili2233\.cn|163cn\.tv)\/[A-Za-z0-9]{5,12}\/?$/.test(raw)) {
     return "";
   }
 
@@ -915,7 +922,7 @@ function parseResolvableBilibiliShortUrl(href) {
 
   if (
     url.protocol !== "https:" ||
-    !["b23.tv", "bili2233.cn"].includes(url.hostname.toLowerCase()) ||
+    !RESOLVABLE_SHORT_HOST_PROVIDERS.has(url.hostname.toLowerCase()) ||
     url.port ||
     url.username ||
     url.password ||
@@ -4933,6 +4940,14 @@ async function fetchBilibiliShortLinkResolution(shortUrl) {
         payload?.version === 1 && typeof payload.canonicalUrl === "string"
           ? parseBilibiliUrl(payload.canonicalUrl)
           : null;
+
+      const expectedProvider = RESOLVABLE_SHORT_HOST_PROVIDERS.get(
+        new URL(normalizedShortUrl).hostname
+      );
+
+      if (expectedProvider === "netease") {
+        return parsed?.provider === "netease" ? parsed : null;
+      }
 
       return parsed?.provider === "bilibili" && parsed.kind === "video"
         ? parsed

@@ -7,6 +7,13 @@ This is the canonical operational procedure for the Extended Preview & Embed Sui
 action, and this file owns executable test, release, readback, restore, and rollback
 steps. Live Discourse and GitHub readback override this document when they disagree.
 
+## 0.18.4 NetEase 163cn.tv short links (2026-09-29)
+
+Theme source only; rollback anchor `5715097` (0.18.3). Requires `expand-reader`
+0.5.0 at 100% (commit `d2bf1a1`). Acceptance: after the Worker is live and the
+theme is updated, `t/topic/11696/199` shows a NetEase card for song `3797218`
+after the preserved share paragraph, and a Bilibili `b23.tv` post still works.
+
 ## 0.18.3 Inline-onebox share rows source update (2026-09-29)
 
 Scope: canonical GitHub `main` only; the user owns the manual theme 119 refresh.

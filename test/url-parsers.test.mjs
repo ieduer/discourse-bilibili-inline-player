@@ -2904,3 +2904,77 @@ test("inline onebox recognition keeps authored links and unsupported pages untou
   });
   assert.equal(collectVisibleUrlCandidates(quoted.cooked, []).length, 0);
 });
+
+test("accepts exact NetEase 163cn.tv share tokens for provider-bound resolution", () => {
+  assert.equal(
+    parseResolvableBilibiliShortUrl("https://163cn.tv/bhsX5BFl"),
+    "https://163cn.tv/bhsX5BFl"
+  );
+
+  for (const source of [
+    "http://163cn.tv/bhsX5BFl",
+    "https://www.163cn.tv/bhsX5BFl",
+    "https://163cn.tv/bhs",
+    "https://163cn.tv/bhsX5BFl?userid=1",
+    "https://163cn.tv.evil.example/bhsX5BFl",
+    "https://163cn.link/bhsX5BFl",
+  ]) {
+    assert.equal(parseResolvableBilibiliShortUrl(source), "", source);
+  }
+});
+
+test("a resolved short link must return its own host's provider", async () => {
+  const originalFetch = context.fetch;
+  const payloads = new Map([
+    ["https://163cn.tv/bhsX5BFl", "https://music.163.com/song?id=3797218"],
+    ["https://163cn.tv/Cross001", "https://www.bilibili.com/video/BV1XntA6eEED"],
+    ["https://b23.tv/Cross002", "https://music.163.com/song?id=3797218"],
+  ]);
+
+  shortLinkResolutionCache.clear();
+  themeSettings.enable_short_link_resolution = true;
+  context.fetch = async (url) => ({
+    ok: true,
+    json: async () => ({
+      version: 1,
+      canonicalUrl: payloads.get(new URL(url).searchParams.get("url")),
+    }),
+  });
+
+  try {
+    const netease = await fetchBilibiliShortLinkResolution("https://163cn.tv/bhsX5BFl");
+
+    assert.equal(netease.provider, "netease");
+    assert.equal(netease.canonicalUrl, "https://music.163.com/song?id=3797218");
+    assert.equal(await fetchBilibiliShortLinkResolution("https://163cn.tv/Cross001"), null);
+    assert.equal(await fetchBilibiliShortLinkResolution("https://b23.tv/Cross002"), null);
+  } finally {
+    shortLinkResolutionCache.clear();
+    delete themeSettings.enable_short_link_resolution;
+    context.fetch = originalFetch;
+  }
+});
+
+test("the forum 163cn.tv inline onebox share row becomes a resolver candidate", () => {
+  const fixture = makeCookedParagraphFixture({
+    after: " (来自@网易云音乐)",
+    anchorClass: "inline-onebox",
+    anchorText: "In einem Meer Aus Wein - Versengold - 单曲 - 网易云音乐",
+    before: "分享Versengold的单曲《In einem Meer Aus Wein》: ",
+    url: "https://163cn.tv/bhsX5BFl",
+  });
+
+  assert.equal(collectVisibleUrlCandidates(fixture.cooked, []).length, 0);
+
+  themeSettings.enable_short_link_resolution = true;
+  try {
+    const [candidate] = collectVisibleUrlCandidates(fixture.cooked, []);
+
+    assert.equal(candidate?.parsed, null);
+    assert.equal(candidate.shortUrl, "https://163cn.tv/bhsX5BFl");
+    assert.equal(candidate.metadataTarget, fixture.anchor);
+    assert.equal(candidate.preserveSource, true);
+  } finally {
+    delete themeSettings.enable_short_link_resolution;
+  }
+});

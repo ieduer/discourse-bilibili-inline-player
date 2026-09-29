@@ -2,6 +2,22 @@
 
 Last reviewed: 2026-09-29 (America/Los_Angeles)
 
+## 0.18.4 NetEase 163cn.tv share links
+
+- Live check on 2026-09-29 (logged-in browser): theme 119 already serves the
+  0.18.3 code, and `forum.rdfzer.com/t/topic/11696/199` still had no card. Its
+  cooked anchor is `<a href="https://163cn.tv/bhsX5BFl" class="inline-onebox">`,
+  an opaque NetEase mobile share token. Live `enable_short_link_resolution` is
+  `true` and the endpoint is `https://reader.bdfz.net/read`.
+- Site-owner decision (same day): resolve `163cn.tv`. The client now sends exact
+  `163cn.tv/<5-12 alnum>` tokens to the existing `/resolve` path and accepts
+  only a NetEase identity for them (Bilibili hosts still accept only a Bilibili
+  video). Everything else about the short-link path is unchanged.
+- Dependency: `expand-reader` 0.5.0 (`release/netease-short-resolver-20260929`,
+  `d2bf1a1`) must be serving at 100% before this matters. Until then `/resolve`
+  answers 400 for `163cn.tv` and the row stays as its original text (fail-open).
+- Validation: 108/108 Node tests pass (three new).
+
 ## 0.18.3 Copied share text with Discourse inline oneboxes
 
 - Symptom (forum topic 11696, 2026-09-29): a pasted NetEase share row
@@ -19,9 +35,8 @@ Last reviewed: 2026-09-29 (America/Los_Angeles)
 - NetEase desktop share path IDs (`/song/<ID>/?userid=…`, and the same for
   playlist/album/program/dj, with optional `/m/`) now parse to the canonical
   `?id=` identity; the sharer `userid` is dropped.
-- Not covered: opaque short links other than Bilibili (NetEase `163cn.tv`, QQ
-  Music `c6.y.qq.com/base/fcgi-bin/u`, `v.douyin.com`). They need resolution,
-  which requires a separately reviewed capability decision.
+- Not covered in 0.18.3: opaque short links other than Bilibili. NetEase
+  `163cn.tv` was added in 0.18.4; QQ Music and `v.douyin.com` remain out.
 - Validation: 105/105 Node tests pass; the three new tests include two that fail
   against 0.18.2. Source-only change; theme 119 is not refreshed by this task.
 - Baseline/rollback source: `51e77db` (0.18.2).
