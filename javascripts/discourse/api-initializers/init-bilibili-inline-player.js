@@ -7,6 +7,7 @@ const LIVE_HOSTS = new Set(["live.bilibili.com", "www.live.bilibili.com"]);
 const SHORT_HOSTS = new Set(["b23.tv", "www.b23.tv", "bili2233.cn", "www.bili2233.cn"]);
 const PLAYER_HOSTS = new Set(["player.bilibili.com"]);
 const NETEASE_HOSTS = new Set(["music.163.com", "y.music.163.com"]);
+const NETEASE_PATH_ID_RE = /^\/(song|playlist|album|program|dj|djradio)\/(\d+)\/?$/;
 const QQMUSIC_HOSTS = new Set(["y.qq.com", "i.y.qq.com"]);
 const ZHIHU_HOSTS = new Set(["zhihu.com", "www.zhihu.com", "zhuanlan.zhihu.com"]);
 const WECHAT_HOSTS = new Set(["mp.weixin.qq.com"]);
@@ -1055,8 +1056,17 @@ function normalizeNetEaseRoutePath(pathname) {
 }
 
 function parseNetEaseRoute(routeUrl) {
-  const pathname = normalizeNetEaseRoutePath(routeUrl.pathname);
-  const id = routeUrl.searchParams.get("id");
+  let pathname = normalizeNetEaseRoutePath(routeUrl.pathname);
+  let id = routeUrl.searchParams.get("id");
+
+  /* The desktop client's copied share text uses the path form
+     `/song/<ID>/?userid=<sharer>`; only the numeric item ID is kept. */
+  const pathIdMatch = pathname.match(NETEASE_PATH_ID_RE);
+
+  if (pathIdMatch && !id) {
+    pathname = `/${pathIdMatch[1]}`;
+    id = pathIdMatch[2];
+  }
 
   if (!/^\d+$/.test(id || "")) {
     return null;
@@ -6667,6 +6677,10 @@ function getVisibleUrlAnchorTarget(anchor) {
     return null;
   }
 
+  if (isDiscourseInlineOnebox(anchor)) {
+    return getInlineOneboxAnchorTarget(anchor, paragraph, segmentIndex);
+  }
+
   const visibleText = normalizeTitleText(anchor.textContent || "")
     .replace(/\s+link clicked \d+ times?$/i, "");
   const cleanedVisibleText = normalizeUrlLikeString(visibleText, {
@@ -6709,6 +6723,40 @@ function getVisibleUrlAnchorTarget(anchor) {
       };
 }
 
+/* Discourse replaces the label of a bare URL written inside a sentence with
+   the fetched page title and marks it `inline-onebox`. That anchor still came
+   from a pasted URL, unlike an author-titled Markdown link, so its href is the
+   identity: copied share text such as NetEase's
+   `分享…《…》: <URL> (来自@网易云音乐)` is recognized after cooking too. */
+function isDiscourseInlineOnebox(anchor) {
+  const classNames = anchor?.classList
+    ? Array.from(anchor.classList)
+    : String(anchor?.className || "").split(/\s+/u);
+
+  return classNames.includes("inline-onebox") || classNames.includes("inline-onebox-loading");
+}
+
+function getInlineOneboxAnchorTarget(anchor, paragraph, segmentIndex) {
+  const rawHref = anchor.getAttribute?.("href") || anchor.href;
+  const cleanedHref = normalizeUrlLikeString(rawHref, {
+    trimTrailingPunctuation: true,
+  });
+  const parsed = parseBilibiliUrl(cleanedHref);
+  const shortUrl = parsed ? "" : getResolvableBilibiliShortUrl(cleanedHref);
+
+  if (!parsed && !shortUrl) {
+    return null;
+  }
+
+  return {
+    paragraph,
+    parsed,
+    shortUrl,
+    segmentIndex,
+    inlineOnebox: true,
+  };
+}
+
 function collectVisibleUrlCandidates(element, existingTargets) {
   const limit = Math.max(1, getIntegerSetting("max_embeds_per_post", 4));
   const results = [];
@@ -6731,19 +6779,24 @@ function collectVisibleUrlCandidates(element, existingTargets) {
     }
 
     seenAnchors.add(anchor);
+    /* An inline onebox label is already the provider page title, so it is a
+       cleaner title source than the surrounding share sentence. Xiaohongshu
+       keeps the whole row because its share context carries the note text. */
+    const useAnchorMetadata =
+      matched.inlineOnebox && matched.parsed?.provider !== "xiaohongshu";
     results.push({
       target: matched.paragraph,
-      metadataTarget: cloneParagraphVisualSegment(
-        matched.paragraph,
-        matched.segmentIndex
-      ),
+      metadataTarget: useAnchorMetadata
+        ? anchor
+        : cloneParagraphVisualSegment(matched.paragraph, matched.segmentIndex),
       markerTarget: anchor,
       anchor,
       parsed: matched.parsed,
       shortUrl: matched.shortUrl,
-      metadataTextToOmit: matched.shortUrl
-        ? normalizeTitleText(anchor.textContent || matched.shortUrl)
-        : "",
+      metadataTextToOmit:
+        matched.shortUrl && !matched.inlineOnebox
+          ? normalizeTitleText(anchor.textContent || matched.shortUrl)
+          : "",
       preserveSource: true,
       segmentIndex: matched.segmentIndex,
     });

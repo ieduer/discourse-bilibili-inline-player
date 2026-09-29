@@ -7,6 +7,18 @@ This is the canonical operational procedure for the Extended Preview & Embed Sui
 action, and this file owns executable test, release, readback, restore, and rollback
 steps. Live Discourse and GitHub readback override this document when they disagree.
 
+## 0.18.3 Inline-onebox share rows source update (2026-09-29)
+
+Scope: canonical GitHub `main` only; the user owns the manual theme 119 refresh.
+Rollback anchor: `51e77db` (0.18.2). The visible-URL collector additionally
+accepts Discourse `a.inline-onebox` anchors by href, and NetEase path-ID share
+URLs parse. No Worker, resolver, CSP or server change.
+
+After the manual update, accept on a real post containing a NetEase desktop
+share row (for example forum topic 11696, the Versengold share): a NetEase card
+appears after the preserved paragraph and plays after click. Negative controls:
+an author-titled `[文字](url)` link and a multi-link navigation line stay plain.
+
 ## 0.18.2 Bilibili click-only source update (2026-09-25)
 
 Publication scope is the canonical GitHub `main` branch only. The user owns the
@@ -478,7 +490,7 @@ The Foliate SHA-256 must be:
 
 Review the complete diff and verify every changed line is task-scoped. Confirm parser
 negative controls for lookalike hosts, credentials, ports, PDF, code, navigation,
-multiple anchors, non-URL anchor labels, and other providers. Confirm every existing
+multiple anchors, non-URL anchor labels (except Discourse `inline-onebox` anchors), and other providers. Confirm every existing
 non-Zhihu provider has a positive fixture whose visible URL is not at the paragraph
 start, and confirm Zhihu requires an exact summary-only response contract.
 For Marxists cooked DOM, the required fixture set is:

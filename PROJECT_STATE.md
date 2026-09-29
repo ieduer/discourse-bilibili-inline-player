@@ -1,6 +1,31 @@
 # Project state
 
-Last reviewed: 2026-09-25 (America/Los_Angeles)
+Last reviewed: 2026-09-29 (America/Los_Angeles)
+
+## 0.18.3 Copied share text with Discourse inline oneboxes
+
+- Symptom (forum topic 11696, 2026-09-29): a pasted NetEase share row
+  `分享Versengold的单曲《In einem Meer Aus Wein》: <URL> (来自@网易云音乐)` stayed a
+  plain link. Discourse had cooked the URL inside the sentence as an inline
+  onebox, replacing its label with the page title. The visible-URL detector
+  requires the label to spell the URL, so it rejected the row.
+- Anchors marked `inline-onebox`/`inline-onebox-loading` by Discourse are now
+  accepted by the same visible-URL collector using their href as identity, for
+  every provider the collector already supports (including opaque Bilibili
+  short links while `enable_short_link_resolution` is on). Segment, one-anchor,
+  `max_embeds_per_post`, code/list/blockquote/media/PDF and unsupported-host
+  rules are unchanged; author-titled Markdown links are still left alone. The
+  card title comes from the inline onebox label, with provider suffixes removed.
+- NetEase desktop share path IDs (`/song/<ID>/?userid=…`, and the same for
+  playlist/album/program/dj, with optional `/m/`) now parse to the canonical
+  `?id=` identity; the sharer `userid` is dropped.
+- Not covered: opaque short links other than Bilibili (NetEase `163cn.tv`, QQ
+  Music `c6.y.qq.com/base/fcgi-bin/u`, `v.douyin.com`). They need resolution,
+  which requires a separately reviewed capability decision.
+- Validation: 105/105 Node tests pass; the three new tests include two that fail
+  against 0.18.2. Source-only change; theme 119 is not refreshed by this task.
+- Baseline/rollback source: `51e77db` (0.18.2).
+
 
 ## 0.18.2 Bilibili playback requires a click
 

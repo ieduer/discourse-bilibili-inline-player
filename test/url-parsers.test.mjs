@@ -2774,3 +2774,133 @@ test("a student blog link written as plain text is picked up in a paragraph", ()
   assert.equal(candidates[0].parsed.provider, "rdfz-blog");
   assert.equal(candidates[0].parsed.slug, "未命名-2");
 });
+
+test("parses NetEase desktop share path IDs without keeping the sharer", () => {
+  for (const [url, canonicalUrl] of [
+    ["http://music.163.com/song/2082701463/?userid=1234567", "https://music.163.com/song?id=2082701463"],
+    ["https://music.163.com/song/2082701463", "https://music.163.com/song?id=2082701463"],
+    ["https://music.163.com/playlist/19723756/?userid=1", "https://music.163.com/playlist?id=19723756"],
+    ["https://music.163.com/album/34720827/", "https://music.163.com/album?id=34720827"],
+    ["https://y.music.163.com/m/song/2082701463/", "https://music.163.com/song?id=2082701463"],
+    ["https://music.163.com/dj/2064329279/", "https://music.163.com/djradio?id=2064329279"],
+  ]) {
+    const parsed = parseBilibiliUrl(url);
+
+    assert.equal(parsed?.provider, "netease", url);
+    assert.equal(parsed.canonicalUrl, canonicalUrl, url);
+  }
+
+  for (const url of [
+    "https://music.163.com/song/abc/",
+    "https://music.163.com/song/123/comments",
+    "https://music.163.com/artist/12345/",
+    "https://music.163.com.evil.example/song/123/",
+  ]) {
+    assert.equal(parseBilibiliUrl(url), null, url);
+  }
+});
+
+test("recognizes Discourse inline oneboxes inside copied share text", () => {
+  const neteaseUrl = "https://music.163.com/song/2082701463/?userid=1234567";
+  const netease = makeCookedParagraphFixture({
+    after: " (来自@网易云音乐)",
+    anchorClass: "inline-onebox",
+    anchorText: "In einem Meer Aus Wein - Versengold - 单曲 - 网易云音乐",
+    before: "分享Versengold的单曲《In einem Meer Aus Wein》: ",
+    url: neteaseUrl,
+  });
+  const [candidate] = collectVisibleUrlCandidates(netease.cooked, []);
+
+  assert.ok(candidate);
+  assert.equal(candidate.target, netease.paragraph);
+  assert.equal(candidate.markerTarget, netease.anchor);
+  assert.equal(candidate.metadataTarget, netease.anchor);
+  assert.equal(candidate.parsed.canonicalUrl, "https://music.163.com/song?id=2082701463");
+  assert.equal(candidate.preserveSource, true);
+  assert.equal(
+    cleanProviderTitle(netease.anchor.textContent, candidate.parsed),
+    "In einem Meer Aus Wein - Versengold"
+  );
+
+  for (const url of [
+    "https://www.bilibili.com/video/BV1xx411c7mD",
+    "https://y.qq.com/n/ryqq/songDetail/004Z8Ihr0JIu5s",
+    "https://www.zhihu.com/question/123456",
+    "https://bdfz.net/posts/180-qishike/",
+  ]) {
+    const fixture = makeCookedParagraphFixture({
+      anchorClass: "inline-onebox",
+      anchorText: "Fetched page title",
+      before: "看看这个：",
+      url,
+    });
+    const [inline] = collectVisibleUrlCandidates(fixture.cooked, []);
+
+    assert.equal(inline?.parsed?.canonicalUrl, parseBilibiliUrl(url).canonicalUrl, url);
+  }
+
+  const short = makeCookedParagraphFixture({
+    anchorClass: "inline-onebox",
+    anchorText: "【标题】-哔哩哔哩",
+    before: "【标题】 ",
+    url: "https://b23.tv/cUbeWZt",
+  });
+  assert.equal(
+    collectVisibleUrlCandidates(short.cooked, []).length,
+    0,
+    "opaque short links stay text while the resolver switch is off"
+  );
+
+  themeSettings.enable_short_link_resolution = true;
+  try {
+    const [shortCandidate] = collectVisibleUrlCandidates(short.cooked, []);
+
+    assert.equal(shortCandidate?.parsed, null);
+    assert.equal(shortCandidate.shortUrl, "https://b23.tv/cUbeWZt");
+    assert.equal(shortCandidate.metadataTextToOmit, "");
+  } finally {
+    delete themeSettings.enable_short_link_resolution;
+  }
+});
+
+test("inline onebox recognition keeps authored links and unsupported pages untouched", () => {
+  const authored = makeCookedParagraphFixture({
+    anchorText: "推荐歌曲",
+    before: "来源：",
+    url: "https://music.163.com/song/2082701463/",
+  });
+  assert.equal(collectVisibleUrlCandidates(authored.cooked, []).length, 0);
+
+  const unsupported = makeCookedParagraphFixture({
+    anchorClass: "inline-onebox",
+    anchorText: "Example Domain",
+    before: "看看：",
+    url: "https://example.com/song/123/",
+  });
+  assert.equal(collectVisibleUrlCandidates(unsupported.cooked, []).length, 0);
+
+  const pdf = makeCookedParagraphFixture({
+    anchorClass: "inline-onebox",
+    anchorText: "共产党宣言",
+    before: "见：",
+    url: "https://www.marxists.org/chinese/pdf/manifesto.pdf",
+  });
+  assert.equal(collectVisibleUrlCandidates(pdf.cooked, []).length, 0);
+
+  const navigation = makeCookedParagraphFixture({
+    anchorClass: "inline-onebox",
+    anchorText: "Some song - 网易云音乐",
+    before: "两首：",
+    extraLinks: [{ href: "https://music.163.com/song?id=2", text: "Other - 网易云音乐" }],
+    url: "https://music.163.com/song?id=1",
+  });
+  assert.equal(collectVisibleUrlCandidates(navigation.cooked, []).length, 0);
+
+  const quoted = makeCookedParagraphFixture({
+    anchorClass: "inline-onebox",
+    anchorText: "Some song - 网易云音乐",
+    inBlockquote: true,
+    url: "https://music.163.com/song?id=1",
+  });
+  assert.equal(collectVisibleUrlCandidates(quoted.cooked, []).length, 0);
+});

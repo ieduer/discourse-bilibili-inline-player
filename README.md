@@ -177,7 +177,7 @@ Still not supported:
 - the article body of a `marxists.org` page when `enable_expand_reader` is off or no reader endpoint is configured, because the archive forbids both framing and cross-origin reads
 - FB2 and CBZ until the forum enables those upload extensions and they receive independent acceptance
 
-Standalone supported URLs remain the simplest input. The component also recognizes eligible BR-delimited visual segments whose only anchor visibly spells the supported URL, wherever that URL appears in the segment. Multiple copied share rows cooked into one paragraph receive cards in source order, count individually against `max_embeds_per_post`, and preserve the complete original paragraph.
+Standalone supported URLs remain the simplest input. The component also recognizes eligible BR-delimited visual segments whose only anchor visibly spells the supported URL, wherever that URL appears in the segment. When Discourse has turned such a URL into an inline onebox (its label replaced by the page title, as happens with copied share text like `分享…《…》: <URL> (来自@网易云音乐)`), the anchor's href is used instead of its label. Multiple copied share rows cooked into one paragraph receive cards in source order, count individually against `max_embeds_per_post`, and preserve the complete original paragraph.
 
 Pasted Xiaohongshu share text, with either plain or auto-linkified share URLs, is a narrow exception: the original paragraph is preserved and the content card is inserted after it, so surrounding text is never discarded.
 
