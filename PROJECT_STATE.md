@@ -17,6 +17,11 @@ Last reviewed: 2026-09-29 (America/Los_Angeles)
   `d2bf1a1`) must be serving at 100% before this matters. Until then `/resolve`
   answers 400 for `163cn.tv` and the row stays as its original text (fail-open).
 - Validation: 108/108 Node tests pass (three new).
+- **Live on 2026-09-29:** theme 119 serves 0.18.4 and `expand-reader` 0.5.0
+  (`1b6fb822`) serves 100%. In a logged-in browser `t/topic/11696/199` shows
+  one card with the official NetEase outchain player for song `3797218` below
+  the preserved share paragraph, after one `/resolve` call. Evidence:
+  `/Users/ylsuen/CF/reports/operations/netease-short-resolver-20260929/`.
 
 ## 0.18.3 Copied share text with Discourse inline oneboxes
 
