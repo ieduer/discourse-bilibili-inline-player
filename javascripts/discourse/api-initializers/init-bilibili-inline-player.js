@@ -43,9 +43,19 @@ const X_RESERVED_HANDLES = new Set([
 ]);
 const X_EMBED_ORIGIN = "https://platform.twitter.com";
 const X_EMBED_PATH = "/embed/Tweet.html";
+/* `x_embed_height` is only the frame's initial height: the official player
+   reports the post's own height once it has rendered, and the frame follows
+   that report up to `x_embed_max_height`, above which the post scrolls inside
+   the card. */
 const X_EMBED_MIN_HEIGHT = 240;
 const X_EMBED_MAX_HEIGHT = 1200;
 const DEFAULT_X_EMBED_HEIGHT = 420;
+const X_EMBED_MAX_CONTENT_HEIGHT_MIN = 600;
+const X_EMBED_MAX_CONTENT_HEIGHT_MAX = 12000;
+const DEFAULT_X_EMBED_MAX_CONTENT_HEIGHT = 6000;
+/* The shortest post either official player renders is around 200px; a smaller
+   report is not a post and must not collapse the frame. */
+const EMBED_REPORTED_MIN_HEIGHT = 120;
 /* The official player reports `results`, `rendered`, or `no_results` once it has
    decided. Nothing arriving after the frame loaded means the browser could not
    reach X at all, which is a source-card case, not an empty box. */
@@ -56,9 +66,13 @@ const X_EMBED_LANGS = new Set([
   "sv", "th", "tr", "uk", "ur", "vi", "zh-cn", "zh-tw",
 ]);
 const INSTAGRAM_HOSTS = new Set(["instagram.com", "www.instagram.com"]);
+const INSTAGRAM_EMBED_ORIGIN = "https://www.instagram.com";
 const INSTAGRAM_EMBED_MIN_HEIGHT = 400;
 const INSTAGRAM_EMBED_MAX_HEIGHT = 1200;
 const DEFAULT_INSTAGRAM_EMBED_HEIGHT = 640;
+const INSTAGRAM_EMBED_MAX_CONTENT_HEIGHT_MIN = 600;
+const INSTAGRAM_EMBED_MAX_CONTENT_HEIGHT_MAX = 12000;
+const DEFAULT_INSTAGRAM_EMBED_MAX_CONTENT_HEIGHT = 4000;
 const BDFZ_POST_AUTO_SCALE_MIN = 0.7;
 const BDFZ_POST_AUTO_SCALE_REFERENCE_WIDTH = 800;
 const DOUYIN_PLAYER_WIDTH = 324;
@@ -2027,11 +2041,25 @@ function parseEbookAttachmentUrl(href) {
   };
 }
 
+/* Text copied from a Markdown source often carries escaped punctuation, most
+   often `\_` inside a handle or token, and Discourse keeps that escape in the
+   cooked link: `%5C_` in the href and `\_` in the visible label. The escape is
+   not part of any provider identity, so it is removed before parsing; the
+   strict per-provider grammars still decide what the unescaped URL means. */
+const MARKDOWN_ESCAPED_URL_PUNCTUATION_RE =
+  /(?:\\|%5[Cc])([!"#$%&'()*+,\-.\/:;<=>?@[\\\]^_`{|}~])/g;
+
+function stripMarkdownUrlEscapes(value) {
+  return typeof value === "string"
+    ? value.replace(MARKDOWN_ESCAPED_URL_PUNCTUATION_RE, "$1")
+    : "";
+}
+
 function parseBilibiliUrl(href) {
   let url;
 
   try {
-    url = new URL(normalizeUrlLikeString(href));
+    url = new URL(stripMarkdownUrlEscapes(normalizeUrlLikeString(href)));
   } catch {
     return null;
   }
@@ -2303,9 +2331,14 @@ function buildXEmbedUrl(parsed, options = {}) {
   return `${X_EMBED_ORIGIN}${X_EMBED_PATH}?${params.toString()}`;
 }
 
+/* Instagram's official embed page is the only player used here. Its captioned
+   variant is what Instagram's own share dialog produces by default; it shows
+   the post's caption below the media instead of only a "view more" link. */
 function buildInstagramEmbedUrl(parsed) {
   const pathPrefix = parsed.contentType === "reel" ? "reel" : "p";
-  return `https://www.instagram.com/${pathPrefix}/${parsed.shortcode}/embed/`;
+  const captioned = getBooleanSetting("instagram_embed_captioned", true) ? "captioned/" : "";
+
+  return `https://www.instagram.com/${pathPrefix}/${parsed.shortcode}/embed/${captioned}`;
 }
 
 function getXEmbedLang(value) {
@@ -3364,6 +3397,10 @@ function extractStructuredProviderTitle(candidate, parsed) {
   return "";
 }
 
+/* A label that is nothing but a URL (a pasted link, escaped or not) is not a
+   title; the provider fallback title names the post instead. */
+const URL_ONLY_TITLE_RE = /^(?:https?:)?\/\/\S+$/i;
+
 function isGenericTitle(title) {
   if (!title || title.length < 2) {
     return true;
@@ -3371,6 +3408,7 @@ function isGenericTitle(title) {
 
   return (
     GENERIC_TITLE_RE.test(title) ||
+    URL_ONLY_TITLE_RE.test(title) ||
     /^网易云音乐(?:是一款|是一个|专注于|，)/u.test(title) ||
     /^qq音乐(?:是|，)/iu.test(title)
   );
@@ -5780,14 +5818,101 @@ function attachDouyinPlayerScale(wrapper, frameWrap) {
   }
 }
 
-function clampXEmbedHeight(height) {
+function getXEmbedMaxHeight() {
+  return getBoundedIntegerSetting(
+    "x_embed_max_height",
+    DEFAULT_X_EMBED_MAX_CONTENT_HEIGHT,
+    X_EMBED_MAX_CONTENT_HEIGHT_MIN,
+    X_EMBED_MAX_CONTENT_HEIGHT_MAX
+  );
+}
+
+function getInstagramEmbedMaxHeight() {
+  return getBoundedIntegerSetting(
+    "instagram_embed_max_height",
+    DEFAULT_INSTAGRAM_EMBED_MAX_CONTENT_HEIGHT,
+    INSTAGRAM_EMBED_MAX_CONTENT_HEIGHT_MIN,
+    INSTAGRAM_EMBED_MAX_CONTENT_HEIGHT_MAX
+  );
+}
+
+/* A player's own height report is applied as reported, up to the
+   administrator's ceiling for that provider; above it the post scrolls inside
+   the card. Anything that is not a positive number is ignored. */
+function clampReportedEmbedHeight(height, maxHeight) {
   const value = Number.parseInt(height, 10);
 
   if (!Number.isFinite(value) || value <= 0) {
     return 0;
   }
 
-  return Math.min(X_EMBED_MAX_HEIGHT, Math.max(X_EMBED_MIN_HEIGHT, value));
+  return Math.min(maxHeight, Math.max(EMBED_REPORTED_MIN_HEIGHT, value));
+}
+
+function clampXEmbedHeight(height) {
+  return clampReportedEmbedHeight(height, getXEmbedMaxHeight());
+}
+
+function clampInstagramEmbedHeight(height) {
+  return clampReportedEmbedHeight(height, getInstagramEmbedMaxHeight());
+}
+
+function applyReportedEmbedHeight(wrapper, frameWrap, height) {
+  if (!height) {
+    return false;
+  }
+
+  frameWrap.style.setProperty("--bili-frame-height", `${height}px`);
+  wrapper.dataset.bilibiliEmbedHeight = String(height);
+
+  return true;
+}
+
+/* Official players that report their size do so over `window.postMessage`.
+   One listener serves every such frame: a message is matched to a frame by its
+   origin and its exact source window, and a bridge is dropped as soon as its
+   frame has left the document, so cloaked or re-rendered posts leave nothing
+   behind. */
+const embedMessageBridges = new Set();
+let embedMessageListenerAttached = false;
+
+function pruneEmbedMessageBridges() {
+  for (const bridge of embedMessageBridges) {
+    if (!bridge.iframe.isConnected) {
+      bridge.dispose();
+    }
+  }
+}
+
+function handleEmbedMessage(event) {
+  pruneEmbedMessageBridges();
+
+  for (const bridge of embedMessageBridges) {
+    if (
+      event.origin === bridge.origin &&
+      bridge.iframe.contentWindow &&
+      event.source === bridge.iframe.contentWindow
+    ) {
+      bridge.handle(event);
+      return;
+    }
+  }
+}
+
+function registerEmbedMessageBridge(bridge) {
+  if (typeof window?.addEventListener !== "function") {
+    return false;
+  }
+
+  pruneEmbedMessageBridges();
+  embedMessageBridges.add(bridge);
+
+  if (!embedMessageListenerAttached) {
+    window.addEventListener("message", handleEmbedMessage);
+    embedMessageListenerAttached = true;
+  }
+
+  return true;
 }
 
 /* Fail open: an X post that cannot be embedded keeps its card footer and the
@@ -5821,37 +5946,78 @@ function renderXEmbedUnavailable(wrapper, reason) {
 
 /* X's official player talks to its host page over `window.postMessage`. Only
    messages from the player origin and from this exact frame are read, and the
-   only things acted on are its own ready, empty-result, and resize reports. */
+   only things acted on are its own ready, empty-result, and resize reports.
+   The resize report follows the ready report and is repeated whenever the
+   post's layout changes (images finishing, the post column narrowing), so the
+   bridge stays attached for the life of the frame instead of ending at the
+   first ready report. */
 function attachXEmbedBridge(wrapper, frameWrap, iframe, embedId = "") {
-  if (typeof window?.addEventListener !== "function") {
-    return;
-  }
-
-  let settled = false;
+  let decided = false;
   let timeoutId = 0;
 
-  const finish = () => {
-    if (settled) {
-      return;
-    }
+  const bridge = {
+    origin: X_EMBED_ORIGIN,
+    iframe,
+    dispose() {
+      window.clearTimeout(timeoutId);
+      embedMessageBridges.delete(bridge);
+    },
+    handle(event) {
+      const payload = event.data?.["twttr.embed"];
+      const method = typeof payload?.method === "string" ? payload.method : "";
 
-    settled = true;
-    window.clearTimeout(timeoutId);
-    window.removeEventListener("message", handleMessage);
+      if (!method || (embedId && payload.id && payload.id !== embedId)) {
+        return;
+      }
+
+      if (method === "twttr.private.resize") {
+        applyReportedEmbedHeight(
+          wrapper,
+          frameWrap,
+          clampXEmbedHeight(payload.params?.[0]?.height)
+        );
+        return;
+      }
+
+      if (decided) {
+        return;
+      }
+
+      if (method === "twttr.private.no_results") {
+        decided = true;
+        bridge.dispose();
+        renderXEmbedUnavailable(wrapper, "no_results");
+        return;
+      }
+
+      if (method === "twttr.private.initialized") {
+        /* The player answered, so the network is fine; give it a fresh window to
+           finish rendering the post itself. */
+        armReadyTimeout();
+        return;
+      }
+
+      if (method === "twttr.private.results" || method === "twttr.private.rendered") {
+        decided = true;
+        window.clearTimeout(timeoutId);
+        wrapper.dataset.bilibiliXEmbed = "ready";
+      }
+    },
   };
 
   const armReadyTimeout = () => {
-    if (settled) {
+    if (decided) {
       return;
     }
 
     window.clearTimeout(timeoutId);
     timeoutId = window.setTimeout(() => {
-      if (settled) {
+      if (decided) {
         return;
       }
 
-      finish();
+      decided = true;
+      bridge.dispose();
 
       if (wrapper.isConnected) {
         renderXEmbedUnavailable(wrapper, "timeout");
@@ -5859,56 +6025,56 @@ function attachXEmbedBridge(wrapper, frameWrap, iframe, embedId = "") {
     }, X_EMBED_READY_TIMEOUT_MS);
   };
 
-  const handleMessage = (event) => {
-    if (
-      settled ||
-      event.origin !== X_EMBED_ORIGIN ||
-      event.source !== iframe.contentWindow
-    ) {
-      return;
-    }
-
-    const payload = event.data?.["twttr.embed"];
-    const method = typeof payload?.method === "string" ? payload.method : "";
-
-    if (!method || (embedId && payload.id && payload.id !== embedId)) {
-      return;
-    }
-
-    if (method === "twttr.private.resize") {
-      const height = clampXEmbedHeight(payload.params?.[0]?.height);
-
-      if (height) {
-        frameWrap.style.setProperty("--bili-frame-height", `${height}px`);
-      }
-
-      return;
-    }
-
-    if (method === "twttr.private.no_results") {
-      finish();
-      renderXEmbedUnavailable(wrapper, "no_results");
-      return;
-    }
-
-    if (method === "twttr.private.initialized") {
-      /* The player answered, so the network is fine; give it a fresh window to
-         finish rendering the post itself. */
-      armReadyTimeout();
-      return;
-    }
-
-    if (method === "twttr.private.results" || method === "twttr.private.rendered") {
-      finish();
-      wrapper.dataset.bilibiliXEmbed = "ready";
-    }
-  };
-
-  window.addEventListener("message", handleMessage);
+  if (!registerEmbedMessageBridge(bridge)) {
+    return;
+  }
 
   /* The frame is lazy, so the countdown starts only once it has actually
      loaded; an off-screen post must never be declared unavailable. */
   iframe.addEventListener("load", armReadyTimeout, { once: true });
+}
+
+/* Instagram's official embed page reports its rendered height the way its own
+   loader expects it: a JSON string `{"type":"MEASURE","details":{"height"}}`
+   from `https://www.instagram.com`. Only that report, from that origin and this
+   exact frame, is acted on; everything else it says is ignored. */
+function readInstagramEmbedReport(data) {
+  if (typeof data !== "string" || data.length === 0 || data.length > 4096) {
+    return null;
+  }
+
+  try {
+    const report = JSON.parse(data);
+
+    return report && typeof report === "object" ? report : null;
+  } catch {
+    return null;
+  }
+}
+
+function attachInstagramEmbedBridge(wrapper, frameWrap, iframe) {
+  const bridge = {
+    origin: INSTAGRAM_EMBED_ORIGIN,
+    iframe,
+    dispose() {
+      embedMessageBridges.delete(bridge);
+    },
+    handle(event) {
+      const report = readInstagramEmbedReport(event.data);
+
+      if (report?.type !== "MEASURE") {
+        return;
+      }
+
+      applyReportedEmbedHeight(
+        wrapper,
+        frameWrap,
+        clampInstagramEmbedHeight(report.details?.height)
+      );
+    },
+  };
+
+  registerEmbedMessageBridge(bridge);
 }
 
 function attachBdfzPostToggle(wrapper, frameWrap, footer) {
@@ -6018,6 +6184,8 @@ function renderLoadedPlayer(wrapper, iframeUrl, { allowAutoplay = false } = {}) 
     attachDouyinPlayerScale(wrapper, frameWrap);
   } else if (state.parsed.provider === "x") {
     attachXEmbedBridge(wrapper, frameWrap, iframe, state.xEmbedId || "");
+  } else if (state.parsed.provider === "instagram") {
+    attachInstagramEmbedBridge(wrapper, frameWrap, iframe);
   }
 
   updateRetryButtonLabel(wrapper);

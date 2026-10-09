@@ -1,6 +1,48 @@
 # Project state
 
-Last reviewed: 2026-09-29 (America/Los_Angeles)
+Last reviewed: 2026-10-09 (America/Los_Angeles)
+
+## 0.19.0 Whole-post X and Instagram frames, escaped links
+
+- Symptom (forum topic 14060, 2026-10-09): an X link stayed a bare link. Its raw
+  text was `https://x.com/JosephJacks\_/status/2108329300848201828?s=20`, copied
+  from a Markdown source with the underscore escaped; Discourse cooked it into a
+  plain `a.onebox` whose href encodes the backslash as `%5C_`, and the exact X
+  handle grammar rejected `JosephJacks%5C_`. The parser now strips Markdown
+  escapes (`\` or `%5C` before ASCII punctuation) from a link before parsing it,
+  for every provider, and the strict grammars then decide as before; the card's
+  canonical link and title use the clean handle.
+- Second finding (every X post): long or image posts were cut off at
+  `x_embed_height` (420px) and scrolled internally. X's player does send
+  `twttr.private.resize` with the post's height (682px for the photo post on
+  that topic, 225px for a one-line post, re-sent on every width change), but it
+  sends it after `twttr.private.results`, and the previous bridge removed its
+  listener on `results`, so the report was never applied; the stylesheet also
+  capped the frame at 74vh (70vh on phones). The 0.16.0 record that "X's
+  current build never sends a resize report" described this unsubscription,
+  not X.
+- The bridge now stays attached for the life of the frame (one shared window
+  listener; a bridge leaves when its frame leaves the document) and applies
+  every resize report, bounded by the new `x_embed_max_height` (default 6000,
+  600–12000). `x_embed_height` is only the initial height. The 74vh/70vh caps
+  are removed. Ready, empty-result, and timeout handling are unchanged.
+- Instagram's embed page reports its height the same way its own loader expects
+  (`MEASURE`: 898px for a photo post, 1094px with its caption); the same bridge
+  now follows it up to `instagram_embed_max_height` (default 4000), and the
+  captioned official embed is the default (`instagram_embed_captioned`), so the
+  caption is shown instead of a "view more" link.
+- A pasted URL is no longer used as a card title; the provider fallback title
+  (`@JosephJacks_ 的 X 帖子`) names the post and labels the frame.
+- Validation: 118/118 Node tests (eight new behavioral bridge tests in
+  `test/embed-height-bridge.test.mjs`, two new parser tests); against the
+  0.18.4 source all eight bridge tests fail and the parser file fails to load.
+  Headless Chromium against the exact cooked HTML of post 237829 and the live
+  X/Instagram embed pages: one `x` card, `ready`, reported and rendered 682px
+  (517px at 360px width), the deleted-post control fell back to the source
+  card, a captioned Instagram post rendered whole at 1092px, a one-line post at
+  225px. Syntax, JSON, YAML, diff, and Foliate hash checks pass.
+- Scope: GitHub source only. Theme 119 is not refreshed by this task; the user
+  updates the forum manually. Rollback anchor: `925511f` (0.18.4).
 
 ## 0.18.4 NetEase 163cn.tv share links
 

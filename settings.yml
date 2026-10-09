@@ -123,19 +123,38 @@ x_embed_height:
   type: integer
   min: 240
   max: 1200
-  description: Height in pixels of an inline X post before the embedded post scrolls internally.
+  description: Initial height in pixels of an inline X post. X's player reports the post's own height once it renders and the frame then follows that report, so this value only applies until the report arrives.
+
+x_embed_max_height:
+  default: 6000
+  type: integer
+  min: 600
+  max: 12000
+  description: Ceiling in pixels for the height an inline X post may grow to from X's own size reports. A post taller than this scrolls inside the card.
 
 enable_instagram_inline_embed:
   default: true
   type: bool
   description: Show instagram.com posts and reels inline with Instagram's embed player. Disable to keep link-only source cards.
 
+instagram_embed_captioned:
+  default: true
+  type: bool
+  description: Use Instagram's captioned embed, which shows the post's caption below the media (the variant Instagram's own share dialog produces). Disable to embed the media only.
+
 instagram_embed_height:
   default: 640
   type: integer
   min: 400
   max: 1200
-  description: Height in pixels of an inline Instagram post before the embedded content scrolls internally.
+  description: Initial height in pixels of an inline Instagram post. Instagram's embed page reports its rendered height and the frame then follows that report, so this value only applies until the report arrives.
+
+instagram_embed_max_height:
+  default: 4000
+  type: integer
+  min: 600
+  max: 12000
+  description: Ceiling in pixels for the height an inline Instagram post may grow to from Instagram's own size reports. A post taller than this scrolls inside the card.
 
 wechat_ingest_endpoint:
   default: "https://wx.bdfz.net/api/ingest"

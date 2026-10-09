@@ -40,7 +40,11 @@ X posts (`x.com`, `twitter.com`) use X's own official embed player at `platform.
 - `?s=`/`?t=` share-tracking parameters are dropped rather than forwarded; the canonical `https://x.com/<handle>/status/<ID>` URL is the whole identity sent to X.
 - The frame is lazy, `no-referrer`, and sandboxed to `allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox`. The official player needs its own origin to read X's public syndication data; without it every post reports an empty result.
 - The embed runs in Do Not Track mode (`dnt=true`), follows the forum's light or dark color scheme, and uses the forum's own display language.
-- The player reports its outcome over `postMessage`. Only messages from `https://platform.twitter.com` sent by that exact frame are read, and only its ready, empty-result, and resize reports are acted on. A deleted, protected, or non-embeddable post and an unreachable X (for example a blocked network) both fall back to the source card with a short explanation and the original link. Because X's current build never sends a resize report, the frame height is the bounded `x_embed_height` administrator setting and taller posts scroll inside the card.
+- The player reports its outcome over `postMessage`. Only messages from `https://platform.twitter.com` sent by that exact frame are read, and only its ready, empty-result, and resize reports are acted on. A deleted, protected, or non-embeddable post and an unreachable X (for example a blocked network) both fall back to the source card with a short explanation and the original link.
+- The frame follows the height the player reports for the post, so the whole post is visible without an inner scroll bar: `x_embed_height` is only the initial height used until the first report arrives, and `x_embed_max_height` (default 6000 pixels) is the ceiling above which a post scrolls inside the card. The player repeats its report whenever the post's layout changes (images finishing, the post column narrowing on a phone), and the frame keeps following it for as long as the post is on the page.
+- A link copied from a Markdown source with escaped punctuation, such as `https://x.com/some\_handle/status/<ID>`, which Discourse cooks with `%5C_` in the href, is read as the clean identity; only the escape is forgiven, the grammar itself is unchanged.
+
+Instagram posts and reels (`instagram.com/p/<shortcode>/`, `/reel/<shortcode>/`, legacy `/tv/`) use Instagram's own official embed page at `https://www.instagram.com/{p|reel}/<shortcode>/embed/captioned/`, the variant Instagram's share dialog produces by default, so the caption is shown below the media; `instagram_embed_captioned=false` returns to the media-only `/embed/` page. The frame is lazy, `no-referrer`, and sandboxed exactly like the X frame. The embed page reports its rendered height the way Instagram's own loader expects (`{"type":"MEASURE","details":{"height":…}}` from `https://www.instagram.com`); only that report, from that origin and that exact frame, is read, and the frame follows it: `instagram_embed_height` is the initial height and `instagram_embed_max_height` (default 4000 pixels) the ceiling. No Instagram API, token, or scraping is involved, and the original link stays under every embed.
 
 rdfz.net student blogs (`<handle>.rdfz.net/p/<slug>`):
 
@@ -177,7 +181,7 @@ Still not supported:
 - the article body of a `marxists.org` page when `enable_expand_reader` is off or no reader endpoint is configured, because the archive forbids both framing and cross-origin reads
 - FB2 and CBZ until the forum enables those upload extensions and they receive independent acceptance
 
-Standalone supported URLs remain the simplest input. The component also recognizes eligible BR-delimited visual segments whose only anchor visibly spells the supported URL, wherever that URL appears in the segment. When Discourse has turned such a URL into an inline onebox (its label replaced by the page title, as happens with copied share text like `分享…《…》: <URL> (来自@网易云音乐)`), the anchor's href is used instead of its label. Multiple copied share rows cooked into one paragraph receive cards in source order, count individually against `max_embeds_per_post`, and preserve the complete original paragraph.
+Standalone supported URLs remain the simplest input. The component also recognizes eligible BR-delimited visual segments whose only anchor visibly spells the supported URL, wherever that URL appears in the segment. When Discourse has turned such a URL into an inline onebox (its label replaced by the page title, as happens with copied share text like `分享…《…》: <URL> (来自@网易云音乐)`), the anchor's href is used instead of its label. Multiple copied share rows cooked into one paragraph receive cards in source order, count individually against `max_embeds_per_post`, and preserve the complete original paragraph. Markdown-escaped punctuation inside a pasted link (`\_`, which Discourse keeps as `%5C_` in the href) is unescaped before the identity is parsed, for every provider; the strict per-provider grammars still decide what the link means, and a bare pasted URL is never used as a card title.
 
 Pasted Xiaohongshu share text, with either plain or auto-linkified share URLs, is a narrow exception: the original paragraph is preserved and the content card is inserted after it, so surrounding text is never discarded.
 
@@ -263,6 +267,11 @@ No rebuild is required.
 - `bdfz_post_embed_height`
 - `enable_x_inline_embed`
 - `x_embed_height`
+- `x_embed_max_height`
+- `enable_instagram_inline_embed`
+- `instagram_embed_captioned`
+- `instagram_embed_height`
+- `instagram_embed_max_height`
 - `wechat_ingest_endpoint`
 - `wechat_embed_height`
 - `expand_reader_endpoint`

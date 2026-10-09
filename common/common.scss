@@ -219,9 +219,12 @@
   box-shadow: 0 10px 24px rgb(0 0 0 / 0.42);
 }
 
+/* The frame follows the height X's player reports for the post, so the whole
+   post is shown without an inner scroll; the initial height applies only until
+   that report arrives, and `x_embed_max_height` caps it. */
 .bilibili-inline-player--x .bilibili-inline-player__frame-wrap--fixed {
-  height: min(74vh, var(--bili-frame-height, 420px));
-  min-height: 240px;
+  height: var(--bili-frame-height, 420px);
+  min-height: 120px;
   overflow: hidden;
   background: var(--secondary, #fff);
 }
@@ -254,9 +257,11 @@
   box-shadow: 0 10px 24px rgb(193 53 132 / 0.38);
 }
 
+/* As with X, the frame follows the height Instagram's embed page reports, so a
+   photo, carousel, or reel with its caption is shown whole. */
 .bilibili-inline-player--instagram .bilibili-inline-player__frame-wrap--fixed {
-  height: min(74vh, var(--bili-frame-height, 640px));
-  min-height: 400px;
+  height: var(--bili-frame-height, 640px);
+  min-height: 120px;
   overflow: hidden;
   background: var(--secondary, #fff);
 }
@@ -1134,15 +1139,8 @@
     min-height: 440px;
   }
 
-  .bilibili-inline-player--x .bilibili-inline-player__frame-wrap--fixed {
-    height: min(70vh, var(--bili-frame-height, 420px));
-    min-height: 240px;
-  }
-
-  .bilibili-inline-player--instagram .bilibili-inline-player__frame-wrap--fixed {
-    height: min(72vh, var(--bili-frame-height, 640px));
-    min-height: 360px;
-  }
+  /* X and Instagram frames keep following the player's reported height on
+     narrow screens too; a viewport-relative cap would cut long posts off. */
 
   .bilibili-inline-player__play {
     min-height: 2.6rem;
