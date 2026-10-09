@@ -1,11 +1,65 @@
 # Operations authority
 
-Last reviewed: 2026-09-01 (America/Los_Angeles)
+Last reviewed: 2026-10-09 (America/Los_Angeles)
 
 This is the canonical operational procedure for the Extended Preview & Embed Suite.
 `AGENTS.md` owns constraints, `PROJECT_STATE.md` owns the accepted version and next
 action, and this file owns executable test, release, readback, restore, and rollback
 steps. Live Discourse and GitHub readback override this document when they disagree.
+
+## 0.19.0 Whole-post X and Instagram frames, escaped links (2026-10-09)
+
+Scope: canonical GitHub source only; the user owns the manual theme 119 refresh.
+Rollback anchor: `925511f` (0.18.4). No Worker, resolver, CSP, or server change.
+
+What changed, and why `t/topic/14060` showed only its link:
+
+- The post's raw text was `https://x.com/JosephJacks\_/status/…`, a link copied
+  from a Markdown source with an escaped underscore. Discourse cooked it into a
+  plain `a.onebox` whose href encodes the backslash as `%5C_`, and the exact X
+  handle grammar rejected it. The identity parser now strips Markdown escapes
+  (`\` or `%5C` before ASCII punctuation) from a link before parsing, for every
+  provider; the per-provider grammars are unchanged.
+- X's player sends `twttr.private.resize` after `twttr.private.results`, and the
+  previous bridge unsubscribed on `results`, so the frame stayed at
+  `x_embed_height` and the stylesheet capped it at 74vh (70vh on phones). The
+  bridge now stays attached for the life of the frame and applies every resize
+  report, bounded by the new `x_embed_max_height`; the viewport caps are gone.
+- Instagram's embed page reports its height the same way (`MEASURE`); the frame
+  follows that report up to `instagram_embed_max_height`, and the captioned
+  official embed is now the default (`instagram_embed_captioned`).
+- A pasted URL is no longer used as a card title; the provider fallback title
+  names the post instead.
+
+Local verification: 118/118 tests (108 existing, eight new behavioral bridge
+tests in `test/embed-height-bridge.test.mjs`, two new parser tests). Against the
+0.18.4 source every bridge test fails and the parser file fails to load. Syntax,
+JSON, YAML, diff, and Foliate hash checks pass. A headless Chromium run of the
+patched initializer against the exact cooked HTML of post 237829 and X's and
+Instagram's live embed pages rendered `@JosephJacks_ 的 X 帖子` as `ready` at the
+reported 682px (517px at 360px width), the deleted-post control as the source
+card, a captioned Instagram post whole at 1092px, and a one-line post at 225px.
+
+After the manual update, confirm the served stylesheet first (the Rails-runner
+refresh has kept a stale compiled asset before):
+
+```bash
+curl -sS -A '<BROWSER_UA>' https://forum.rdfzer.com/ \
+  | grep -o 'common_theme_119_[a-f0-9]*'
+curl -sS -A '<BROWSER_UA>' \
+  https://forum.rdfzer.com/stylesheets/common_theme_119_<DIGEST>.css \
+  | grep -c 'min(74vh'
+```
+
+The count must be `0`; if it is not, run the admin `Update to latest` path for
+theme 119 to rebuild the asset. Then, in a logged-in browser: `t/topic/14060`
+shows one X card with `data-bilibili-x-embed="ready"` and
+`data-bilibili-embed-height` set, the full photo visible with no inner scroll
+bar, and `在 X 打开` pointing at
+`https://x.com/JosephJacks_/status/2108329300848201828`; a long or multi-image X
+post is shown whole; a deleted-post link keeps the source card; an Instagram post
+shows its caption; a phone-width viewport shows the whole post as well. Readback
+items 12 and 14 below record the exact checks.
 
 ## 0.18.4 NetEase 163cn.tv short links (2026-09-29)
 
@@ -358,6 +412,7 @@ Before any mutation, also read:
 | `bdfz.net/posts/<article>/` | public, server-rendered source page framed directly by the theme | external public source | source link fallback; feature kill switch |
 | `open.douyin.com/player/video` | official public Douyin iframe player; exact numeric video ID only | external public player | canonical `www.douyin.com/video/<ID>` fallback; revert theme commit |
 | `platform.twitter.com/embed/Tweet.html` | X's official public post embed; exact numeric post ID only | external public player | source card plus canonical `x.com/<handle>/status/<ID>` link; `enable_x_inline_embed=false` |
+| `www.instagram.com/p/<shortcode>/embed/captioned/` (and `/reel/`) | Instagram's official public embed page; exact shortcode only | external public player | source card plus canonical post link; `enable_instagram_inline_embed=false` |
 | Tests | `test/url-parsers.test.mjs` | source | Git |
 
 There are no external local build inputs, database exports, generated releases, or
@@ -419,7 +474,21 @@ X settings:
 
 - `enable_x_inline_embed`: immediate X containment switch; default `true`.
   Disabled keeps a link-only source card.
-- `x_embed_height`: bounded `240`–`1200`, default `420` pixels.
+- `x_embed_height`: bounded `240`–`1200`, default `420` pixels; the initial
+  frame height, kept only until the player reports the post's own height.
+- `x_embed_max_height`: bounded `600`–`12000`, default `6000` pixels; the
+  ceiling for reported heights, above which the post scrolls inside the card.
+
+Instagram settings:
+
+- `enable_instagram_inline_embed`: immediate Instagram containment switch;
+  default `true`. Disabled keeps a link-only source card.
+- `instagram_embed_captioned`: frame the captioned official embed page; default
+  `true`. Disabled frames the media-only page.
+- `instagram_embed_height`: bounded `400`–`1200`, default `640` pixels; the
+  initial frame height, kept only until the embed page reports its height.
+- `instagram_embed_max_height`: bounded `600`–`12000`, default `4000` pixels;
+  the ceiling for reported heights.
 
 BDFZ post settings:
 
@@ -675,6 +744,14 @@ reload as needed and verify:
     and keeps that link. If Discourse itself produced an onebox for an X link,
     the component must produce zero wrappers for it. Confirm whether X links on
     this forum currently cook as plain anchors before reading this control.
+    Once the post renders, the wrapper carries `data-bilibili-embed-height`
+    equal to the height X reported, the frame wrap is exactly that tall, and
+    the whole post (text, every image, the action row) is visible without an
+    inner scroll bar, on a phone-width viewport as well; narrowing the post
+    column changes the reported height and the frame follows. `t/topic/14060`
+    is the escaped-link control: its `a.onebox` href contains `%5C_`, and it
+    must produce one `x` card titled `@JosephJacks_ 的 X 帖子` whose footer
+    link is `https://x.com/JosephJacks_/status/2108329300848201828`.
 13. Start the canonical BDFZ style regression from
     `https://forum.rdfzer.com/t/topic/13449/7`, follow the topic to the embedded
     first post, and verify `180-qishike` uses the BDFZ font, background, body,
@@ -682,6 +759,14 @@ reload as needed and verify:
     black canvas mean the source CSS was rejected. Check anonymous CORS on every
     SRI stylesheet before considering any sandbox relaxation; `allow-same-origin`
     remains forbidden.
+14. An Instagram post link produces exactly one `instagram` wrapper framing
+    `https://www.instagram.com/p/<shortcode>/embed/captioned/` with the same
+    lazy, `no-referrer`, sandboxed frame as X. Once the post renders, the
+    wrapper carries `data-bilibili-embed-height` equal to the height Instagram
+    reported, and the media, caption, and action row are all visible without
+    an inner scroll bar. The footer keeps `在 Instagram 打开` pointing at the
+    canonical post URL. A removed post keeps Instagram's own notice inside the
+    frame and the original link below it.
 
 Accepted browser readback for `0.11.1` met items 1–6: `1330/2` and `2327/1`
 each had one wrapper/pane/open state with a telemetry-free real title and a

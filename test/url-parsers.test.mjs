@@ -18,7 +18,12 @@ globalThis.__themeParserTestApi = {
   buildNoAutoplayIframeUrl,
   buildXEmbedUrl,
   buildXiaohongshuPreviewText,
+  buildMetadata,
+  clampInstagramEmbedHeight,
   clampXEmbedHeight,
+  getInstagramEmbedMaxHeight,
+  getXEmbedMaxHeight,
+  stripMarkdownUrlEscapes,
   cleanProviderTitle,
   cloneParagraphVisualSegment,
   collectEbookAttachmentCandidates,
@@ -113,7 +118,12 @@ const {
   buildNoAutoplayIframeUrl,
   buildXEmbedUrl,
   buildXiaohongshuPreviewText,
+  buildMetadata,
+  clampInstagramEmbedHeight,
   clampXEmbedHeight,
+  getInstagramEmbedMaxHeight,
+  getXEmbedMaxHeight,
+  stripMarkdownUrlEscapes,
   cleanProviderTitle,
   cloneParagraphVisualSegment,
   collectEbookAttachmentCandidates,
@@ -2441,12 +2451,34 @@ test("X embed language, theme, and height helpers stay bounded", () => {
   assert.equal(parseCssColorLuminance("rgb(300, 0, 0)"), null);
   assert.equal(parseCssColorLuminance(""), null);
 
+  /* A reported post height is applied as reported, within the administrator's
+     ceiling; the shortest real post (about 225px) is never padded up. */
   assert.equal(clampXEmbedHeight(600), 600);
-  assert.equal(clampXEmbedHeight(10), 240);
-  assert.equal(clampXEmbedHeight(9000), 1200);
+  assert.equal(clampXEmbedHeight(225), 225);
+  assert.equal(clampXEmbedHeight(10), 120);
+  assert.equal(clampXEmbedHeight(9000), 6000);
   assert.equal(clampXEmbedHeight("480px"), 480);
   assert.equal(clampXEmbedHeight("tall"), 0);
   assert.equal(clampXEmbedHeight(-5), 0);
+  assert.equal(getXEmbedMaxHeight(), 6000);
+
+  themeSettings.x_embed_max_height = 1000;
+  assert.equal(getXEmbedMaxHeight(), 1000);
+  assert.equal(clampXEmbedHeight(9000), 1000);
+  themeSettings.x_embed_max_height = 99999;
+  assert.equal(clampXEmbedHeight(99999), 12000);
+  themeSettings.x_embed_max_height = 1;
+  assert.equal(clampXEmbedHeight(9000), 600);
+  delete themeSettings.x_embed_max_height;
+
+  assert.equal(getInstagramEmbedMaxHeight(), 4000);
+  assert.equal(clampInstagramEmbedHeight(898), 898);
+  assert.equal(clampInstagramEmbedHeight(9000), 4000);
+  assert.equal(clampInstagramEmbedHeight(10), 120);
+  assert.equal(clampInstagramEmbedHeight("x"), 0);
+  themeSettings.instagram_embed_max_height = 800;
+  assert.equal(clampInstagramEmbedHeight(9000), 800);
+  delete themeSettings.instagram_embed_max_height;
 });
 
 test("X posts use the plain-link collectors and leave a real Discourse onebox alone", () => {
@@ -2518,13 +2550,20 @@ test("parses exact Instagram post, reel, and tv forms and builds embed URL", () 
 
   assert.equal(
     buildIframeUrl(parsedPost),
-    "https://www.instagram.com/p/DFxyz123_-/embed/"
+    "https://www.instagram.com/p/DFxyz123_-/embed/captioned/"
   );
   assert.equal(
     buildIframeUrl(parsedReel),
-    "https://www.instagram.com/reel/DFxyz123_-/embed/"
+    "https://www.instagram.com/reel/DFxyz123_-/embed/captioned/"
   );
   assert.equal(buildNoAutoplayIframeUrl(parsedPost), buildIframeUrl(parsedPost));
+
+  themeSettings.instagram_embed_captioned = false;
+  assert.equal(
+    buildIframeUrl(parsedPost),
+    "https://www.instagram.com/p/DFxyz123_-/embed/"
+  );
+  delete themeSettings.instagram_embed_captioned;
 
   assert.equal(getMetaLine(parsedPost), "Instagram 帖子");
   assert.equal(getMetaLine(parsedReel), "Instagram Reel");
@@ -2553,7 +2592,7 @@ test("parses exact Instagram post, reel, and tv forms and builds embed URL", () 
   wrapperState.set(wrapper, state);
   primeEmbedState(wrapper);
 
-  assert.equal(state.iframeUrl, "https://www.instagram.com/p/DFxyz123_-/embed/");
+  assert.equal(state.iframeUrl, "https://www.instagram.com/p/DFxyz123_-/embed/captioned/");
   assert.equal(state.standardIframeUrl, state.iframeUrl);
   assert.equal(state.noAutoplayIframeUrl, "");
   assert.equal(state.externalOnly, false);
@@ -2977,4 +3016,98 @@ test("the forum 163cn.tv inline onebox share row becomes a resolver candidate", 
   } finally {
     delete themeSettings.enable_short_link_resolution;
   }
+});
+
+test("accepts Markdown-escaped punctuation in copied links while keeping strict identities", () => {
+  const canonical = "https://x.com/JosephJacks_/status/2108329300848201828";
+
+  assert.equal(
+    stripMarkdownUrlEscapes("https://x.com/JosephJacks%5C_/status/2108329300848201828?s=20"),
+    "https://x.com/JosephJacks_/status/2108329300848201828?s=20"
+  );
+  assert.equal(
+    stripMarkdownUrlEscapes("https://x\\.com/a\\_b/status/1"),
+    "https://x.com/a_b/status/1"
+  );
+  assert.equal(
+    stripMarkdownUrlEscapes("https://x.com/plain/status/1"),
+    "https://x.com/plain/status/1"
+  );
+  assert.equal(stripMarkdownUrlEscapes(null), "");
+
+  for (const source of [
+    "https://x.com/JosephJacks%5C_/status/2108329300848201828?s=20",
+    "https://x.com/JosephJacks%5c_/status/2108329300848201828",
+    "https://x.com/JosephJacks\\_/status/2108329300848201828?s=20",
+    "https://x\\.com/JosephJacks\\_/status/2108329300848201828",
+    "https://twitter.com/JosephJacks\\_/status/2108329300848201828/photo/1",
+  ]) {
+    const parsed = parseBilibiliUrl(source);
+
+    assert.ok(parsed, source);
+    assert.equal(parsed.provider, "x", source);
+    assert.equal(parsed.handle, "JosephJacks_", source);
+    assert.equal(parsed.canonicalUrl, canonical, source);
+  }
+
+  assert.equal(
+    parseBilibiliUrl("https://www.instagram.com/p/DFxyz123\\_-/").canonicalUrl,
+    "https://www.instagram.com/p/DFxyz123_-/"
+  );
+  assert.equal(
+    parseBilibiliUrl("https://www.instagram.com/reel/DFxyz123%5C_-/?igsh=abc").canonicalUrl,
+    "https://www.instagram.com/reel/DFxyz123_-/"
+  );
+
+  /* Only the escape is forgiven: the unescaped URL still has to be an exact
+     identity, and a backslash before anything but punctuation stays. */
+  for (const source of [
+    "https://x.com/BDFZer/status/1234\\_5678",
+    "https://x.com/BDFZer\\/status/1234567890123456789/likes",
+    "https://x.com/BDFZer/status/%5C1234567890123456789",
+    "https://x.com/BDFZer/status/\\1234567890123456789",
+  ]) {
+    assert.equal(parseBilibiliUrl(source), null, source);
+  }
+});
+
+test("the forum's escaped X share link becomes one X card with the clean identity", () => {
+  /* forum.rdfzer.com post 237829 (topic 14060): Discourse cooked the pasted
+     `https://x.com/JosephJacks\_/status/…` into a plain `a.onebox` whose href
+     encodes the Markdown escape as `%5C`, while the label still shows `\_`. */
+  const href = "https://x.com/JosephJacks%5C_/status/2108329300848201828?s=20";
+  const label = "https://x.com/JosephJacks\\_/status/2108329300848201828?s=20";
+  const canonical = "https://x.com/JosephJacks_/status/2108329300848201828";
+
+  const standalone = makeCookedParagraphFixture({
+    url: href,
+    anchorText: label,
+    anchorClass: "onebox",
+  });
+  const [candidate] = collectStandaloneCandidates(standalone.cooked, []);
+
+  assert.ok(candidate, "the escaped link is recognized");
+  assert.equal(candidate.parsed.provider, "x");
+  assert.equal(candidate.parsed.canonicalUrl, canonical);
+  assert.equal(candidate.target, standalone.paragraph);
+  assert.ok(!candidate.preserveSource);
+
+  /* The pasted URL is not a title; the card names the post instead, and the
+     original link it keeps is the clean canonical one. */
+  const metadata = buildMetadata(standalone.paragraph, standalone.anchor, candidate.parsed);
+  assert.equal(metadata.title, "@JosephJacks_ 的 X 帖子");
+  assert.equal(metadata.canonicalUrl, canonical);
+
+  const quoted = makeCookedParagraphFixture({
+    before: "看这条：",
+    url: href,
+    anchorText: label,
+    after: "（转）",
+  });
+  const [visible] = collectVisibleUrlCandidates(quoted.cooked, []);
+
+  assert.ok(visible, "the escaped link inside a sentence is recognized");
+  assert.equal(visible.parsed.canonicalUrl, canonical);
+  assert.equal(visible.preserveSource, true);
+  assert.equal(visible.target, quoted.paragraph);
 });
