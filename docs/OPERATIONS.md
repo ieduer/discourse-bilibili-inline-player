@@ -1,13 +1,18 @@
 # Operations authority
 
-Last reviewed: 2026-10-09 (America/Los_Angeles)
+Last reviewed: 2026-10-14 (UTC)
 
 This is the canonical operational procedure for the Extended Preview & Embed Suite.
 `AGENTS.md` owns constraints, `PROJECT_STATE.md` owns the accepted version and next
 action, and this file owns executable test, release, readback, restore, and rollback
 steps. Live Discourse and GitHub readback override this document when they disagree.
 
-## 0.20.0 No built-in backend services (prepared 2026-10-14, not released)
+## 0.21.0 Office/security integration (prepared 2026-10-14, not released)
+
+The integration branch starts at Office candidate `c52c380` and adds only
+security follow-up `62a1a01`; its owner-service isolation parent `81a3f9b` is
+already present. Office code, vendored bundles and fixtures are preserved.
+The canonical checkout and any rename/publication work remain with their owner.
 
 Public defaults no longer name or fall back to any operator service:
 `expand_reader_endpoint`, `wechat_ingest_endpoint`, and the new
@@ -16,7 +21,11 @@ Public defaults no longer name or fall back to any operator service:
 default to `false` (`enable_short_link_resolution` was already `false`). An empty
 or invalid value disables the feature; returned WeChat archive URLs must equal
 `<wechat_archive_origin>/<slug>`. WeChat polling is capped at 16 attempts and
-three minutes with 2–15 s backoff. Media embeds and the ebook reader are unchanged.
+three minutes with 2–15 s backoff. All three backend API paths refuse redirects
+and share a four-operation page limit with no queue. Archive cache entries include
+the configured archive origin, and polling stops if its settings change. These are
+client bounds, not backend authorization or a service-wide resource budget.
+Media embeds and the ebook reader are unchanged.
 
 Effect on an installed component: Discourse stores only settings an administrator
 changed. Any of the settings above that still inherits its default will switch to
@@ -27,9 +36,13 @@ policy for the explicitly configured forum. The ordered, private rollout and the
 exact theme 119 values are kept outside this public repository in the operator's
 operations records; do not copy them here.
 
-Validation: `npm test` (129 tests, including `test/owner-isolation.test.mjs`, which
-records every request a clean installation attempts) plus the standard syntax,
-JSON, YAML, diff, and Foliate hash checks.
+Local combined validation: `npm test` on Node 24.18.0 (179 tests, including
+Office worker fixtures and 17 isolation tests covering
+clean defaults, missing/blank/invalid settings, automatic/manual/fallback paths,
+explicit configurations, redirected-request refusal, duplicate requests, shared
+concurrency and polling bounds). Standard syntax, JSON, YAML and diff checks also
+apply. This local evidence does not establish deployed behavior or forum acceptance.
+Historical release evidence below predates this candidate.
 
 ## 0.19.0 Whole-post X and Instagram frames, escaped links (2026-10-09)
 

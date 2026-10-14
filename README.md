@@ -241,9 +241,29 @@ The component works without any backend: media players, X and Instagram embeds, 
 | Opaque short links (`b23.tv`, `bili2233.cn`, `163cn.tv`) | `enable_short_link_resolution` plus the reader endpoint above | `GET <endpoint origin>/resolve?url=<short URL>`; must return `{ "version": 1, "canonicalUrl": "..." }` |
 | WeChat article archive | `enable_wechat_inline`, `wechat_ingest_endpoint` (for example `https://archive.example.com/api/ingest`), `wechat_archive_origin` (for example `https://archive.example.com`) | `POST <endpoint>` with JSON `{ "url": "<public article URL>" }`; must return `{ "ok": true, "url": "<archive origin>/<slug>", "slug": "<slug>", "orig": "<article URL>" }`, or HTTP `202` with `{ "pending": true }` while converting |
 
-Requests are sent with credentials omitted and no referrer. Any other answer is treated as unavailable and the original link stays. A returned archive URL is accepted only when it is exactly `<wechat_archive_origin>/<slug>`.
+Requests are sent with credentials omitted, no referrer, and HTTP redirects refused. Configure the final API endpoint directly. Any other answer is treated as unavailable and the original link stays. A returned archive URL is accepted only when it is exactly `<wechat_archive_origin>/<slug>`; the archive service must serve that URL directly. Up to four backend operations run at once across a page, including pending conversions. Duplicate requests share work; when capacity is full, additional cards retain their source links without queuing. These browser limits are not a service-wide budget or authorization control.
 
 Your service decides who may use it. Cross-origin headers and the browser's `Origin` value only describe which pages a browser may read responses from; they do not authenticate a caller, and anything a theme component sends can be replayed by any client. Apply the service's own authorization, per-caller limits, and resource budgets before it does expensive work, and never place a reusable secret in a theme setting. Staff viewers see a short hint on cards whose feature is not configured; other readers simply see the source card.
+
+### Upgrading an existing configured forum
+
+Before upgrading, record the installed commit and effective settings. Settings that
+were inherited from earlier defaults may become blank or disabled after the update.
+Administrators who intend to keep an existing service must explicitly save its
+reader/ingestion endpoint, enable each required feature, and set the new
+`wechat_archive_origin` to the origin that serves their archives. Preserve the
+independent short-link switch. Do not copy another installation's endpoints.
+
+After the separately approved update, check both configured success and failure
+flows, then check an installation with all endpoints blank: it must keep the source
+links and send no backend requests, even with the feature switches enabled. A
+backend requiring trusted authentication needs a separately designed integration;
+this public theme cannot safely hold a reusable service credential.
+
+For containment, clear the relevant endpoints or disable the feature switches.
+A code rollback should revert only the repair commits while preserving subsequent
+accepted features. Older versions restore built-in defaults, so keep explicit
+settings and disabled switches in place until the rollback is reviewed.
 
 ## Installation
 

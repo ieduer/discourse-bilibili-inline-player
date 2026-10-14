@@ -73,7 +73,7 @@ function harness(overrides = {}) {
   const responses = [];
   const fetch = async (input, init = {}) => {
     const url = String(input?.url || input);
-    requests.push({ kind: "fetch", url, method: init.method || "GET", body: init.body });
+    requests.push({ kind: "fetch", url, method: init.method || "GET", body: init.body, redirect: init.redirect });
     const next = responses.shift();
 
     if (!next) {
@@ -114,7 +114,8 @@ function harness(overrides = {}) {
     .replace("export default apiInitializer((api) => {", "const themeInitializer = apiInitializer((api) => {")
     .concat(`
       globalThis.__api = {
-        buildWrapper, fetchBilibiliShortLinkResolution, fetchReaderView, fetchWeChatArchive,
+        buildWrapper, activatePlayer, autoExpandWrapper, expandThroughReader, expandWeChatArchive,
+        themeSettings, fetchBilibiliShortLinkResolution, fetchReaderView, fetchWeChatArchive,
         getBilibiliShortResolverEndpoint, getExpandReaderEndpoint, getWeChatIngestEndpoint,
         normalizeWeChatArchivePayload, parseBilibiliUrl, supportsExpandReader,
         supportsWeChatArchive, themeInitializer, wrapperState,
@@ -403,7 +404,7 @@ test("WeChat polling is bounded and stops at terminal backend answers", async ()
     }
   }
   assert.equal(await pending, null);
-  assert.ok(requests.length <= 20, `polling stopped after ${requests.length} requests`);
+  assert.equal(requests.length, 16, "the attempt cap applies even when timers advance without wall clock time");
   const waits = timers.filter((timer) => timer.delay >= 1000 && timer.delay < 60000).map((timer) => timer.delay);
   assert.ok(waits.at(-1) > waits[0], "waits back off");
 });
@@ -427,4 +428,146 @@ test("only staff see a configuration hint on an unconfigured reading card", asyn
   }
   await staff.settle();
   assert.deepEqual(staff.requests, []);
+});
+
+
+const CONFIGURED = {
+  enable_expand_reader: true, enable_zhihu_summary: true,
+  enable_rdfz_blog_inline: true, enable_short_link_resolution: true,
+  enable_wechat_inline: true, expand_reader_endpoint: OTHER_READER,
+  wechat_ingest_endpoint: OTHER_INGEST, wechat_archive_origin: OTHER_ARCHIVE,
+};
+const reply = (status, body = { ok: false }) => ({
+  ok: status >= 200 && status < 300, status,
+  headers: { get: () => null }, json: async () => body,
+});
+
+test("missing, blank, mistyped and invalid endpoints cannot issue automatic, manual or fallback requests", async () => {
+  for (const value of [undefined, null, false, 42, {}, "", "   ", "not a url", "//reader.example.org/read",
+    "https:reader.example.org/read", "https:///reader.example.org/read",
+    "https://reader.example.org/rea\td", "http://reader.example.org/read", "https://user:secret@reader.example.org/read"]) {
+    for (const auto_expand_embeds of [true, false]) {
+      const h = harness({ ...CONFIGURED, auto_expand_embeds,
+        expand_reader_endpoint: value, wechat_ingest_endpoint: value });
+      const cards = buildCards(h.api);
+      await h.settle();
+      for (const card of cards) {
+        await h.api.autoExpandWrapper(card);
+        await h.api.activatePlayer(card);
+        await h.api.expandThroughReader(card);
+        await h.api.expandWeChatArchive(card);
+      }
+      assert.equal(await h.api.fetchReaderView(READING_LINKS[3]), null);
+      assert.equal(await h.api.fetchWeChatArchive(h.api.parseBilibiliUrl(READING_LINKS[0])), null);
+      for (const short of ["https://b23.tv/AbCdE12", "https://bili2233.cn/AbCdE12", "https://163cn.tv/AbCdE12"]) {
+        assert.equal(await h.api.fetchBilibiliShortLinkResolution(short), null);
+      }
+      assert.deepEqual(h.requests, [], String(value));
+      assert.equal(cards.length, 4);
+      assert.ok(cards.every((card) => card.querySelector(".bilibili-inline-player__footer-link")));
+    }
+  }
+});
+
+test("all configured backend calls refuse HTTP redirects and retain credential isolation", async () => {
+  const h = harness(CONFIGURED);
+  for (let index = 0; index < 3; index += 1) {
+    h.responses.push((_url, init) => {
+      assert.equal(init.redirect, "error");
+      assert.equal(init.credentials, "omit");
+      assert.equal(init.referrerPolicy, "no-referrer");
+      return reply(403);
+    });
+  }
+  await h.api.fetchReaderView(READING_LINKS[3]);
+  await h.api.fetchWeChatArchive(h.api.parseBilibiliUrl(READING_LINKS[0]));
+  await h.api.fetchBilibiliShortLinkResolution("https://b23.tv/AbCdE12");
+  assert.equal(h.requests.length, 3);
+  assert.ok(h.requests.every((request) => request.redirect === "error"));
+});
+
+test("backend concurrency is shared, duplicates coalesce, and a completed slot can be reused", async () => {
+  const h = harness(CONFIGURED);
+  const release = [];
+  for (let index = 0; index < 4; index += 1) {
+    h.responses.push(() => new Promise((resolve) => release.push(() => resolve(reply(403)))));
+  }
+  const parsed = h.api.parseBilibiliUrl(READING_LINKS[0]);
+  const pending = [h.api.fetchReaderView(READING_LINKS[3]), h.api.fetchWeChatArchive(parsed),
+    h.api.fetchBilibiliShortLinkResolution("https://b23.tv/AbCdE12"),
+    h.api.fetchBilibiliShortLinkResolution("https://b23.tv/AbCdE13")];
+  pending.push(h.api.fetchReaderView(READING_LINKS[3]), h.api.fetchWeChatArchive(parsed),
+    h.api.fetchBilibiliShortLinkResolution("https://b23.tv/AbCdE12"));
+  assert.equal(h.requests.length, 4, "duplicates share in-flight work");
+  assert.equal(await h.api.fetchBilibiliShortLinkResolution("https://b23.tv/AbCdE14"), null);
+  assert.equal(h.requests.length, 4, "saturation fails open without a queue");
+  release.forEach((finish) => finish());
+  await Promise.all(pending);
+  h.responses.push(reply(403));
+  await h.api.fetchBilibiliShortLinkResolution("https://b23.tv/AbCdE14");
+  assert.equal(h.requests.length, 5, "failed requests release capacity");
+});
+
+test("WeChat polling stops when its switch or configured endpoint/origin changes", async () => {
+  for (const change of [
+    { enable_wechat_inline: false }, { wechat_ingest_endpoint: "" },
+    { wechat_ingest_endpoint: "https://changed.example/api/ingest" },
+    { wechat_archive_origin: "https://changed.example" },
+  ]) {
+    const h = harness(CONFIGURED);
+    h.responses.push(reply(202, { pending: true, retryAfter: 0 }));
+    const pending = h.api.fetchWeChatArchive(h.api.parseBilibiliUrl(READING_LINKS[0]));
+    await new Promise((resolve) => setImmediate(resolve));
+    Object.assign(h.api.themeSettings, change);
+    await h.settle();
+    assert.equal(await pending, null);
+    assert.equal(h.requests.length, 1);
+  }
+});
+
+test("cached archives cannot cross an archive-origin setting change", async () => {
+  const h = harness(CONFIGURED);
+  const parsed = h.api.parseBilibiliUrl(READING_LINKS[0]);
+  const payload = { ok: true, url: `${OTHER_ARCHIVE}/fixture-article`, slug: "fixture-article", orig: parsed.canonicalUrl };
+  h.responses.push(reply(200, payload));
+  assert.ok(await h.api.fetchWeChatArchive(parsed));
+  h.api.themeSettings.wechat_archive_origin = "https://changed.example";
+  h.responses.push(reply(200, payload));
+  assert.equal(await h.api.fetchWeChatArchive(parsed), null);
+  assert.equal(h.requests.length, 2);
+});
+
+test("reader fetch entry point respects the main and per-provider switches", async () => {
+  const h = harness({ ...CONFIGURED, enable_expand_reader: false });
+  assert.equal(await h.api.fetchReaderView(READING_LINKS[3]), null);
+  h.api.themeSettings.enable_expand_reader = true;
+  h.api.themeSettings.enable_zhihu_summary = false;
+  h.api.themeSettings.enable_rdfz_blog_inline = false;
+  assert.equal(await h.api.fetchReaderView(READING_LINKS[1]), null);
+  assert.equal(await h.api.fetchReaderView(READING_LINKS[2]), null);
+  assert.equal(await h.api.fetchReaderView("https://unrelated.example/page"), null);
+  assert.deepEqual(h.requests, []);
+});
+
+test("explicit third-party services preserve archive rendering, reader responses and canonical resolution", async () => {
+  const h = harness(CONFIGURED);
+  const parsed = h.api.parseBilibiliUrl(READING_LINKS[0]);
+  h.responses.push(reply(200, { ok: true, url: `${OTHER_ARCHIVE}/fixture-article`,
+    slug: "fixture-article", orig: parsed.canonicalUrl, title: "Archived fixture" }));
+  const [card] = buildCards(h.api, [READING_LINKS[0]]);
+  h.document.body.appendChild(card);
+  await h.settle();
+  const frame = card.querySelector("iframe");
+  assert.ok(frame, "a matching archive renders");
+  assert.equal(frame.src, `${OTHER_ARCHIVE}/fixture-article`);
+  assert.equal(frame.sandbox, "allow-popups allow-popups-to-escape-sandbox");
+  assert.equal(frame.referrerPolicy, "no-referrer");
+  assert.ok(card.querySelectorAll(".bilibili-inline-player__footer-link")
+    .some((link) => link.href === parsed.canonicalUrl), "source link is retained");
+
+  h.responses.push(reply(200, { ok: true, html: "<p>Readable fixture</p>" }));
+  assert.equal((await h.api.fetchReaderView(READING_LINKS[3])).html, "<p>Readable fixture</p>");
+  h.responses.push(reply(200, { version: 1, canonicalUrl: "https://www.bilibili.com/video/BV1xx411c7mD" }));
+  assert.equal((await h.api.fetchBilibiliShortLinkResolution("https://b23.tv/AbCdE12")).provider, "bilibili");
+  assert.deepEqual(ownerRequests(h.requests), []);
 });

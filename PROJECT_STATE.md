@@ -1,16 +1,24 @@
 # Project state
 
-Last reviewed: 2026-10-09 (America/Los_Angeles)
+Last reviewed: 2026-10-14 (UTC)
 
-## 0.20.0 No built-in backend services (local branch, not released)
+## 0.21.0 Office previews and backend isolation (local integration, not released)
 
-- Branch `security/owner-service-isolation`, based on `0ad9dfa` (0.19.0). Not
-  pushed, merged, or installed; the paused Office-preview branch will be rebased
-  onto it.
+- Local branch `audit/integrated-office-security` is based on Office-preview
+  candidate `c52c380`, which already includes owner-service isolation `81a3f9b`.
+  It integrates only follow-up `62a1a01`; the first isolation repair is not
+  applied twice. The canonical Office branch is unchanged. Nothing is pushed,
+  merged, renamed, or installed.
+- Browser-local DOCX/XLSX/XLS/PPTX previews and the official PDF ownership
+  boundary are preserved. Combined validation passes 179/179 tests on Node
+  24.18.0, including Office fixtures and backend isolation regressions.
 - Public defaults contain no service URL; reader, WeChat, Zhihu, student-blog, and
   short-link features are off until an administrator configures them. Empty or
   invalid endpoints never fall back to another address. WeChat archives must be
   served from the configured `wechat_archive_origin`.
+- Follow-up review added redirect refusal for backend requests, a four-operation
+  page limit, archive-origin-aware deduplication, direct reader switch checks,
+  strict malformed URL rejection, and polling cancellation when settings change.
 - Releasing it to theme 119 requires the operator's explicit settings and backend
   admission controls to be in place first; that ordered plan is private.
 

@@ -182,6 +182,12 @@ class FakeNode {
     }
   }
 
+  prepend(...children) {
+    for (const child of [...children].reverse()) {
+      this.insertBefore(typeof child === "string" ? this.ownerDocument.createTextNode(child) : child, this.childNodes[0]);
+    }
+  }
+
   insertBefore(child, reference) {
     if (!reference) {
       return this.appendChild(child);

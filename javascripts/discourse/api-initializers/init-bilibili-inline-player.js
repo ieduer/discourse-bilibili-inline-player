@@ -4606,6 +4606,23 @@ const WECHAT_ARCHIVE_CACHE_TTL_MS = 5 * 60 * 1000;
 const SHORT_LINK_RESOLUTION_TIMEOUT_MS = 10000;
 const SHORT_LINK_RESOLUTION_CACHE_MAX_ENTRIES = 24;
 const SHORT_LINK_RESOLUTION_CACHE_TTL_MS = 5 * 60 * 1000;
+// One page shares a small pool across all configured backend integrations.
+// Saturation keeps source links available instead of creating a request queue.
+const BACKEND_MAX_CONCURRENT_REQUESTS = 4;
+let activeBackendRequests = 0;
+
+async function withBackendSlot(callback) {
+  if (activeBackendRequests >= BACKEND_MAX_CONCURRENT_REQUESTS) {
+    return null;
+  }
+  activeBackendRequests += 1;
+  try {
+    return await callback();
+  } finally {
+    activeBackendRequests -= 1;
+  }
+}
+
 const DEFAULT_READER_PANE_HEIGHT = 560;
 const DEFAULT_RDFZ_BLOG_COMMENTS_HEIGHT = 360;
 const readerViewCache = new Map();
@@ -4621,7 +4638,7 @@ function getConfiguredServiceUrl(name) {
   const value = themeSettings[name];
   const text = typeof value === "string" ? value.trim() : "";
 
-  if (!text) {
+  if (!text || !/^https?:\/\/[^/]/i.test(text) || /[\\\s]/u.test(text)) {
     return null;
   }
 
@@ -4683,7 +4700,7 @@ function supportsWeChatArchive(parsed) {
 }
 
 function getWeChatArchiveCacheKey(canonicalUrl, endpoint = getWeChatIngestEndpoint()) {
-  return `${endpoint}\n${canonicalUrl}`;
+  return `${endpoint}\n${getWeChatArchiveOrigin()}\n${canonicalUrl}`;
 }
 
 function getCachedWeChatArchive(cacheKey, now = Date.now()) {
@@ -4776,7 +4793,10 @@ async function fetchWeChatArchive(parsed) {
     return cached;
   }
 
-  const request = fetchWeChatArchiveWithRetry(parsed, endpoint);
+  const archiveOrigin = getWeChatArchiveOrigin();
+  const request = withBackendSlot(() =>
+    fetchWeChatArchiveWithRetry(parsed, endpoint, archiveOrigin)
+  );
 
   const entry = storeWeChatArchive(cacheKey, request);
   const result = await request;
@@ -4821,13 +4841,18 @@ function waitForWeChatRetry(delayMs) {
   return new Promise((resolve) => window.setTimeout(resolve, delayMs));
 }
 
-async function fetchWeChatArchiveWithRetry(parsed, endpoint) {
+async function fetchWeChatArchiveWithRetry(parsed, endpoint, archiveOrigin) {
   const deadline = Date.now() + WECHAT_ARCHIVE_MAX_WAIT_MS;
   let networkFailures = 0;
 
   for (let attempt = 0; attempt < WECHAT_ARCHIVE_MAX_ATTEMPTS; attempt += 1) {
     const remainingMs = deadline - Date.now();
-    if (remainingMs <= 0) {
+    if (
+      remainingMs <= 0 ||
+      !supportsWeChatArchive(parsed) ||
+      endpoint !== getWeChatIngestEndpoint() ||
+      archiveOrigin !== getWeChatArchiveOrigin()
+    ) {
       return null;
     }
 
@@ -4842,6 +4867,7 @@ async function fetchWeChatArchiveWithRetry(parsed, endpoint) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: parsed.canonicalUrl }),
+        redirect: "error",
         credentials: "omit",
         referrerPolicy: "no-referrer",
         signal: controller.signal,
@@ -4869,7 +4895,15 @@ async function fetchWeChatArchiveWithRetry(parsed, endpoint) {
         return null;
       }
 
-      return normalizeWeChatArchivePayload(await response.json(), parsed);
+      const payload = await response.json();
+      if (
+        !supportsWeChatArchive(parsed) ||
+        endpoint !== getWeChatIngestEndpoint() ||
+        archiveOrigin !== getWeChatArchiveOrigin()
+      ) {
+        return null;
+      }
+      return normalizeWeChatArchivePayload(payload, parsed);
     } catch {
       networkFailures += 1;
       if (
@@ -5001,7 +5035,7 @@ async function fetchBilibiliShortLinkResolution(shortUrl) {
     return cached;
   }
 
-  const request = (async () => {
+  const request = withBackendSlot(async () => {
     const requestUrl = new URL(endpoint);
     const controller = new AbortController();
     const timer = window.setTimeout(
@@ -5014,6 +5048,7 @@ async function fetchBilibiliShortLinkResolution(shortUrl) {
     try {
       const response = await fetch(requestUrl.toString(), {
         method: "GET",
+        redirect: "error",
         credentials: "omit",
         referrerPolicy: "no-referrer",
         signal: controller.signal,
@@ -5045,7 +5080,7 @@ async function fetchBilibiliShortLinkResolution(shortUrl) {
     } finally {
       window.clearTimeout(timer);
     }
-  })();
+  });
 
   const entry = storeShortLinkResolution(cacheKey, request);
   const result = await request;
@@ -5123,7 +5158,7 @@ function storeReaderRequest(cacheKey, promise, now = Date.now()) {
 async function fetchReaderView(canonicalUrl) {
   const endpoint = getExpandReaderEndpoint();
 
-  if (!endpoint) {
+  if (!endpoint || !supportsExpandReader(parseBilibiliUrl(canonicalUrl))) {
     return null;
   }
 
@@ -5134,7 +5169,7 @@ async function fetchReaderView(canonicalUrl) {
     return cached;
   }
 
-  const request = (async () => {
+  const request = withBackendSlot(async () => {
     const requestUrl = new URL(endpoint);
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), READER_TIMEOUT_MS);
@@ -5144,6 +5179,7 @@ async function fetchReaderView(canonicalUrl) {
     try {
       const response = await fetch(requestUrl.toString(), {
         method: "GET",
+        redirect: "error",
         credentials: "omit",
         referrerPolicy: "no-referrer",
         signal: controller.signal,
@@ -5161,7 +5197,7 @@ async function fetchReaderView(canonicalUrl) {
     } finally {
       window.clearTimeout(timer);
     }
-  })();
+  });
 
   const entry = storeReaderRequest(cacheKey, request);
   const result = await request;
