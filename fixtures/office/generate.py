@@ -4,11 +4,11 @@ Every value below is invented for testing; no user content is involved.
 
     python3 -m venv <TMP>/pyenv
     <TMP>/pyenv/bin/pip install python-docx==1.2.0 python-pptx==1.0.2 openpyxl==3.1.5
-    <TMP>/pyenv/bin/python test/fixtures/office/generate.py
+    <TMP>/pyenv/bin/python fixtures/office/generate.py
     soffice --headless -env:UserInstallation=file://<TMP>/lo-profile \
-      --convert-to xlsx --outdir <TMP>/lo-out test/fixtures/office/sample-source.xlsx
+      --convert-to xlsx --outdir <TMP>/lo-out fixtures/office/sample-source.xlsx
     soffice --headless -env:UserInstallation=file://<TMP>/lo-profile \
-      --convert-to xls --outdir <TMP>/lo-out test/fixtures/office/sample-source.xlsx
+      --convert-to xls --outdir <TMP>/lo-out fixtures/office/sample-source.xlsx
 
 The LibreOffice round trip stores calculated values for formula cells, which
 is what a workbook saved by a spreadsheet application contains. Copy the

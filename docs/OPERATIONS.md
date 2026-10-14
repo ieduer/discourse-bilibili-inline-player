@@ -7,6 +7,17 @@ This is the canonical operational procedure for the Extended Preview & Embed Sui
 action, and this file owns executable test, release, readback, restore, and rollback
 steps. Live Discourse and GitHub readback override this document when they disagree.
 
+## 0.21.1 Import failure correction
+
+Discourse imports all `test/` descendants as JavaScript text fields without an
+extension filter. Keep binary fixtures outside that directory: `fixtures/office/`
+is ignored by the remote theme importer and remains available to Node tests.
+The fixture loader and generator paths follow that location. A fatal UTF-8 decode
+regression covers the imported test tree. This is a package-layout correction;
+runtime modules, vendored assets and feature settings are unchanged. Run the full
+suite and ordinary publication gate; settings/backend migration still precedes
+installing the Office/isolation release. Do not change server encoding or core.
+
 ## 0.21.0 Office/security integration (prepared 2026-10-14, not released)
 
 The integration branch starts at Office candidate `c52c380` and adds only

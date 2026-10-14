@@ -69,5 +69,5 @@ export function loadWorkerBundle() {
 }
 
 export function readFixture(name) {
-  return new Uint8Array(readFileSync(new URL(`../fixtures/office/${name}`, import.meta.url)));
+  return new Uint8Array(readFileSync(new URL(`../../fixtures/office/${name}`, import.meta.url)));
 }

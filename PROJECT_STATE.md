@@ -2,6 +2,19 @@
 
 Last reviewed: 2026-10-14 (UTC)
 
+## 0.21.1 Office fixture import correction
+
+- Discourse treats every file under `test/` as a JavaScript theme field, including
+  binary Office fixtures. Importing those files raised `invalid byte sequence in
+  UTF-8` before the new version was installed.
+- Move synthetic Office fixtures and their generator to top-level `fixtures/`,
+  which the Discourse theme importer excludes. Update the Node fixture loader;
+  no preview runtime code, asset content or feature settings change.
+- Add a regression that checks every file under the imported `test/` tree is
+  valid UTF-8. Existing Office parser tests continue to use the same fixture bytes.
+- This correction does not waive the explicit settings/backend prerequisites
+  for upgrading from the pre-isolation version.
+
 ## 0.21.0 Office previews and backend isolation (local integration, not released)
 
 - Local branch `audit/integrated-office-security` is based on Office-preview
