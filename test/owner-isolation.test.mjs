@@ -6,6 +6,7 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import vm from "node:vm";
 import { FakeDocument } from "./helpers/fake-dom.mjs";
+import { documentPreviewBindings } from "./helpers/initializer.mjs";
 
 const initializerUrl = new URL(
   "../javascripts/discourse/api-initializers/init-bilibili-inline-player.js",
@@ -83,6 +84,7 @@ function harness(overrides = {}) {
   };
 
   const context = {
+    ...documentPreviewBindings,
     AbortController,
     console,
     document,

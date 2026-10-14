@@ -2,14 +2,14 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import vm from "node:vm";
+import { documentPreviewBindings, stripInitializerImports } from "./helpers/initializer.mjs";
 
 const initializerUrl = new URL(
   "../javascripts/discourse/api-initializers/init-bilibili-inline-player.js",
   import.meta.url
 );
 const initializerSource = await readFile(initializerUrl, "utf8");
-const executableSource = initializerSource
-  .replace(/^import \{ apiInitializer \} from "discourse\/lib\/api";\n/u, "")
+const executableSource = stripInitializerImports(initializerSource)
   .replace("export default apiInitializer((api) => {", "const themeInitializer = apiInitializer((api) => {")
   .concat(`
 globalThis.__themeParserTestApi = {
@@ -120,6 +120,7 @@ function restoreSetting(name) {
 }
 
 const context = {
+  ...documentPreviewBindings,
   AbortController,
   apiInitializer: (callback) => callback,
   console,
@@ -716,6 +717,23 @@ test("keeps surrounding pasted share text when adding a source card", () => {
   assert.equal(block.dataset.bilibiliInlinePlayer, "done");
   assert.deepEqual(inserted, { position: "afterend", element: replacement });
   assert.equal(replaced, false);
+});
+
+test("bare share text inside an existing preview never becomes a second card", () => {
+  // A converted Office document or reader pane can contain paragraphs with
+  // pasted share text; re-decorating the post must leave them alone.
+  const insidePreview = {
+    dataset: {},
+    querySelector: () => null,
+    textContent: "复制后打开（xhslink.com/o/Fixture123），查看笔记",
+    closest: (selector) =>
+      selector === ".bilibili-inline-player, [data-bilibili-inline-player]" ? {} : null,
+  };
+  const cooked = {
+    querySelectorAll: (selector) => (selector === "p" ? [insidePreview] : []),
+  };
+
+  assert.equal(collectEmbedTextCandidates(cooked, []).length, 0);
 });
 
 test("rejects lookalike hosts, unsupported paths, credentials, and custom ports", () => {

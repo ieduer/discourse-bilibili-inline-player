@@ -1,0 +1,15 @@
+{
+  "name": "rich-embeds-vendor-build",
+  "private": true,
+  "description": "Pinned build inputs for the self-hosted Office preview assets. Not loaded by Discourse.",
+  "dependencies": {
+    "@aiden0z/pptx-renderer": "1.3.0",
+    "@xmldom/xmldom": "0.8.15",
+    "fflate": "0.8.3",
+    "mammoth": "1.13.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

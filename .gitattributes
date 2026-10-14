@@ -1,0 +1,6 @@
+# Generated, hash-pinned vendor artifacts (vendor-src/build.mjs). Their bytes,
+# including license text and significant whitespace in minified code, must not
+# be normalized, so whitespace checks do not apply to them.
+assets/vendor/office-preview-worker.js -whitespace
+assets/vendor/pptx-renderer.js -whitespace
+assets/vendor/office-preview-THIRD-PARTY.txt -whitespace

@@ -39,6 +39,52 @@ ebook_reader_height:
   max: 1000
   description: Desktop inline ebook reader height in pixels; mobile uses a viewport-relative height.
 
+enable_office_preview:
+  default: true
+  type: bool
+  description: Show a preview card for uploaded DOCX, XLSX, XLS, and PPTX attachments. Files load only after a reader clicks Preview, are parsed in the reader's browser, and are never sent to a third party. Legacy DOC/PPT and macro-enabled files are labelled unsupported. Disable to leave Office attachments as plain links.
+
+office_preview_max_size_mb:
+  default: 20
+  type: integer
+  min: 1
+  max: 50
+  description: Largest Office attachment, in MiB, that the in-browser preview downloads. Larger files keep their download link. Decompressed content is limited separately inside the preview worker.
+
+office_preview_timeout_seconds:
+  default: 45
+  type: integer
+  min: 10
+  max: 120
+  description: Time limit for downloading and parsing one Office attachment. The parser runs in a Web Worker that is terminated when the limit is reached or the reader cancels.
+
+office_preview_height:
+  default: 640
+  type: integer
+  min: 360
+  max: 1200
+  description: Height in pixels of an open Office preview inside a post; phones use at most 70% of the screen height. Full-screen reading mode uses the whole window.
+
+office_preview_trusted_origins:
+  default: ""
+  type: list
+  list_type: simple
+  description: Extra HTTPS origins (for example https://files.example.com) that may serve or redirect Office attachments for in-browser preview. The forum's own origin and the upload CDN and bucket announced by Discourse are always trusted; nothing else is fetched.
+
+office_external_viewer:
+  default: disabled
+  type: enum
+  choices:
+    - disabled
+    - microsoft
+  description: "Optional external viewer. 'microsoft' offers readers a separate, explicitly confirmed action that sends the attachment's URL to Microsoft's Office Online viewer, whose servers then download the file. Only attachments under the public URL prefixes below, in public categories of a site without login_required or secure_uploads, are eligible; private messages and protected uploads never are."
+
+office_external_viewer_url_prefixes:
+  default: ""
+  type: list
+  list_type: simple
+  description: HTTPS URL prefixes ending in / (for example https://forum.example.com/uploads/short-url/) whose attachments an administrator certifies as publicly downloadable without login. Required before the external viewer is offered for any attachment. Leave empty to keep every Office preview inside the reader's browser.
+
 show_open_link:
   default: true
   type: bool

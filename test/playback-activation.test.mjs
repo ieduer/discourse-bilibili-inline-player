@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import vm from "node:vm";
+import { documentPreviewBindings, stripInitializerImports } from "./helpers/initializer.mjs";
 
 const source = await readFile(
   new URL("../javascripts/discourse/api-initializers/init-bilibili-inline-player.js", import.meta.url),
@@ -50,6 +51,7 @@ function harness(settings = {}) {
   const opened = [];
   const context = {
     URL, URLSearchParams, console, settings,
+    ...documentPreviewBindings,
     apiInitializer: (callback) => callback,
     document: {
       createElement(tag) {
@@ -60,8 +62,7 @@ function harness(settings = {}) {
     },
     window: { setTimeout() {}, open: (...args) => opened.push(args) },
   };
-  vm.runInNewContext(source
-    .replace(/^import \{ apiInitializer \} from "discourse\/lib\/api";\n/u, "")
+  vm.runInNewContext(stripInitializerImports(source)
     .replace("export default apiInitializer((api) => {", "const themeInitializer = apiInitializer((api) => {")
     .concat(`
       fetchVideoInfo = async () => { throw new Error("Fixture metadata unavailable"); };

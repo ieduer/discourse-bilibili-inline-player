@@ -4,8 +4,10 @@
   "license_url": "https://github.com/ieduer/discourse-bilibili-inline-player/blob/main/LICENSE",
   "component": true,
   "authors": "suen",
-  "theme_version": "0.20.0",
+  "theme_version": "0.21.0",
   "assets": {
-    "foliate_reader": "assets/vendor/foliate-reader.min.js"
+    "foliate_reader": "assets/vendor/foliate-reader.min.js",
+    "office_preview_worker": "assets/vendor/office-preview-worker.js",
+    "pptx_renderer": "assets/vendor/pptx-renderer.js"
   }
 }

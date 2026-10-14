@@ -1,4 +1,10 @@
 import { apiInitializer } from "discourse/lib/api";
+import {
+  collectDocumentCandidates,
+  createDocumentPreviewHost,
+  disposeDisconnectedCards,
+  placeDocumentCards,
+} from "../lib/document-preview/index.js";
 
 const VIDEO_HOSTS = new Set(["www.bilibili.com", "m.bilibili.com", "bilibili.com"]);
 const ARTICLE_HOSTS = new Set(["www.bilibili.com", "m.bilibili.com"]);
@@ -7110,7 +7116,11 @@ function collectEmbedTextCandidates(element, existingTargets) {
       break;
     }
 
-    if (seen.has(block) || block.dataset?.bilibiliInlinePlayer) {
+    if (
+      seen.has(block) ||
+      block.dataset?.bilibiliInlinePlayer ||
+      block.closest?.(".bilibili-inline-player, [data-bilibili-inline-player]")
+    ) {
       continue;
     }
 
@@ -7235,7 +7245,15 @@ export default apiInitializer((api) => {
     viewerIsStaff = false;
   }
 
-  api.decorateCookedElement((element) => {
+  const documentPreviewHost = createDocumentPreviewHost({
+    settings: themeSettings,
+    siteSettings: api.container?.lookup?.("service:site-settings"),
+    loadThemeModule,
+  });
+
+  api.onPageChange?.(() => disposeDisconnectedCards(documentPreviewHost));
+
+  api.decorateCookedElement((element, helper) => {
     const insertionCursors = new WeakMap();
     const oneboxCandidates = collectOneboxCandidates(element);
     const standaloneCandidates = collectStandaloneCandidates(
@@ -7254,6 +7272,16 @@ export default apiInitializer((api) => {
         ...visibleUrlCandidates,
       ].map((candidate) => candidate.target)
     );
+    const documentCandidates = collectDocumentCandidates(element, {
+      host: documentPreviewHost,
+      limit: Math.max(1, getIntegerSetting("max_embeds_per_post", 4)),
+      usedSlots:
+        oneboxCandidates.length +
+        standaloneCandidates.length +
+        visibleUrlCandidates.length +
+        ebookAttachmentCandidates.length,
+    });
+    const documentTargets = documentCandidates.map((candidate) => candidate.anchor);
     const iframeCandidates = collectIframeCandidates(
       element,
       [
@@ -7261,7 +7289,7 @@ export default apiInitializer((api) => {
         ...standaloneCandidates,
         ...visibleUrlCandidates,
         ...ebookAttachmentCandidates,
-      ].map((candidate) => candidate.target)
+      ].map((candidate) => candidate.target).concat(documentTargets)
     );
     const embedTextCandidates = collectEmbedTextCandidates(
       element,
@@ -7271,7 +7299,7 @@ export default apiInitializer((api) => {
         ...visibleUrlCandidates,
         ...ebookAttachmentCandidates,
         ...iframeCandidates,
-      ].map((candidate) => candidate.target)
+      ].map((candidate) => candidate.target).concat(documentTargets)
     );
 
     void replaceCandidates([
@@ -7282,5 +7310,10 @@ export default apiInitializer((api) => {
       ...iframeCandidates,
       ...embedTextCandidates,
     ], insertionCursors);
+
+    /* Office cards keep the original attachment line and are inserted after
+       it; the returned cleanup cancels any preview when Discourse re-renders
+       or removes this post. */
+    return placeDocumentCards(documentCandidates, { host: documentPreviewHost, helper }) || undefined;
   });
 });
