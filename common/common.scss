@@ -468,6 +468,15 @@
   line-height: 1.5;
 }
 
+.bilibili-inline-player__reading-admin-hint {
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-left: 3px solid var(--tertiary, #08c);
+  background: color-mix(in srgb, var(--tertiary, #08c) 8%, transparent);
+  color: var(--primary-high, #444);
+  font-size: 0.85em;
+}
+
 .bilibili-inline-player__reading-status--error {
   color: var(--danger, #b42318);
 }

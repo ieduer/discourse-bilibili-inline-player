@@ -60,24 +60,24 @@ enable_xiaohongshu_inline_page:
   description: Automatically expand the official Xiaohongshu or RedNote note page in a lazy-loaded iframe. Disable to keep content-rich cards with an external source link only.
 
 enable_expand_reader:
-  default: true
+  default: false
   type: bool
-  description: Expand the full text of sources that refuse to be framed or read by the browser, using the shared BDFZ expand-reader service. Disable to fall back to link-only source cards.
+  description: Expand the full text of sources that refuse to be framed or read by the browser (marxists.org documents, and the providers enabled below) through the reader service you configure in expand_reader_endpoint. Off by default; nothing is requested until both this switch and the endpoint are set. Unavailable or failed requests keep link-only source cards.
 
 enable_short_link_resolution:
   default: false
   type: bool
-  description: Resolve opaque b23.tv and bili2233.cn video share links through the configured expand-reader service. Disabled by default as an independent fail-open circuit breaker.
+  description: Resolve opaque b23.tv, bili2233.cn, and 163cn.tv share links through the /resolve path of your configured reader service. Independent of enable_expand_reader; requires expand_reader_endpoint. Off by default.
 
 enable_zhihu_summary:
-  default: true
+  default: false
   type: bool
-  description: Read an exact question, answer, or article match from Zhihu's official search API through expand-reader and show only its bounded summary. Disable to keep link-only source cards.
+  description: Show a bounded summary for exact Zhihu question, answer, or article links through your configured reader service (requires enable_expand_reader and expand_reader_endpoint). Off by default; disabled links stay source cards.
 
 enable_rdfz_blog_inline:
-  default: true
+  default: false
   type: bool
-  description: Expand rdfz.net student blog articles (<handle>.rdfz.net/p/<slug>) inline through the shared BDFZ expand-reader service. That platform refuses framing and cross-origin reads, so disabling this leaves link-only source cards.
+  description: Expand rdfz.net student blog articles (<handle>.rdfz.net/p/<slug>) through your configured reader service (requires enable_expand_reader and expand_reader_endpoint). That platform refuses framing and cross-origin reads, so without a reader service these stay link-only source cards. Off by default.
 
 enable_rdfz_blog_comments:
   default: true
@@ -92,9 +92,9 @@ rdfz_blog_comments_height:
   description: Height in pixels of the reply list under an expanded student blog article before the replies scroll on their own. The replies always sit beside the article's scroll box, never inside it.
 
 enable_wechat_inline:
-  default: true
+  default: false
   type: bool
-  description: Convert supported mp.weixin.qq.com article links through wx.bdfz.net and show the archived full text inline by default. The original WeChat link remains available on every success or failure.
+  description: Convert supported mp.weixin.qq.com article links through the archive service you configure in wechat_ingest_endpoint and wechat_archive_origin, and show the archived full text inline. Off by default. The original WeChat link remains available on every success or failure.
 
 enable_bdfz_posts_inline:
   default: true
@@ -157,21 +157,26 @@ instagram_embed_max_height:
   description: Ceiling in pixels for the height an inline Instagram post may grow to from Instagram's own size reports. A post taller than this scrolls inside the card.
 
 wechat_ingest_endpoint:
-  default: "https://wx.bdfz.net/api/ingest"
+  default: ""
   type: string
-  description: Exact HTTPS ingestion endpoint for the operator-owned WeChat archive. For safety this component accepts only https://wx.bdfz.net/api/ingest.
+  description: HTTPS ingestion endpoint of a WeChat archive service you operate (for example https://archive.example.com/api/ingest). Empty means unavailable; there is no built-in service. The service must admit this forum's readers through its own authorization policy.
+
+wechat_archive_origin:
+  default: ""
+  type: string
+  description: HTTPS origin, without a path, that serves your archived WeChat articles (for example https://archive.example.com). A conversion result is shown only when its URL is exactly <this origin>/<slug>; any other returned URL is rejected. Required together with wechat_ingest_endpoint.
 
 wechat_embed_height:
   default: 720
   type: integer
   min: 360
   max: 1400
-  description: Height in pixels of the inline wx.bdfz.net full-text archive before the embedded article scrolls internally.
+  description: Height in pixels of the inline archived WeChat full text before the embedded article scrolls internally.
 
 expand_reader_endpoint:
-  default: "https://reader.bdfz.net/read"
+  default: ""
   type: string
-  description: HTTPS endpoint of the shared expand-reader service. Must be a service you operate; it is called with the linked page URL and returns an already-sanitized reading fragment.
+  description: HTTPS endpoint of a reader service you operate (for example https://reader.example.com/read). It is called with the linked page URL and returns a reading fragment that this component sanitizes again. Empty means unavailable; there is no built-in service.
 
 expand_reader_height:
   default: 560

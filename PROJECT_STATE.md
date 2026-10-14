@@ -2,6 +2,18 @@
 
 Last reviewed: 2026-10-09 (America/Los_Angeles)
 
+## 0.20.0 No built-in backend services (local branch, not released)
+
+- Branch `security/owner-service-isolation`, based on `0ad9dfa` (0.19.0). Not
+  pushed, merged, or installed; the paused Office-preview branch will be rebased
+  onto it.
+- Public defaults contain no service URL; reader, WeChat, Zhihu, student-blog, and
+  short-link features are off until an administrator configures them. Empty or
+  invalid endpoints never fall back to another address. WeChat archives must be
+  served from the configured `wechat_archive_origin`.
+- Releasing it to theme 119 requires the operator's explicit settings and backend
+  admission controls to be in place first; that ordered plan is private.
+
 ## 0.19.0 Whole-post X and Instagram frames, escaped links
 
 - Symptom (forum topic 14060, 2026-10-09): an X link stayed a bare link. Its raw

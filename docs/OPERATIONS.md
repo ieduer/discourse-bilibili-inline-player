@@ -7,6 +7,30 @@ This is the canonical operational procedure for the Extended Preview & Embed Sui
 action, and this file owns executable test, release, readback, restore, and rollback
 steps. Live Discourse and GitHub readback override this document when they disagree.
 
+## 0.20.0 No built-in backend services (prepared 2026-10-14, not released)
+
+Public defaults no longer name or fall back to any operator service:
+`expand_reader_endpoint`, `wechat_ingest_endpoint`, and the new
+`wechat_archive_origin` default to empty, and `enable_expand_reader`,
+`enable_wechat_inline`, `enable_zhihu_summary`, and `enable_rdfz_blog_inline`
+default to `false` (`enable_short_link_resolution` was already `false`). An empty
+or invalid value disables the feature; returned WeChat archive URLs must equal
+`<wechat_archive_origin>/<slug>`. WeChat polling is capped at 16 attempts and
+three minutes with 2–15 s backoff. Media embeds and the ebook reader are unchanged.
+
+Effect on an installed component: Discourse stores only settings an administrator
+changed. Any of the settings above that still inherits its default will switch to
+the new default on update, which turns that feature off. Theme 119 therefore must
+receive explicit values for every setting it relies on **before** it is updated to
+this release, and the backend services must already enforce their own admission
+policy for the explicitly configured forum. The ordered, private rollout and the
+exact theme 119 values are kept outside this public repository in the operator's
+operations records; do not copy them here.
+
+Validation: `npm test` (129 tests, including `test/owner-isolation.test.mjs`, which
+records every request a clean installation attempts) plus the standard syntax,
+JSON, YAML, diff, and Foliate hash checks.
+
 ## 0.19.0 Whole-post X and Instagram frames, escaped links (2026-10-09)
 
 Scope: canonical GitHub source only; the user owns the manual theme 119 refresh.
@@ -237,7 +261,7 @@ contract change. Roll back theme 119 to exact source `7ddffd5`.
 - Canonical checkout: `/Users/ylsuen/Discourse/discourse-bilibili-inline-player`.
 - Repository: `https://github.com/ieduer/discourse-bilibili-inline-player.git`, branch `main`.
 - Runtime target: `forum.rdfzer.com`, Discourse remote theme component `119`.
-- Reader dependencies: `https://reader.bdfz.net/read`, owned by `expand-reader`, and `https://wx.bdfz.net/api/ingest`, owned by `wx-ingest`; BDFZ posts frame their public `https://bdfz.net/posts/<article>/` source directly.
+- Reader dependencies of the operator instance (explicit theme 119 settings, not public defaults since 0.20.0): `https://reader.bdfz.net/read`, owned by `expand-reader`, and `https://wx.bdfz.net/api/ingest`, owned by `wx-ingest`; BDFZ posts frame their public `https://bdfz.net/posts/<article>/` source directly.
 - Health: forum `/`, `/srv/status`; reader `/health`; `wx.bdfz.net/health`; then real cooked-post acceptance.
 - Deploy prohibition: never rebuild Discourse, edit `app.yml`, or mutate forum content for a theme release.
 - Release gate: clean exact source, tests, GitHub push, exact-SHA hosted-CI readback, guarded theme refresh, database readback, public health, and browser acceptance. A zero-step GitHub billing rejection may use only the bounded local-CI exception below; a real test failure may not.
@@ -454,20 +478,22 @@ PDF remains owned by the official `discourse-pdf-previews` component.
 
 Reader settings:
 
-- `enable_expand_reader`: immediate containment switch; default `true`.
+- `enable_expand_reader`: immediate containment switch; default `false` since 0.20.0.
 - `enable_short_link_resolution`: independent Bilibili opaque-short-link switch;
   default `false`. It has no effect when the reader endpoint is invalid.
-- `enable_zhihu_summary`: Zhihu summary-only switch; default `true`. It has no
+- `enable_zhihu_summary`: Zhihu summary-only switch; default `false` since 0.20.0. It has no
   effect when the main reader switch or endpoint is unavailable.
-- `expand_reader_endpoint`: operator-controlled HTTPS endpoint; default
-  `https://reader.bdfz.net/read`; HTTP is accepted only for exact loopback development.
+- `expand_reader_endpoint`: operator-controlled HTTPS endpoint; default empty
+  (unavailable) since 0.20.0; HTTP is accepted only for exact loopback development.
 - `expand_reader_height`: bounded `240`–`1200`, default `560` pixels.
 - `enable_marxists_inline_media`: native archive audio/video switch; independent of document text.
 
 WeChat settings:
 
-- `enable_wechat_inline`: immediate WeChat containment switch; default `true`.
-- `wechat_ingest_endpoint`: must be exactly `https://wx.bdfz.net/api/ingest`.
+- `enable_wechat_inline`: immediate WeChat containment switch; default `false` since 0.20.0.
+- `wechat_ingest_endpoint`: administrator-configured HTTPS endpoint; default empty.
+- `wechat_archive_origin`: administrator-configured HTTPS origin; default empty. A
+  result is shown only when its URL equals `<origin>/<slug>`.
 - `wechat_embed_height`: bounded `360`–`1400`, default `720` pixels.
 
 X settings:

@@ -97,12 +97,34 @@ globalThis.__themeParserTestApi = {
   wrapperState,
 };
 `);
+/* Since 0.20.0 the component has no built-in backend. These behavioural
+   tests describe an installation whose administrator has explicitly
+   configured reader and WeChat archive services, as an operator-run forum
+   must; owner-isolation.test.mjs covers a clean installation. */
+const OPERATOR_CONFIGURATION = Object.freeze({
+  enable_expand_reader: true,
+  enable_zhihu_summary: true,
+  enable_rdfz_blog_inline: true,
+  enable_wechat_inline: true,
+  expand_reader_endpoint: "https://reader.bdfz.net/read",
+  wechat_ingest_endpoint: "https://wx.bdfz.net/api/ingest",
+  wechat_archive_origin: "https://wx.bdfz.net",
+});
+
+function restoreSetting(name) {
+  if (Object.hasOwn(OPERATOR_CONFIGURATION, name)) {
+    themeSettings[name] = OPERATOR_CONFIGURATION[name];
+  } else {
+    delete themeSettings[name];
+  }
+}
+
 const context = {
   AbortController,
   apiInitializer: (callback) => callback,
   console,
   fetch: globalThis.fetch,
-  settings: {},
+  settings: { ...OPERATOR_CONFIGURATION },
   URL,
   URLSearchParams,
   window: { clearTimeout, setTimeout },
@@ -955,7 +977,7 @@ test("parses only exact bdfz.net article pages and defaults them to an inline fu
   assert.equal(isKnownInlineKind(parsed), false);
   assert.equal(shouldAutoExpandEmbed(parsed), false);
   assert.equal(getFooterMeta(parsed), "bdfz.net 原文链接");
-  delete themeSettings.enable_bdfz_posts_inline;
+  restoreSetting("enable_bdfz_posts_inline");
 
   for (const source of [
     "https://bdfz.net/posts/",
@@ -1176,7 +1198,7 @@ test("marxists documents stay cards and never claim an inline renderer", () => {
   assert.equal(shouldAutoExpandEmbed(document), false);
   assert.equal(shouldShowDirectSourceLink(document), true);
   assert.equal(getOpenLabel(document), "在马克思主义文库打开");
-  assert.equal(getFooterMeta(document), "原文经 BDFZ 阅读服务展开 · 该站禁止页面被外部内嵌");
+  assert.equal(getFooterMeta(document), "原文经阅读服务展开 · 该站禁止页面被外部内嵌");
 
   const ebook = parseBilibiliUrl("https://www.marxists.org/ebooks/marx/capital.epub");
 
@@ -1440,7 +1462,7 @@ test("counts BR-delimited share cards against max_embeds_per_post", () => {
 
   themeSettings.max_embeds_per_post = 2;
   assert.equal(collectVisibleUrlCandidates(cooked, []).length, 2);
-  delete themeSettings.max_embeds_per_post;
+  restoreSetting("max_embeds_per_post");
 });
 
 test("trims pasted URL punctuation only in the visible-link candidate path", () => {
@@ -1480,7 +1502,7 @@ test("collects mixed-text opaque short links only when the resolver is enabled",
     assert.equal(candidate.metadataTextToOmit, `${shortUrl}】`);
     assert.equal(candidate.preserveSource, true);
   } finally {
-    delete themeSettings.enable_short_link_resolution;
+    restoreSetting("enable_short_link_resolution");
   }
 });
 
@@ -1504,8 +1526,8 @@ test("opaque short links count against max_embeds_per_post before resolution", (
     assert.equal(candidates[0].shortUrl, "https://b23.tv/Code0001");
     assert.equal(candidates[0].preserveSource, true);
   } finally {
-    delete themeSettings.enable_short_link_resolution;
-    delete themeSettings.max_embeds_per_post;
+    restoreSetting("enable_short_link_resolution");
+    restoreSetting("max_embeds_per_post");
   }
 });
 
@@ -1547,7 +1569,7 @@ test("pending short-link resolution blocks re-decoration and fails open", async 
     assert.equal(fixture.paragraph.dataset.bilibiliInlinePlayer, "done");
   } finally {
     shortLinkResolutionCache.clear();
-    delete themeSettings.enable_short_link_resolution;
+    restoreSetting("enable_short_link_resolution");
     context.fetch = originalFetch;
   }
 });
@@ -1696,15 +1718,15 @@ test("documents route through the shared expand-reader service, media does not",
   const zhihu = parseBilibiliUrl("https://www.zhihu.com/question/123");
 
   assert.equal(supportsExpandReader(zhihu), true, "Zhihu uses summary-only reader output");
-  assert.equal(getFooterMeta(zhihu), "知乎官方摘要经 BDFZ 阅读服务展开 · 完整内容请打开原文");
+  assert.equal(getFooterMeta(zhihu), "知乎官方摘要经阅读服务展开 · 完整内容请打开原文");
 
   themeSettings.enable_zhihu_summary = false;
   assert.equal(supportsExpandReader(zhihu), false);
   assert.equal(getFooterMeta(zhihu), "知乎原文卡片");
-  delete themeSettings.enable_zhihu_summary;
+  restoreSetting("enable_zhihu_summary");
 });
 
-test("WeChat uses only the exact operator archive endpoint and defaults to full-text mode", () => {
+test("WeChat uses only the administrator's configured archive service", () => {
   const parsed = parseBilibiliUrl("https://mp.weixin.qq.com/s/Fixture123");
 
   assert.equal(supportsWeChatArchive(parsed), true);
@@ -1717,21 +1739,30 @@ test("WeChat uses only the exact operator archive endpoint and defaults to full-
   themeSettings.enable_wechat_inline = false;
   assert.equal(supportsWeChatArchive(parsed), false);
   assert.equal(getFooterMeta(parsed), "微信原文卡片");
-  delete themeSettings.enable_wechat_inline;
+  restoreSetting("enable_wechat_inline");
 
+  // Unsafe or ambiguous values disable the feature rather than being repaired.
   for (const endpoint of [
+    "",
     "http://wx.bdfz.net/api/ingest",
-    "https://wx.bdfz.net.evil.example/api/ingest",
     "https://user:pass@wx.bdfz.net/api/ingest",
-    "https://wx.bdfz.net:444/api/ingest",
-    "https://wx.bdfz.net/api/other",
     "https://wx.bdfz.net/api/ingest?refresh=1",
+    "https://wx.bdfz.net/api/ingest#x",
+    "not a url",
   ]) {
     themeSettings.wechat_ingest_endpoint = endpoint;
     assert.equal(getWeChatIngestEndpoint(), "", endpoint);
     assert.equal(supportsWeChatArchive(parsed), false, endpoint);
   }
-  delete themeSettings.wechat_ingest_endpoint;
+
+  // Any HTTPS service the administrator runs is acceptable.
+  themeSettings.wechat_ingest_endpoint = "https://archive.example.org:8443/v1/ingest";
+  assert.equal(getWeChatIngestEndpoint(), "https://archive.example.org:8443/v1/ingest");
+  restoreSetting("wechat_ingest_endpoint");
+
+  themeSettings.wechat_archive_origin = "";
+  assert.equal(supportsWeChatArchive(parsed), false, "an archive origin is required");
+  restoreSetting("wechat_archive_origin");
 });
 
 test("WeChat archive responses require an exact source echo and wx.bdfz.net slug", () => {
@@ -1987,8 +2018,8 @@ test("short-link resolution derives a same-origin endpoint behind an independent
     themeSettings.expand_reader_endpoint = "http://reader.example/read";
     assert.equal(getBilibiliShortResolverEndpoint(), "");
   } finally {
-    delete themeSettings.enable_short_link_resolution;
-    delete themeSettings.expand_reader_endpoint;
+    restoreSetting("enable_short_link_resolution");
+    restoreSetting("expand_reader_endpoint");
   }
 });
 
@@ -2040,7 +2071,7 @@ test("short-link requests share one in-flight fetch and revalidate the response 
     assert.equal(requestedOptions.referrerPolicy, "no-referrer");
   } finally {
     shortLinkResolutionCache.clear();
-    delete themeSettings.enable_short_link_resolution;
+    restoreSetting("enable_short_link_resolution");
     context.fetch = originalFetch;
   }
 });
@@ -2078,7 +2109,7 @@ test("invalid resolver payloads fail open and are evicted for a later retry", as
     assert.equal(calls, 2);
   } finally {
     shortLinkResolutionCache.clear();
-    delete themeSettings.enable_short_link_resolution;
+    restoreSetting("enable_short_link_resolution");
     context.fetch = originalFetch;
   }
 });
@@ -2130,7 +2161,7 @@ test("the reader is skipped when disabled or pointed at a non-HTTPS endpoint", (
   themeSettings.enable_expand_reader = false;
   assert.equal(supportsExpandReader(document), false);
   assert.equal(getFooterMeta(document), "马克思主义文库原文卡片 · 该站禁止页面被外部内嵌");
-  delete themeSettings.enable_expand_reader;
+  restoreSetting("enable_expand_reader");
 
   themeSettings.expand_reader_endpoint = "http://reader.example/read";
   assert.equal(supportsExpandReader(document), false, "plaintext endpoints are refused");
@@ -2140,7 +2171,7 @@ test("the reader is skipped when disabled or pointed at a non-HTTPS endpoint", (
   assert.equal(supportsExpandReader(document), false);
   themeSettings.expand_reader_endpoint = "https://user:pass@reader.example/read";
   assert.equal(supportsExpandReader(document), false, "endpoint credentials are refused");
-  delete themeSettings.expand_reader_endpoint;
+  restoreSetting("expand_reader_endpoint");
 
   assert.equal(supportsExpandReader(document), true);
 });
@@ -2358,7 +2389,7 @@ test("parses exact X post forms and embeds X's own official player", () => {
   assert.equal(getLoadedFrameHeight(parsed), 1200);
   themeSettings.x_embed_height = 10;
   assert.equal(getLoadedFrameHeight(parsed), 240);
-  delete themeSettings.x_embed_height;
+  restoreSetting("x_embed_height");
 
   const wrapper = {};
   const state = { parsed, environmentRisk: { level: "none" } };
@@ -2386,7 +2417,7 @@ test("parses exact X post forms and embeds X's own official player", () => {
   primeEmbedState(offWrapper);
   assert.equal(offState.iframeUrl, null);
   assert.equal(offState.externalOnly, true);
-  delete themeSettings.enable_x_inline_embed;
+  restoreSetting("enable_x_inline_embed");
 
   assert.match(
     initializerSource,
@@ -2469,7 +2500,7 @@ test("X embed language, theme, and height helpers stay bounded", () => {
   assert.equal(clampXEmbedHeight(99999), 12000);
   themeSettings.x_embed_max_height = 1;
   assert.equal(clampXEmbedHeight(9000), 600);
-  delete themeSettings.x_embed_max_height;
+  restoreSetting("x_embed_max_height");
 
   assert.equal(getInstagramEmbedMaxHeight(), 4000);
   assert.equal(clampInstagramEmbedHeight(898), 898);
@@ -2478,7 +2509,7 @@ test("X embed language, theme, and height helpers stay bounded", () => {
   assert.equal(clampInstagramEmbedHeight("x"), 0);
   themeSettings.instagram_embed_max_height = 800;
   assert.equal(clampInstagramEmbedHeight(9000), 800);
-  delete themeSettings.instagram_embed_max_height;
+  restoreSetting("instagram_embed_max_height");
 });
 
 test("X posts use the plain-link collectors and leave a real Discourse onebox alone", () => {
@@ -2563,7 +2594,7 @@ test("parses exact Instagram post, reel, and tv forms and builds embed URL", () 
     buildIframeUrl(parsedPost),
     "https://www.instagram.com/p/DFxyz123_-/embed/"
   );
-  delete themeSettings.instagram_embed_captioned;
+  restoreSetting("instagram_embed_captioned");
 
   assert.equal(getMetaLine(parsedPost), "Instagram 帖子");
   assert.equal(getMetaLine(parsedReel), "Instagram Reel");
@@ -2585,7 +2616,7 @@ test("parses exact Instagram post, reel, and tv forms and builds embed URL", () 
   assert.equal(getLoadedFrameHeight(parsedPost), 1200);
   themeSettings.instagram_embed_height = 10;
   assert.equal(getLoadedFrameHeight(parsedPost), 400);
-  delete themeSettings.instagram_embed_height;
+  restoreSetting("instagram_embed_height");
 
   const wrapper = {};
   const state = { parsed: parsedPost, environmentRisk: { level: "none" } };
@@ -2609,7 +2640,7 @@ test("parses exact Instagram post, reel, and tv forms and builds embed URL", () 
   primeEmbedState(offWrapper);
   assert.equal(offState.iframeUrl, null);
   assert.equal(offState.externalOnly, true);
-  delete themeSettings.enable_instagram_inline_embed;
+  restoreSetting("enable_instagram_inline_embed");
 });
 
 test("rejects Instagram URLs that are not exact post identities", () => {
@@ -2723,7 +2754,7 @@ test("a student blog article expands as text plus replies, and stays a link when
   assert.equal(getPreviewAspectRatio(parsed), "auto");
   assert.equal(
     getFooterMeta(parsed),
-    "全文与回复经 BDFZ 阅读服务展开 · 该站禁止页面被外部内嵌"
+    "全文与回复经阅读服务展开 · 该站禁止页面被外部内嵌"
   );
 
   /* The blog can never be framed, so there is no inline player to open and the
@@ -2738,11 +2769,11 @@ test("a student blog article expands as text plus replies, and stays a link when
     getFooterMeta(parsed),
     "学生博客原文卡片 · 该站禁止页面被外部内嵌"
   );
-  delete themeSettings.enable_rdfz_blog_inline;
+  restoreSetting("enable_rdfz_blog_inline");
 
   themeSettings.show_open_link = false;
   assert.equal(shouldShowDirectSourceLink(parsed), true, "the source link is never dropped");
-  delete themeSettings.show_open_link;
+  restoreSetting("show_open_link");
 });
 
 test("a reader view for another article or another blog is discarded", () => {
@@ -2898,7 +2929,7 @@ test("recognizes Discourse inline oneboxes inside copied share text", () => {
     assert.equal(shortCandidate.shortUrl, "https://b23.tv/cUbeWZt");
     assert.equal(shortCandidate.metadataTextToOmit, "");
   } finally {
-    delete themeSettings.enable_short_link_resolution;
+    restoreSetting("enable_short_link_resolution");
   }
 });
 
@@ -2989,7 +3020,7 @@ test("a resolved short link must return its own host's provider", async () => {
     assert.equal(await fetchBilibiliShortLinkResolution("https://b23.tv/Cross002"), null);
   } finally {
     shortLinkResolutionCache.clear();
-    delete themeSettings.enable_short_link_resolution;
+    restoreSetting("enable_short_link_resolution");
     context.fetch = originalFetch;
   }
 });
@@ -3014,7 +3045,7 @@ test("the forum 163cn.tv inline onebox share row becomes a resolver candidate", 
     assert.equal(candidate.metadataTarget, fixture.anchor);
     assert.equal(candidate.preserveSource, true);
   } finally {
-    delete themeSettings.enable_short_link_resolution;
+    restoreSetting("enable_short_link_resolution");
   }
 });
 

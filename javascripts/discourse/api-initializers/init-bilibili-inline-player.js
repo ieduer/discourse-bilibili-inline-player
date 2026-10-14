@@ -469,6 +469,8 @@ const NETEASE_MEDIA_BY_OUTCHAIN_TYPE = Object.fromEntries(
 );
 
 const themeSettings = typeof settings === "object" && settings ? settings : {};
+/* Set from the current user at startup; only staff see configuration hints. */
+let viewerIsStaff = false;
 const wrapperState = new WeakMap();
 const videoInfoCache = new Map();
 const qqMusicSongInfoCache = new Map();
@@ -1964,7 +1966,7 @@ function getMarxistsFooterMeta(parsed) {
   }
 
   if (supportsExpandReader(parsed)) {
-    return "原文经 BDFZ 阅读服务展开 · 该站禁止页面被外部内嵌";
+    return "原文经阅读服务展开 · 该站禁止页面被外部内嵌";
   }
 
   return "马克思主义文库原文卡片 · 该站禁止页面被外部内嵌";
@@ -2916,11 +2918,11 @@ function getFooterMeta(parsed) {
       return getQQMusicFooterMeta(parsed);
     case "zhihu":
       return supportsExpandReader(parsed)
-        ? "知乎官方摘要经 BDFZ 阅读服务展开 · 完整内容请打开原文"
+        ? "知乎官方摘要经阅读服务展开 · 完整内容请打开原文"
         : "知乎原文卡片";
     case "wechat":
       return supportsWeChatArchive(parsed)
-        ? "经 wx.bdfz.net 转换并默认展开全文 · 保留微信原文"
+        ? `经 ${getWeChatArchiveHost()} 转换并默认展开全文 · 保留微信原文`
         : "微信原文卡片";
     case "bdfz-post":
       return getBooleanSetting("enable_bdfz_posts_inline", true)
@@ -2928,7 +2930,7 @@ function getFooterMeta(parsed) {
         : "bdfz.net 原文链接";
     case "rdfz-blog":
       return supportsExpandReader(parsed)
-        ? "全文与回复经 BDFZ 阅读服务展开 · 该站禁止页面被外部内嵌"
+        ? "全文与回复经阅读服务展开 · 该站禁止页面被外部内嵌"
         : "学生博客原文卡片 · 该站禁止页面被外部内嵌";
     case "douyin":
       return "抖音开放平台播放器 · 保留原视频链接";
@@ -3969,6 +3971,12 @@ function buildReadingCard(wrapper, metadata) {
     status.setAttribute("aria-live", "polite");
     status.setAttribute("aria-atomic", "true");
     body.appendChild(status);
+  } else if (viewerIsStaff) {
+    const hint = getBackendConfigurationHint(metadata.parsed);
+
+    if (hint) {
+      body.appendChild(createElement("div", "bilibili-inline-player__reading-admin-hint", hint));
+    }
   }
 
   const footer = createElement("div", "bilibili-inline-player__footer");
@@ -3997,6 +4005,26 @@ function buildReadingCard(wrapper, metadata) {
   } else if (supportsWeChatArchive(metadata.parsed)) {
     Promise.resolve().then(() => expandWeChatArchive(wrapper));
   }
+}
+
+/* Staff-only explanation for a reading card that stays a link because the
+   installation has not configured (or has disabled) the backend it needs. */
+function getBackendConfigurationHint(parsed) {
+  if (parsed?.provider === "wechat" && parsed.kind === "wechat") {
+    return "管理员提示：微信全文需要在主题设置中开启 enable_wechat_inline，并配置你自己的 wechat_ingest_endpoint 与 wechat_archive_origin。";
+  }
+
+  const readerKinds = {
+    zhihu: "enable_zhihu_summary",
+    "rdfz-blog": "enable_rdfz_blog_inline",
+  };
+
+  if (readerKinds[parsed?.kind] || (parsed?.kind === "marxists" && parsed.contentType === "document")) {
+    const flag = readerKinds[parsed.kind];
+    return `管理员提示：全文展开需要开启 enable_expand_reader${flag ? ` 与 ${flag}` : ""}，并配置你自己的 expand_reader_endpoint。`;
+  }
+
+  return "";
 }
 
 function buildCompactAudioCard(wrapper, metadata) {
@@ -4561,8 +4589,10 @@ const READER_TIMEOUT_MS = 15000;
 const READER_CACHE_MAX_ENTRIES = 24;
 const READER_CACHE_TTL_MS = 5 * 60 * 1000;
 const WECHAT_ARCHIVE_REQUEST_TIMEOUT_MS = 90000;
-const WECHAT_ARCHIVE_MAX_WAIT_MS = 4 * 60 * 1000;
-const WECHAT_ARCHIVE_MAX_ATTEMPTS = 64;
+const WECHAT_ARCHIVE_MAX_WAIT_MS = 3 * 60 * 1000;
+const WECHAT_ARCHIVE_MAX_ATTEMPTS = 16;
+const WECHAT_ARCHIVE_BACKOFF_FACTOR = 1.5;
+const WECHAT_ARCHIVE_MAX_BACKOFF_MS = 15000;
 const WECHAT_ARCHIVE_MAX_NETWORK_FAILURES = 2;
 const WECHAT_ARCHIVE_RETRY_DELAY_MS = 2000;
 const WECHAT_ARCHIVE_CACHE_MAX_ENTRIES = 24;
@@ -4570,8 +4600,6 @@ const WECHAT_ARCHIVE_CACHE_TTL_MS = 5 * 60 * 1000;
 const SHORT_LINK_RESOLUTION_TIMEOUT_MS = 10000;
 const SHORT_LINK_RESOLUTION_CACHE_MAX_ENTRIES = 24;
 const SHORT_LINK_RESOLUTION_CACHE_TTL_MS = 5 * 60 * 1000;
-const DEFAULT_WECHAT_INGEST_ENDPOINT = "https://wx.bdfz.net/api/ingest";
-const DEFAULT_READER_ENDPOINT = "https://reader.bdfz.net/read";
 const DEFAULT_READER_PANE_HEIGHT = 560;
 const DEFAULT_RDFZ_BLOG_COMMENTS_HEIGHT = 360;
 const readerViewCache = new Map();
@@ -4580,40 +4608,71 @@ const shortLinkResolutionCache = new Map();
 let readerFragmentSequence = 0;
 let bdfzPostFrameSequence = 0;
 
-function getWeChatIngestEndpoint() {
-  const endpoint = getStringSetting(
-    "wechat_ingest_endpoint",
-    DEFAULT_WECHAT_INGEST_ENDPOINT
-  ).trim();
+/* Backend services are configured by each installation's administrator.
+   There is no built-in service: an empty, malformed, or non-HTTPS value means
+   the feature is unavailable and the original link is shown instead. */
+function getConfiguredServiceUrl(name) {
+  const value = themeSettings[name];
+  const text = typeof value === "string" ? value.trim() : "";
+
+  if (!text) {
+    return null;
+  }
 
   try {
-    const url = new URL(endpoint);
+    const url = new URL(text);
+    const isLoopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
 
+    /* HTTPS in production; a loopback endpoint is allowed so the component can be
+       developed against a local instance of a service. */
     if (
-      url.protocol !== "https:" ||
-      url.hostname !== "wx.bdfz.net" ||
-      url.port ||
+      (url.protocol !== "https:" && !(url.protocol === "http:" && isLoopback)) ||
       url.username ||
-      url.password ||
-      url.pathname !== "/api/ingest" ||
-      url.search ||
-      url.hash
+      url.password
     ) {
-      return "";
+      return null;
     }
 
-    return url.toString();
+    return url;
   } catch {
+    return null;
+  }
+}
+
+function getWeChatIngestEndpoint() {
+  const url = getConfiguredServiceUrl("wechat_ingest_endpoint");
+
+  if (!url || url.search || url.hash) {
     return "";
   }
+
+  return url.toString();
+}
+
+/* The only origin a returned archive may be loaded from. It is configured
+   separately from the ingestion endpoint and never taken from a response. */
+function getWeChatArchiveOrigin() {
+  const url = getConfiguredServiceUrl("wechat_archive_origin");
+
+  if (!url || !["", "/"].includes(url.pathname) || url.search || url.hash) {
+    return "";
+  }
+
+  return url.origin;
+}
+
+function getWeChatArchiveHost() {
+  const origin = getWeChatArchiveOrigin();
+  return origin ? new URL(origin).host : "";
 }
 
 function supportsWeChatArchive(parsed) {
   return Boolean(
     parsed?.provider === "wechat" &&
       parsed.kind === "wechat" &&
-      getBooleanSetting("enable_wechat_inline", true) &&
-      getWeChatIngestEndpoint()
+      getBooleanSetting("enable_wechat_inline", false) &&
+      getWeChatIngestEndpoint() &&
+      getWeChatArchiveOrigin()
   );
 }
 
@@ -4669,15 +4728,8 @@ function normalizeWeChatArchivePayload(payload, parsed) {
     return null;
   }
 
-  let archiveUrl;
-
-  try {
-    archiveUrl = new URL(String(payload.url || ""));
-  } catch {
-    return null;
-  }
-
-  const slug = archiveUrl.pathname.slice(1);
+  const archiveOrigin = getWeChatArchiveOrigin();
+  const slug = String(payload.slug || "");
   let echoedSource;
 
   try {
@@ -4686,23 +4738,19 @@ function normalizeWeChatArchivePayload(payload, parsed) {
     return null;
   }
 
+  /* The archive URL must be exactly <configured archive origin>/<slug>. A
+     URL is never trusted because the service returned it. */
   if (
-    archiveUrl.protocol !== "https:" ||
-    archiveUrl.hostname !== "wx.bdfz.net" ||
-    archiveUrl.port ||
-    archiveUrl.username ||
-    archiveUrl.password ||
-    archiveUrl.search ||
-    archiveUrl.hash ||
+    !archiveOrigin ||
     !/^[a-z0-9-]{6,128}$/i.test(slug) ||
-    String(payload.slug || "") !== slug ||
+    payload.url !== `${archiveOrigin}/${slug}` ||
     echoedSource?.sourceIdentity !== parsed.sourceIdentity
   ) {
     return null;
   }
 
   return {
-    archiveUrl: archiveUrl.toString(),
+    archiveUrl: `${archiveOrigin}/${slug}`,
     slug,
     title: normalizeTitleText(String(payload.title || "")).slice(0, 160),
   };
@@ -4749,6 +4797,16 @@ function getWeChatRetryDelayMs(response, payload, fallbackMs = WECHAT_ARCHIVE_RE
   return Math.min(10000, Math.max(0, delayMs));
 }
 
+/* Polling an in-progress conversion waits at least an exponentially growing
+   interval, whatever the service suggests, so a page can never poll faster
+   than the client's own schedule: 2s, 3s, 4.5s, … up to 15s. */
+function getWeChatBackoffMs(attempt) {
+  return Math.min(
+    WECHAT_ARCHIVE_MAX_BACKOFF_MS,
+    WECHAT_ARCHIVE_RETRY_DELAY_MS * WECHAT_ARCHIVE_BACKOFF_FACTOR ** attempt
+  );
+}
+
 function waitForWeChatRetry(delayMs) {
   if (delayMs <= 0) {
     return Promise.resolve();
@@ -4793,7 +4851,10 @@ async function fetchWeChatArchiveWithRetry(parsed, endpoint) {
         window.clearTimeout(timer);
         timer = null;
         await waitForWeChatRetry(
-          Math.min(getWeChatRetryDelayMs(response, pending), deadline - Date.now())
+          Math.min(
+            Math.max(getWeChatRetryDelayMs(response, pending), getWeChatBackoffMs(attempt)),
+            deadline - Date.now()
+          )
         );
         continue;
       }
@@ -4829,31 +4890,14 @@ async function fetchWeChatArchiveWithRetry(parsed, endpoint) {
 }
 
 function getExpandReaderEndpoint() {
-  const endpoint = getStringSetting("expand_reader_endpoint", DEFAULT_READER_ENDPOINT).trim();
+  const url = getConfiguredServiceUrl("expand_reader_endpoint");
 
-  if (!endpoint) {
+  if (!url) {
     return "";
   }
 
-  try {
-    const url = new URL(endpoint);
-    const isLoopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
-
-    /* HTTPS in production; a loopback endpoint is allowed so the component can be
-       developed against a local instance of the reader service. */
-    if (
-      (url.protocol !== "https:" && !(url.protocol === "http:" && isLoopback)) ||
-      url.username ||
-      url.password
-    ) {
-      return "";
-    }
-
-    url.hash = "";
-    return url.toString();
-  } catch {
-    return "";
-  }
+  url.hash = "";
+  return url.toString();
 }
 
 function getBilibiliShortResolverEndpoint() {
@@ -5010,12 +5054,12 @@ async function fetchBilibiliShortLinkResolution(shortUrl) {
 function supportsExpandReader(parsed) {
   const supportedSource =
     (parsed?.kind === "marxists" && parsed.contentType === "document") ||
-    (parsed?.kind === "rdfz-blog" && getBooleanSetting("enable_rdfz_blog_inline", true)) ||
-    (parsed?.kind === "zhihu" && getBooleanSetting("enable_zhihu_summary", true));
+    (parsed?.kind === "rdfz-blog" && getBooleanSetting("enable_rdfz_blog_inline", false)) ||
+    (parsed?.kind === "zhihu" && getBooleanSetting("enable_zhihu_summary", false));
 
   return Boolean(
     supportedSource &&
-      getBooleanSetting("enable_expand_reader", true) &&
+      getBooleanSetting("enable_expand_reader", false) &&
       getExpandReaderEndpoint()
   );
 }
@@ -5505,7 +5549,7 @@ function buildWeChatArchivePane(wrapper, archive) {
   iframe.loading = "lazy";
   iframe.referrerPolicy = "no-referrer";
   iframe.sandbox = "allow-popups allow-popups-to-escape-sandbox";
-  iframe.title = `${title} — wx.bdfz.net 全文`;
+  iframe.title = `${title} — ${getWeChatArchiveHost()} 全文`;
   pane.appendChild(iframe);
   return pane;
 }
@@ -5567,7 +5611,7 @@ async function expandWeChatArchive(wrapper) {
     const archiveLink = createElement(
       "a",
       "bilibili-inline-player__footer-link",
-      "在 wx.bdfz.net 打开全文"
+      `在 ${getWeChatArchiveHost()} 打开全文`
     );
     archiveLink.href = archive.archiveUrl;
     archiveLink.target = "_blank";
@@ -7183,6 +7227,12 @@ function replaceCandidates(candidates, insertionCursors = null) {
 export default apiInitializer((api) => {
   if (!getBooleanSetting("enabled", true)) {
     return;
+  }
+
+  try {
+    viewerIsStaff = Boolean(api.getCurrentUser?.()?.staff);
+  } catch {
+    viewerIsStaff = false;
   }
 
   api.decorateCookedElement((element) => {
